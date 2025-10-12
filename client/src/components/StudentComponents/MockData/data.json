@@ -1,0 +1,22 @@
+{
+  "activeLearners": 50000,
+  "supportedLanguages": 25,
+  "features": [
+    {
+      "title": "Voice Recognition Technology",
+      "desc": "Practice pronunciation with AI-Powered feedback"
+    },
+    {
+      "title": "Interactive Learning Modules",
+      "desc": "Engaging content tailored to your learning space"
+    },
+    {
+      "title": "Progress Analytics",
+      "desc": "Monitor your improvement with detailed analytics"
+    },
+    {
+      "title": "Global Learning Community",
+      "desc": "Connect with fellow learners worldwide"
+    }
+  ]
+}
