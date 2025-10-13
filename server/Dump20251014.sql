@@ -49,8 +49,34 @@ CREATE TABLE `assignments` (
 
 LOCK TABLES `assignments` WRITE;
 /*!40000 ALTER TABLE `assignments` DISABLE KEYS */;
-INSERT INTO `assignments` VALUES (11,'1','Tense',1,NULL,100.00,40.00,'2025-10-13 00:00:00','2025-10-14 00:00:00','sample_question_upload.xlsx',1,'2025-10-12 14:03:14','2025-10-12 14:03:14'),(12,'2','Verbose',1,NULL,100.00,40.00,'2025-10-13 00:00:00','2025-10-14 00:00:00','sample_question_upload.xlsx',1,'2025-10-12 14:44:47','2025-10-12 14:44:47');
 /*!40000 ALTER TABLE `assignments` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `colleges`
+--
+
+DROP TABLE IF EXISTS `colleges`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `colleges` (
+  `college_id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) NOT NULL,
+  `college_address` varchar(255) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`college_id`),
+  UNIQUE KEY `name` (`name`)
+) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `colleges`
+--
+
+LOCK TABLES `colleges` WRITE;
+/*!40000 ALTER TABLE `colleges` DISABLE KEYS */;
+INSERT INTO `colleges` VALUES (11,'ABC College',NULL,'2025-10-13 17:51:28'),(12,'XYZ University',NULL,'2025-10-13 17:51:28'),(13,'KGISL Institute','14/02 Marutham Nagar','2025-10-13 19:25:55');
+/*!40000 ALTER TABLE `colleges` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -63,14 +89,17 @@ DROP TABLE IF EXISTS `departments`;
 CREATE TABLE `departments` (
   `department_id` int NOT NULL AUTO_INCREMENT,
   `department_name` varchar(255) NOT NULL,
+  `college_id` int NOT NULL,
   `department_code` varchar(50) NOT NULL,
   `is_active` tinyint(1) DEFAULT '1',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`department_id`),
   UNIQUE KEY `department_code` (`department_code`),
-  KEY `idx_dept_code` (`department_code`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  KEY `idx_dept_code` (`department_code`),
+  KEY `college_id` (`college_id`),
+  CONSTRAINT `departments_ibfk_1` FOREIGN KEY (`college_id`) REFERENCES `colleges` (`college_id`) ON DELETE RESTRICT
+) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -79,7 +108,7 @@ CREATE TABLE `departments` (
 
 LOCK TABLES `departments` WRITE;
 /*!40000 ALTER TABLE `departments` DISABLE KEYS */;
-INSERT INTO `departments` VALUES (1,'Computer Science','CS',1,'2025-10-11 18:42:29','2025-10-11 18:42:29');
+INSERT INTO `departments` VALUES (11,'B.Sc Computer Science',11,'BSCS',1,'2025-10-13 17:52:13','2025-10-13 17:52:13'),(12,'BSc Physics',12,'BSPHYS',1,'2025-10-13 17:52:13','2025-10-13 17:52:13'),(13,'BSc Physics',13,'BSC 13',1,'2025-10-13 19:25:55','2025-10-13 19:25:55');
 /*!40000 ALTER TABLE `departments` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -155,7 +184,7 @@ CREATE TABLE `roles` (
   `name` enum('super_admin','admin','administrator','teacher','student') NOT NULL,
   PRIMARY KEY (`role_id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -164,6 +193,7 @@ CREATE TABLE `roles` (
 
 LOCK TABLES `roles` WRITE;
 /*!40000 ALTER TABLE `roles` DISABLE KEYS */;
+INSERT INTO `roles` VALUES (1,'super_admin'),(2,'admin'),(3,'administrator'),(4,'teacher'),(5,'student');
 /*!40000 ALTER TABLE `roles` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -198,7 +228,6 @@ CREATE TABLE `sub_topics` (
 
 LOCK TABLES `sub_topics` WRITE;
 /*!40000 ALTER TABLE `sub_topics` DISABLE KEYS */;
-INSERT INTO `sub_topics` VALUES (6,5,'Past Tense',1,'https://us7xgl2xx9.ufs.sh/f/NLwJvYRc8DXfBe34fsIZrb67gjCL5kFMaqTzV3evG81Ec0su','Requirements of ElectCare.docx','<p>Requirements of ElectCare</p><p></p><p></p><p></p><p>Day 2 (10:00am to 13:20pm)Doubt Clarification for Special Allowences</p><p></p><p>1) Special Allowences (daily allowences) is fixed amount for employee For example for fresher there will be 150 or 200 as a fixed special allowences and they change every revision for appraisal with salary they wil be fixed                  Salary Amount + Special AllowencesWhen Employee Login to the app when they set their visit record like stating field visit from and to they choose like they want to enable special allowance or notCalcaulation is like:so the field visit for the employee is like for 10 days and the special allowance for the employee is 150 so the 10 * 150 = 1500 rupees this need to be calculated automatically2) Accounts + Finance (Audio listen from 20:00 to )The accounts sees these details about money transaction in the account ledgerThe Finanace maintains finance related issue like is there sufficient amount or need money for the company and we need time period for this order or not .The accounts checks related to the payment transactions,tax related data checking by accounts and these transactions needed to storedAccount ----? Finance</p><p></p><p>Accounts and finance comes in contact with the client is when regarding with the sales invoice generation mail generation and payment collection .3) Sales Order’s are also needed to see by the Accounts department(BOTH SALES AND SERVICE) If a same customer is asking for another quotation the sales user or manager can verify to the accounts team that this order can be passed or not. For example if the customer has unpaid history or previous overdue amount that it is processed so the current order can be hold.The sales order needs to be approved by the accounts team and thn only they can proceed the sales orderthe accounts team will tell like first collect the precious unpaid amount then proceed the current order the sales order should show the status as Hold | Proceed.</p><p></p><p>with the reason need to be provided for every action.Every user who interacts and process a particaulr order needs the approval from accounts for further process and finialize the orderso the flow becomes like:Sales User -----? Accounts ---? Project Manager4) Purchase FlowPurchase User raise for material request and Purchase Manager can view the request raised.Purchase User only selects the suppliers and ask for verification with the purchase managerIn this also accounts comes in like once after completion of the supplier quotation and before coming to the final purchase order the purchase manager need to verify with the accounts teams about any pending transaction like tax, or any other additional amount and if the accounts department approve then they can finialize the purchase order.The purchase manager files a report like after the supplier selected and purchase order created for the product they gives necessary details like the amount required and conditions to the finance and finance decide whether to approve or not.The flow is Purchase User ---?Material Request --? RFQ --? Purchase Manager --?  Confirmation Ok ---? Supplier Quotation --? Purchae Manager --? Accounts and Finance ---? Purchase Manager --? Confirmed means ----? stores ---? AccountsFor more detail listen audio from 20:12 to 35:004) Delivery Note ( Currently it is not present in the company)It is needed in the sales and serviceIncase there is no need for sales invoice and service invoice they issue delivery not/delivery chalan stores creates a delivery note and these delivery note is send to the accounts and these accounts create the invoice just fetching from the delivery note and send to the customer5) Sales Invoice (there is doubt regarding this flow and for reference the audio is from 40:00 to 43:00)When invoice is generated for the request but the there is short in materials then they can create delivery note and attach to it and send to the client.if the bill is generated and if there is short supply it also needed to be mentioned in it and again for request just the  remaining it need to create bill.</p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p>Service Module1) Service is based on work order from the customer</p><p></p><p>2) After work order is request the sales user verifies the client history to confirm the work</p><p></p><p>order from the accounts department and It goes to the service manager.</p><p></p><p>3) After confirmation of the work order the manager assigns it to the service engineer</p><p></p><p></p><p></p><p>                                          Heirarchy</p><p></p><p></p><p></p><p>                    Service Manager ----?  Service Engineer</p><p></p><p>4) Special Allowence present for service engineers daily basis</p><p></p><p>5) Each work order against a ticket number is generated automatically by the system for</p><p></p><p>that particular work. For a work order there can be multiple ticket numbers</p><p></p><p>6) After the work is assigned to a service engineer they gets a notification about the details</p><p></p><p>of the work with the schedule like from when to when.</p><p></p><p>7) If the work needs extra working days they first need to raise an request to their</p><p></p><p>respective service manager</p><p></p><p>8) The final bill generated and provided to the user is calculated is based on the number of</p><p></p><p>days the work done no till the assigned date</p><p></p><p>9) If the work is done before the assigned schedule the remaing days are not closed so the</p><p></p><p>customer use the remaining days in the assigned date for other work and for that separate</p><p></p><p>bill is generated and this is valid till the year end.</p><p></p><p>10) service engineer can rise advance request or use their own money and raise for expense</p><p></p><p>claim to the service manager for the necessities like</p><p></p><p>food,accommodation</p><p></p><p>11) Data sheet regarding work order is feeded by the sales userwhich contains work order number(manual),date, against this the system creates a ticket number, client data, number of days, travel applicable or not with cost is fixed and this is given to service manager and to the service engineer.</p><p></p><p>11) Serive engineer needs to maintain a report(timesheet report) of each days work in detail and send the report to their respective service manager, this process till the final day of work. This is internal report</p><p></p><p>12)Final report(Service report)  is created by the service engineer and gets signed from the client and this is send to the service managerfor verification. After approved that is send to the client with bill finally.</p><p></p><p>13) Every machine that is diagnosed should maintain and store as a unique code or tag.this tag is used to get the past log of the work done on the machine.Each information need to shared in the timesheet that is done to a machine(can upload photo also).</p><p></p><p>14)so the history of work is like         </p><p></p><p>         Client id(or client code) --?  sub id (machine id) --? full details(log of each changes)</p><p></p><p>15)For one work order there can be multiple ticket raised and closed</p><p></p><p>16)The final report(Service report) generated is send to client with the bill for the client to verify.</p><p></p><p>17) The internal report should contains values after each SOP is performed in the particular machine.</p><p></p><p>18) the final report should mention working hours (fixed working hours 8 to 4) additional hours need to be mentioned in the both report</p><p></p><p>19) There is a  possibility that on a client visit they also visit multiple other client after completing the current so the final report of all client is send to the service manager for verification. This is possible so whenever a work order is completed the service engineer needs to upload the service report to their respective service manager</p><p></p><p>20) Digital Signature/Digital FingerPrint on the report/document for the necessary signee</p><p></p><p>21) if a new service engineer assigns to a existing customer, the service engineer can view a history of previous changes and diagnosis done to the machine using the appropriate machine id </p><p></p><p>22) E way bill automatically generating based on the sales invoice </p><p></p><p>23) E Invoice bill generation that gets authenticated by the Invoice Registration Portal.</p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p> </p><p></p><p></p>',1,'2025-10-12 14:02:44','2025-10-12 14:02:44');
 /*!40000 ALTER TABLE `sub_topics` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -231,8 +260,47 @@ CREATE TABLE `topics` (
 
 LOCK TABLES `topics` WRITE;
 /*!40000 ALTER TABLE `topics` DISABLE KEYS */;
-INSERT INTO `topics` VALUES (5,1,'Tenses',NULL,1,1,'2025-10-12 14:02:44','2025-10-12 14:02:44');
 /*!40000 ALTER TABLE `topics` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `users`
+--
+
+DROP TABLE IF EXISTS `users`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `users` (
+  `user_id` int NOT NULL AUTO_INCREMENT,
+  `username` varchar(100) NOT NULL,
+  `password_hash` varchar(255) NOT NULL,
+  `full_name` varchar(255) DEFAULT NULL,
+  `college_id` int NOT NULL,
+  `department_id` int DEFAULT NULL,
+  `role_id` int NOT NULL,
+  `is_active` tinyint(1) DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`user_id`),
+  UNIQUE KEY `username` (`username`),
+  KEY `idx_username` (`username`),
+  KEY `idx_role` (`role_id`),
+  KEY `idx_college` (`college_id`),
+  KEY `idx_dept` (`department_id`),
+  CONSTRAINT `users_ibfk_1` FOREIGN KEY (`college_id`) REFERENCES `colleges` (`college_id`) ON DELETE RESTRICT,
+  CONSTRAINT `users_ibfk_2` FOREIGN KEY (`department_id`) REFERENCES `departments` (`department_id`) ON DELETE SET NULL,
+  CONSTRAINT `users_ibfk_3` FOREIGN KEY (`role_id`) REFERENCES `roles` (`role_id`) ON DELETE RESTRICT
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `users`
+--
+
+LOCK TABLES `users` WRITE;
+/*!40000 ALTER TABLE `users` DISABLE KEYS */;
+INSERT INTO `users` VALUES (3,'21AIB38','$2b$12$opwE8leFuOExofLbsI9Mf.L7ApAWfzMDtQAot5vD03/rbTovxxlkm','John Doe',11,11,5,1,'2025-10-13 18:01:45','2025-10-13 18:01:45'),(4,'21AIB56','$2b$12$hoGiXQcIjbBlOx0i/VYSb..cwhP4tcnW4L7iGBEpZlW5lih7Uv39a','Jane Smith',11,11,5,1,'2025-10-13 18:01:45','2025-10-13 18:01:45'),(5,'21AIB57','$2b$12$7VDvkQA.Vkr8rennVApXbeYl7LXxku.F7lySELouhOziiwkwZcGTi','Alice Johnson',12,12,5,1,'2025-10-13 18:01:45','2025-10-13 18:01:45'),(6,'21AIB55','$2b$12$vRlP1/cIN3SiljvMIaaWeePIBV7yh2PRzS3P11QpLFy5EF6Snn.Uu','Bob Wilson',11,11,5,1,'2025-10-13 18:01:46','2025-10-13 18:01:45'),(7,'21AIB60','$2b$12$tkE6oSyt3PY3cx6YdK7x8eSGhhw2oPhJOqLkol/gQ.MJhcJE8Ypim','Carol Lee',12,12,5,1,'2025-10-13 18:01:46','2025-10-13 18:01:45');
+/*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -244,4 +312,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-10-12 21:16:45
+-- Dump completed on 2025-10-14  0:57:35
