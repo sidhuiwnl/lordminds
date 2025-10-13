@@ -96,15 +96,25 @@ const SuperAdminAccessCreation = () => {
       if (selectedAccessType === "college-onboarding") {
         // Handle college onboarding (placeholder - adjust to your endpoint)
         const payload = {
-          name: formData.collegeName,
-          address: formData.collegeAddress,
-          departments: formData.selectedDepartments
-        };
-        console.log("College Onboarding Payload:", payload);
-        // Example: await fetch(`${API_BASE}/colleges`, { method: "POST", body: JSON.stringify(payload) });
-        setMessage({ type: "success", text: "College onboarded successfully (placeholder)" });
-        // Reset form
-        setFormData(prev => ({ ...prev, collegeName: "", collegeAddress: "", selectedDepartments: [] }));
+    name: formData.collegeName,
+    address: formData.collegeAddress,
+    departments: formData.selectedDepartments  // Array from multi-select
+  };
+
+  const response = await fetch(`${API_BASE}/colleges/onboard`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const result = await response.json();
+  if (response.ok) {
+    setMessage({ type: "success", text: result.message });
+    // Reset form
+    setFormData(prev => ({ ...prev, collegeName: "", collegeAddress: "", selectedDepartments: [] }));
+  } else {
+    setMessage({ type: "error", text: result.detail || "College onboarding failed" });
+  }
       } else if (selectedAccessType === "student" && selectedFile) {
         // Bulk upload for students
         const formDataBulk = new FormData();
