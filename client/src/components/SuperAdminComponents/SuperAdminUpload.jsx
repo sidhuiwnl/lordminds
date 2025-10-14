@@ -131,7 +131,7 @@ const SuperAdminUpload = () => {
     
 
 
-    formDataToSend.append('department_id', formData.department || 1); // Example department ID
+    formDataToSend.append('department_id', formData.department || 11); // Example department ID
     formDataToSend.append('topic_name', formData.topicName);
     formDataToSend.append('sub_topic_name', formData.subTopicName);
     formDataToSend.append('no_of_sub_topics', formData.noOfSubTopic);
