@@ -167,7 +167,7 @@ const SuperAdminUpload = () => {
 
   const fetchTopicsForDepartment = async (deptId) => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/topic-subtopic?department_id=${deptId}`, {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/topics/topic-subtopic?department_id=${deptId}`, {
         method: "GET",
         headers: {
           "Accept": "application/json",
@@ -274,7 +274,7 @@ const SuperAdminUpload = () => {
     } 
 
     async function fetchTopicWithSubTopic() {
-       const resposne = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/get-topic-with-subtpics`,{
+       const resposne = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/topics/get-topic-with-subtpics`,{
         method : "GET",
         headers : {
           "Accept" : "application/json",
@@ -314,13 +314,7 @@ const SuperAdminUpload = () => {
 }
   
 
-  const uploadedMcqs = [
-    { no: 1, topicName: "Lesson 1", subTopicName: "Topic 1", numberOfQuestions: "30 questions", mcqFile: "document1.doc", progress: "65%" },
-    { no: 2, topicName: "Lesson 1", subTopicName: "Topic 1", numberOfQuestions: "30 questions", mcqFile: "document2.doc", progress: "65%" },
-    { no: 3, topicName: "Lesson 1", subTopicName: "Topic 1", numberOfQuestions: "30 questions", mcqFile: "document3.doc", progress: "65%" },
-    { no: 4, topicName: "Lesson 1", subTopicName: "Topic 1", numberOfQuestions: "30 questions", mcqFile: "document4.doc", progress: "65%" },
-    { no: 5, topicName: "Lesson 1", subTopicName: "Topic 1", numberOfQuestions: "30 questions", mcqFile: "document5.doc", progress: "65%" }
-  ];
+ 
 
   return (
     <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">

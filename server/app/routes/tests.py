@@ -1,20 +1,27 @@
+import os
+import uuid
+import json
+import aiofiles
+import pandas as pd
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, Form, File, UploadFile
 from config.database import get_db
-import pandas as pd
-import json
-from datetime import datetime
 
 router = APIRouter()
+
+# Directory setup
+UPLOAD_DIR = "uploads/tests"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 @router.post("/create", status_code=201)
 async def create_test(
     test_type: str = Form(...),  # 'assignment' or 'sub_topic'
-    
+
     # Common fields
     department_id: int = Form(...),
-    file: UploadFile = File(...),  # Required for both, Excel file with questions
-    
+    file: UploadFile = File(...),
+
     # Assignment fields
     assignment_number: str = Form(None),
     assignment_topic: str = Form(None),
@@ -22,265 +29,185 @@ async def create_test(
     passing_marks: float = Form(40),
     start_date: datetime = Form(None),
     end_date: datetime = Form(None),
-    
+
     # Subtopic fields
     topic_name: str = Form(None),
     sub_topic_name: str = Form(None),
-    no_of_sub_topics: int = Form(None)
+    no_of_sub_topics: int = Form(None),
 ):
-    """
-    Create either an assignment test or a subtopic test with Excel question upload.
-    Steps:
-    1. Validate department exists
-    2. Create assignment/subtopic record
-    3. Parse Excel file (questions)
-    4. Insert all questions linked to the new assignment/subtopic
-    """
-    # Basic file validation
+    """Create assignment or subtopic test — optimized for speed."""
+
+    # Validate file
     if not file.filename.endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Only Excel (.xlsx/.xls) files are allowed.")
+
+    # ✅ Step 1: Save uploaded file asynchronously
+    unique_id = str(uuid.uuid4())
+    file_extension = os.path.splitext(file.filename)[1]
+    saved_filename = f"{unique_id}{file_extension}"
+    save_folder = os.path.join(UPLOAD_DIR, test_type)
+    os.makedirs(save_folder, exist_ok=True)
+    file_path = os.path.join(save_folder, saved_filename)
+
+    async with aiofiles.open(file_path, "wb") as out_file:
+        while content := await file.read(1024 * 1024):  # 1MB chunks
+            await out_file.write(content)
 
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
+                # ✅ Step 2: Validate department
+                cursor.execute(
+                    "SELECT department_id FROM departments WHERE department_id=%s",
+                    (department_id,)
+                )
+                if not cursor.fetchone():
+                    raise HTTPException(status_code=400, detail="Department not found.")
 
+                # ✅ Step 3: Handle Assignment creation
                 if test_type == "assignment":
-                    # Validate required fields
                     if not (assignment_number and assignment_topic and start_date and end_date):
                         raise HTTPException(status_code=400, detail="Missing required assignment fields.")
 
-                    # Check department exists
                     cursor.execute(
-                        "SELECT department_id FROM departments WHERE department_id=%s",
-                        (department_id,)
-                    )
-                    dept = cursor.fetchone()
-                    if not dept:
-                        raise HTTPException(status_code=400, detail="Department not found.")
-
-                    # Format dates for DB insert
-                    start_date_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
-                    end_date_str = end_date.strftime("%Y-%m-%d %H:%M:%S")
-
-                    # Insert assignment
-                    insert_assignment = """
+                        """
                         INSERT INTO assignments
                         (assignment_number, assignment_topic, department_id, total_marks, passing_marks,
-                         start_date, end_date, file_name, created_at, updated_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-                    """
-                    cursor.execute(insert_assignment, (
-                        assignment_number,
-                        assignment_topic,
-                        department_id,
-                        total_marks,
-                        passing_marks,
-                        start_date_str,
-                        end_date_str,
-                        file.filename
-                    ))
-                    assignment_id = cursor.lastrowid
-
-                    # Parse Excel and insert questions
-                    content = await file.read()
-                    df = pd.read_excel(content)
-                    inserted_count = 0
-
-                    for index, row in df.iterrows():
-                        q_type = row["Question_Type"].strip().lower()
-
-                        # Get question_type_id from question_type table
-                        cursor.execute("SELECT question_type_id FROM question_type WHERE question_type = %s", (q_type,))
-                        q_type_row = cursor.fetchone()
-                        if not q_type_row:
-                            raise HTTPException(status_code=400, detail=f"Invalid question type: {q_type}")
-                        question_type_id = q_type_row["question_type_id"]
-
-                        # Build question_data JSON based on type
-                        question_data = {}
-                        if q_type == "mcq":
-                            question_data = {
-                                "options": [
-                                    row.get("Option_A"),
-                                    row.get("Option_B"),
-                                    row.get("Option_C"),
-                                    row.get("Option_D")
-                                ],
-                                "correct_answer": row.get("Correct_Answer")
-                            }
-                        elif q_type == "fill_blank":
-                            question_data = {
-                                "sentence": row.get("Question_Text"),
-                                "correct_answers": [x.strip() for x in str(row.get("Correct_Answer", "")).split(",")]
-                            }
-                        elif q_type == "match":
-                            question_data = {
-                                "column_a": str(row.get("Option_A", "")).split(";"),
-                                "column_b": str(row.get("Option_B", "")).split(";"),
-                                "correct_pairs": dict(
-                                    [pair.split("-") for pair in str(row.get("Correct_Answer", "")).split(",")]
-                                )
-                            }
-                        elif q_type == "own_response":
-                            question_data = {
-                                "expected_keywords": str(row.get("Extra_Data", "")).split(",")
-                            }
-                        elif q_type == "true_false":
-                            question_data = {
-                                "statement": row.get("Question_Text"),
-                                "correct_answer": row.get("Correct_Answer") in ["True", "true", "1"]
-                            }
-                        elif q_type == "one_word":
-                            question_data = {
-                                "definition": row.get("Question_Text"),
-                                "correct_answer": row.get("Correct_Answer")
-                            }
-
-                        # Insert each question using test_scope and reference_id
-                        insert_question = """
-                            INSERT INTO questions
-                            (test_scope, reference_id, question_type_id, question_text, question_data, marks, order_no, created_at, updated_at)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-                        """
-                        cursor.execute(insert_question, (
-                            'assignment',
-                            assignment_id,
-                            question_type_id,
-                            row.get("Question_Text"),
-                            json.dumps(question_data),
-                            row.get("Marks", 1),
-                            row.get("Order_No", index + 1)
-                        ))
-                        inserted_count += 1
-
-                    conn.commit()
-                    return {
-                        "status": "success",
-                        "message": f"Assignment test created successfully with {inserted_count} questions.",
-                        "assignment_id": assignment_id
-                    }
-
-                elif test_type == "sub_topic":
-                    # Validate required fields
-                    if not (topic_name and sub_topic_name):
-                        raise HTTPException(status_code=400, detail="Missing required subtopic fields: topic_name and sub_topic_name.")
-
-                    # Check department exists
-                    cursor.execute(
-                        "SELECT department_id FROM departments WHERE department_id=%s",
-                        (department_id,)
+                         start_date, end_date, file_name, file_path, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                        """,
+                        (
+                            assignment_number,
+                            assignment_topic,
+                            department_id,
+                            total_marks,
+                            passing_marks,
+                            start_date.strftime("%Y-%m-%d %H:%M:%S"),
+                            end_date.strftime("%Y-%m-%d %H:%M:%S"),
+                            file.filename,
+                            file_path,
+                        ),
                     )
-                    dept = cursor.fetchone()
-                    if not dept:
-                        raise HTTPException(status_code=400, detail="Department not found")
+                    conn.commit()
+                    ref_id = cursor.lastrowid
+                    test_scope = "assignment"
 
-                    # Find existing topic
+                # ✅ Step 4: Handle Subtopic creation
+                elif test_type == "sub_topic":
+                    if not (topic_name and sub_topic_name):
+                        raise HTTPException(status_code=400, detail="Missing topic_name or sub_topic_name.")
+
+                    # Validate topic & subtopic
                     cursor.execute(
                         "SELECT topic_id FROM topics WHERE department_id=%s AND topic_name=%s AND is_active=TRUE",
-                        (department_id, topic_name)
+                        (department_id, topic_name),
                     )
                     topic = cursor.fetchone()
                     if not topic:
                         raise HTTPException(status_code=400, detail="Topic not found.")
+                    topic_id = topic["topic_id"]
 
-                    topic_id = topic['topic_id']
-
-                    # Find existing sub_topic under the topic
                     cursor.execute(
                         "SELECT sub_topic_id FROM sub_topics WHERE topic_id=%s AND sub_topic_name=%s AND is_active=TRUE",
-                        (topic_id, sub_topic_name)
+                        (topic_id, sub_topic_name),
                     )
                     sub_topic = cursor.fetchone()
                     if not sub_topic:
-                        raise HTTPException(status_code=400, detail="Sub-topic not found.")
-
-                    sub_topic_id = sub_topic['sub_topic_id']
-
-                    # Parse Excel and insert questions
-                    content = await file.read()
-                    df = pd.read_excel(content)
-                    inserted_count = 0
-
-                    for index, row in df.iterrows():
-                        q_type = row["Question_Type"].strip().lower()
-
-                        # Get question_type_id from question_type table
-                        cursor.execute("SELECT question_type_id FROM question_type WHERE question_type = %s", (q_type,))
-                        q_type_row = cursor.fetchone()
-                        if not q_type_row:
-                            raise HTTPException(status_code=400, detail=f"Invalid question type: {q_type}")
-                        question_type_id = q_type_row["question_type_id"]
-
-                        # Build question_data JSON based on type (same as assignment)
-                        question_data = {}
-                        if q_type == "mcq":
-                            question_data = {
-                                "options": [
-                                    row.get("Option_A"),
-                                    row.get("Option_B"),
-                                    row.get("Option_C"),
-                                    row.get("Option_D")
-                                ],
-                                "correct_answer": row.get("Correct_Answer")
-                            }
-                        elif q_type == "fill_blank":
-                            question_data = {
-                                "sentence": row.get("Question_Text"),
-                                "correct_answers": [x.strip() for x in str(row.get("Correct_Answer", "")).split(",")]
-                            }
-                        elif q_type == "match":
-                            question_data = {
-                                "column_a": str(row.get("Option_A", "")).split(";"),
-                                "column_b": str(row.get("Option_B", "")).split(";"),
-                                "correct_pairs": dict(
-                                    [pair.split("-") for pair in str(row.get("Correct_Answer", "")).split(",")]
-                                )
-                            }
-                        elif q_type == "own_response":
-                            question_data = {
-                                "expected_keywords": str(row.get("Extra_Data", "")).split(",")
-                            }
-                        elif q_type == "true_false":
-                            question_data = {
-                                "statement": row.get("Question_Text"),
-                                "correct_answer": row.get("Correct_Answer") in ["True", "true", "1"]
-                            }
-                        elif q_type == "one_word":
-                            question_data = {
-                                "definition": row.get("Question_Text"),
-                                "correct_answer": row.get("Correct_Answer")
-                            }
-
-                        # Insert each question using test_scope and reference_id
-                        insert_question = """
-                            INSERT INTO questions
-                            (test_scope, reference_id, question_type_id, question_text, question_data, marks, order_no, created_at, updated_at)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-                        """
-                        cursor.execute(insert_question, (
-                            'sub_topic',
-                            sub_topic_id,
-                            question_type_id,
-                            row.get("Question_Text"),
-                            json.dumps(question_data),
-                            row.get("Marks", 1),
-                            row.get("Order_No", index + 1)
-                        ))
-                        inserted_count += 1
-
-                    conn.commit()
-                    return {
-                        "status": "success",
-                        "message": f"Questions added successfully to subtopic with {inserted_count} questions.",
-                        "topic_id": topic_id,
-                        "sub_topic_id": sub_topic_id
-                    }
+                        raise HTTPException(status_code=400, detail="Subtopic not found.")
+                    ref_id = sub_topic["sub_topic_id"]
+                    test_scope = "sub_topic"
 
                 else:
                     raise HTTPException(status_code=400, detail="Invalid test_type. Must be 'assignment' or 'sub_topic'.")
 
+        # ✅ Step 5: Parse Excel after DB insert (outside transaction for I/O)
+        df = pd.read_excel(file_path)
+        if df.empty:
+            raise HTTPException(status_code=400, detail="Uploaded Excel file is empty or invalid.")
+
+        # ✅ Step 6: Build question data for bulk insert
+        question_rows = []
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                for index, row in df.iterrows():
+                    q_type = str(row["Question_Type"]).strip().lower()
+
+                    cursor.execute(
+                        "SELECT question_type_id FROM question_type WHERE question_type=%s",
+                        (q_type,),
+                    )
+                    q_type_row = cursor.fetchone()
+                    if not q_type_row:
+                        raise HTTPException(status_code=400, detail=f"Invalid question type: {q_type}")
+                    q_type_id = q_type_row["question_type_id"]
+
+                    qd = {}
+                    if q_type == "mcq":
+                        qd = {
+                            "options": [row.get("Option_A"), row.get("Option_B"), row.get("Option_C"), row.get("Option_D")],
+                            "correct_answer": row.get("Correct_Answer"),
+                        }
+                    elif q_type == "fill_blank":
+                        qd = {
+                            "sentence": row.get("Question_Text"),
+                            "correct_answers": [x.strip() for x in str(row.get("Correct_Answer", "")).split(",")],
+                        }
+                    elif q_type == "match":
+                        qd = {
+                            "column_a": str(row.get("Option_A", "")).split(";"),
+                            "column_b": str(row.get("Option_B", "")).split(";"),
+                            "correct_pairs": dict(
+                                pair.split("-") for pair in str(row.get("Correct_Answer", "")).split(",") if "-" in pair
+                            ),
+                        }
+                    elif q_type == "own_response":
+                        qd = {"expected_keywords": str(row.get("Extra_Data", "")).split(",")}
+                    elif q_type == "true_false":
+                        qd = {
+                            "statement": row.get("Question_Text"),
+                            "correct_answer": str(row.get("Correct_Answer")).lower() in ["true", "1"],
+                        }
+                    elif q_type == "one_word":
+                        qd = {
+                            "definition": row.get("Question_Text"),
+                            "correct_answer": row.get("Correct_Answer"),
+                        }
+
+                    question_rows.append(
+                        (
+                            test_scope,
+                            ref_id,
+                            q_type_id,
+                            row.get("Question_Text"),
+                            json.dumps(qd),
+                            row.get("Marks", 1),
+                            row.get("Order_No", index + 1),
+                        )
+                    )
+
+                # ✅ Step 7: Bulk insert
+                cursor.executemany(
+                    """
+                    INSERT INTO questions
+                    (test_scope, reference_id, question_type_id, question_text, question_data, marks, order_no, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                    """,
+                    question_rows,
+                )
+                conn.commit()
+
+        return {
+            "status": "success",
+            "message": f"{test_scope.capitalize()} created successfully with {len(question_rows)} questions.",
+            "reference_id": ref_id,
+            "file_info": {
+                "original_name": file.filename,
+                "saved_as": saved_filename,
+                "path": file_path,
+            },
+        }
+
     except HTTPException:
         raise
     except Exception as e:
-        conn.rollback()
         raise HTTPException(status_code=500, detail=f"Error creating test: {str(e)}")

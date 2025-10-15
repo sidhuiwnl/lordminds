@@ -1,7 +1,8 @@
-from fastapi import FastAPI,HTTPException
+from fastapi import FastAPI
 from config.database import get_db
 from fastapi.middleware.cors import CORSMiddleware
 from routes import assignments, overviews,users,tests,colleges,topics,questions,departments
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(
     title="LordMind API",
@@ -16,6 +17,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
 app.include_router(assignments.router, prefix="/assignments", tags=["Assignments"])
