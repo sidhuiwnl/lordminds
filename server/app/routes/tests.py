@@ -34,6 +34,7 @@ async def create_test(
     topic_name: str = Form(None),
     sub_topic_name: str = Form(None),
     no_of_sub_topics: int = Form(None),
+    file_name: str = Form(None),
 ):
     """Create assignment or subtopic test — optimized for speed."""
 
@@ -111,10 +112,32 @@ async def create_test(
                         "SELECT sub_topic_id FROM sub_topics WHERE topic_id=%s AND sub_topic_name=%s AND is_active=TRUE",
                         (topic_id, sub_topic_name),
                     )
+                    cursor.execute(
+                        "SELECT sub_topic_id FROM sub_topics WHERE topic_id=%s AND sub_topic_name=%s AND is_active=TRUE",
+                        (topic_id, sub_topic_name),
+                    )
                     sub_topic = cursor.fetchone()
-                    if not sub_topic:
-                        raise HTTPException(status_code=400, detail="Subtopic not found.")
-                    ref_id = sub_topic["sub_topic_id"]
+
+                    if sub_topic:
+                        # If exists, optionally update test_file
+                        ref_id = sub_topic["sub_topic_id"]
+                        cursor.execute(
+                            "UPDATE sub_topics SET test_file=%s, updated_at=NOW() WHERE sub_topic_id=%s",
+                            (file.filename, ref_id),
+                        )
+                    else:
+                        # Insert new subtopic
+                        cursor.execute(
+                            """
+                            INSERT INTO sub_topics
+                            (topic_id, sub_topic_name, file_name, test_file, is_active, created_at, updated_at)
+                            VALUES (%s, %s, %s, %s, TRUE, NOW(), NOW())
+                            """,
+                            (topic_id, sub_topic_name, file_name or file.filename, file.filename),
+                        )
+                        conn.commit()
+                        ref_id = cursor.lastrowid
+
                     test_scope = "sub_topic"
 
                 else:

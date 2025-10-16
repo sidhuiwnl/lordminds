@@ -19,6 +19,8 @@ const SuperAdminAccessCreation = () => {
   const [loading, setLoading] = useState(false);
   const [colleges, setColleges] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [showAddDeptModal, setShowAddDeptModal] = useState(false);
+  const [deptForm, setDeptForm] = useState({ name: "", code: "" });
 
   const API_BASE = "http://localhost:8000"; // Adjust to your FastAPI server URL
 
@@ -30,26 +32,35 @@ const SuperAdminAccessCreation = () => {
     { id: "admin", label: "Administrator Access" }
   ];
 
+  const fetchColleges = async () => {
+    try {
+      const collegesRes = await fetch(`${API_BASE}/colleges`);
+      if (collegesRes.ok) {
+        const collegesData = await collegesRes.json();
+        setColleges(collegesData.data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching colleges:", error);
+      setMessage({ type: "error", text: "Failed to load colleges" });
+    }
+  };
+
+  const fetchDepartments = async () => {
+    try {
+      const deptsRes = await fetch(`${API_BASE}/departments`);
+      if (deptsRes.ok) {
+        const deptsData = await deptsRes.json();
+        setDepartments(deptsData.data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching departments:", error);
+      setMessage({ type: "error", text: "Failed to load departments" });
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
-      try {
-        // Fetch colleges
-        const collegesRes = await fetch(`${API_BASE}/colleges`);
-        if (collegesRes.ok) {
-          const collegesData = await collegesRes.json();
-          setColleges(collegesData.data || []);
-        }
-
-        // Fetch departments
-        const deptsRes = await fetch(`${API_BASE}/departments`);
-        if (deptsRes.ok) {
-          const deptsData = await deptsRes.json();
-          setDepartments(deptsData.data || []);
-        }
-      } catch (error) {
-        console.error("Error fetching data:", error);
-        setMessage({ type: "error", text: "Failed to load colleges/departments" });
-      }
+      await Promise.all([fetchColleges(), fetchDepartments()]);
     };
 
     fetchData();
@@ -79,6 +90,36 @@ const SuperAdminAccessCreation = () => {
 
   const clearMessage = () => {
     setTimeout(() => setMessage({ type: "", text: "" }), 5000);
+  };
+
+  const handleCreateDept = async () => {
+    if (!deptForm.name || !deptForm.code) return;
+
+    const formDataDept = new FormData();
+    formDataDept.append("department_name", deptForm.name);
+    formDataDept.append("department_code", deptForm.code);
+
+    try {
+      const response = await fetch(`${API_BASE}/departments/create`, {
+        method: "POST",
+        body: formDataDept,
+      });
+
+      const result = await response.json();
+      if (response.ok) {
+        setMessage({ type: "success", text: result.message });
+        setShowAddDeptModal(false);
+        setDeptForm({ name: "", code: "" });
+        await fetchDepartments();
+        clearMessage();
+      } else {
+        setMessage({ type: "error", text: result.detail || "Department creation failed" });
+        clearMessage();
+      }
+    } catch (error) {
+      setMessage({ type: "error", text: "Network error: " + error.message });
+      clearMessage();
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -145,7 +186,7 @@ const SuperAdminAccessCreation = () => {
           full_name: selectedAccessType === "student" ? formData.name : undefined,
           username: formData.username,
           password: formData.password,
-          email: undefined // Add if needed
+          
         };
 
         const response = await fetch(`${API_BASE}/users`, {
@@ -222,16 +263,28 @@ const SuperAdminAccessCreation = () => {
 
           <div className="flex flex-col lg:flex-row items-start gap-4">
             <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">Department</label>
-            <Select
-              isMulti
-              options={departments.map(dept => ({ value: dept.department_name || dept.name, label: dept.department_name || dept.name }))}
-              value={formData.selectedDepartments.map(deptName => ({ value: deptName, label: deptName }))}
-              onChange={(options) => handleSelectChange(options, "selectedDepartments")}
-              className="flex-1"
-              placeholder="Select departments"
-              isClearable
-              closeMenuOnSelect={false}
-            />
+            <div className="flex flex-1 gap-2">
+              <Select
+                isMulti
+                options={departments.map(dept => ({ value: dept.department_name || dept.name, label: dept.department_name || dept.name }))}
+                value={formData.selectedDepartments.map(deptName => ({ value: deptName, label: deptName }))}
+                onChange={(options) => handleSelectChange(options, "selectedDepartments")}
+                className="flex-1"
+                placeholder="Select departments"
+                isClearable
+                closeMenuOnSelect={false}
+              />
+              <button
+                type="button"
+                onClick={() => setShowAddDeptModal(true)}
+                className="bg-green-500 text-white px-3 py-2 rounded text-sm font-medium hover:bg-green-600 flex items-center gap-1 whitespace-nowrap"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add
+              </button>
+            </div>
           </div>
         </>
       );
@@ -408,7 +461,8 @@ const SuperAdminAccessCreation = () => {
           <div className="bg-white rounded-2xl shadow-sm p-6 lg:p-8 border-t-4 border-r-4 border-[#1b65a6] rounded-bl-lg rounded-tr-lg">
             <div className="flex justify-between items-center mb-6 lg:mb-8">
               <h2 className="font-bold text-lg lg:text-xl text-gray-800">Fill the details to create {getFormTitle()}</h2>
-              <div className="flex gap-3">
+              {selectedAccessType === "student" && (
+                 <div className="flex gap-3">
                 <button 
                   type="button" 
                   className="bg-gray-500 text-white px-5 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow flex items-center gap-1"
@@ -440,6 +494,7 @@ const SuperAdminAccessCreation = () => {
                   </button>
                 </div>
               </div>
+              )}
             </div>
             
             <div className="space-y-4">
@@ -459,6 +514,60 @@ const SuperAdminAccessCreation = () => {
             </button>
           </div>
         </form>
+
+        {/* Add Department Modal */}
+        {showAddDeptModal && (
+         <div
+            className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            onClick={() => setShowAddDeptModal(false)}
+          >
+            <div 
+              className="bg-white rounded-lg p-6 w-full max-w-md relative" 
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold mb-4">Add New Department</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Department Name</label>
+                  <input 
+                    type="text" 
+                    value={deptForm.name}
+                    onChange={(e) => setDeptForm(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Enter department name"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Department Code</label>
+                  <input 
+                    type="text" 
+                    value={deptForm.code}
+                    onChange={(e) => setDeptForm(prev => ({ ...prev, code: e.target.value }))}
+                    placeholder="Enter department code"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                <button 
+                  type="button"
+                  onClick={() => setShowAddDeptModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="button"
+                  onClick={handleCreateDept}
+                  disabled={!deptForm.name || !deptForm.code}
+                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Create Department
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

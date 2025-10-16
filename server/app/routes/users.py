@@ -45,29 +45,31 @@ ROLE_MAP = {
 
 @router.post("/")
 async def create_user(user_data: UserCreate):
-    """Create a single user based on role type (manual entry for student/teacher/administrator)"""
+    """Create a single user based on role type"""
     conn = None
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
                 # Step 1: Lookup college_id
                 cursor.execute("SELECT college_id FROM colleges WHERE name = %s", (user_data.college_name,))
-                college_result = cursor.fetchone()
-                if not college_result:
+                college_res = cursor.fetchone()
+                if not college_res:
                     raise HTTPException(status_code=400, detail=f"College '{user_data.college_name}' not found")
-                college_id = college_result['college_id']
+                college_id = college_res['college_id']
 
-                # Step 2: Lookup department_id if applicable (FIX: Use department_name column)
+                # Step 2: Lookup department_id via college_departments mapping
                 department_id = None
                 if user_data.department_name:
-                    cursor.execute(
-                        "SELECT department_id FROM departments WHERE department_name = %s AND college_id = %s",
-                        (user_data.department_name, college_id)
-                    )
-                    dept_result = cursor.fetchone()
-                    if not dept_result:
-                        raise HTTPException(status_code=400, detail=f"Department '{user_data.department_name}' not found in college '{user_data.college_name}'")
-                    department_id = dept_result['department_id']
+                    cursor.execute("""
+                        SELECT d.department_id
+                        FROM departments d
+                        JOIN college_departments cd ON cd.department_id = d.department_id
+                        WHERE d.department_name = %s AND cd.college_id = %s
+                    """, (user_data.department_name, college_id))
+                    dept_res = cursor.fetchone()
+                    if not dept_res:
+                        raise HTTPException(status_code=400, detail=f"Department '{user_data.department_name}' not found for college '{user_data.college_name}'")
+                    department_id = dept_res['department_id']
 
                 # Step 3: Check username uniqueness
                 cursor.execute("SELECT user_id FROM users WHERE username = %s", (user_data.username,))
@@ -80,26 +82,19 @@ async def create_user(user_data: UserCreate):
                     raise HTTPException(status_code=400, detail=f"Invalid role: {user_data.role}")
 
                 # Step 5: Hash password
-                password_bytes = user_data.password.encode('utf-8')
-                password_hash = bcrypt.hashpw(password_bytes, bcrypt.gensalt()).decode('utf-8')
+                password_hash = bcrypt.hashpw(user_data.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
                 # Step 6: Insert user
-                insert_query = """
+                cursor.execute("""
                     INSERT INTO users (username, password_hash, full_name, college_id, department_id, role_id, created_at, updated_at)
                     VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW())
-                """
-                cursor.execute(insert_query, (
-                    user_data.username, password_hash, user_data.full_name,
-                    college_id, department_id, role_id
-                ))
-                conn.commit()
+                """, (user_data.username, password_hash, user_data.full_name, college_id, department_id, role_id))
 
-                user_id = cursor.lastrowid
+                conn.commit()
                 return {
                     "status": "success",
                     "message": "User created successfully",
                     "data": {
-                        "user_id": user_id,
                         "username": user_data.username,
                         "role": user_data.role
                     }
@@ -108,13 +103,13 @@ async def create_user(user_data: UserCreate):
     except HTTPException:
         raise
     except Exception as e:
-        # Safe rollback to avoid InterfaceError
         if conn:
             try:
                 conn.rollback()
             except:
-                pass  # Ignore rollback errors
+                pass
         raise HTTPException(status_code=500, detail=f"Error creating user: {str(e)}")
+
     
 
 
@@ -122,7 +117,7 @@ async def create_user(user_data: UserCreate):
 @router.post("/bulk")
 async def bulk_create_users(file: UploadFile = File(...), role: str = Form(...)):
     if role != 'student':
-        raise HTTPException(status_code=400, detail="Bulk creation is only supported for 'student' role")
+        raise HTTPException(status_code=400, detail="Bulk creation only supported for 'student' role")
 
     conn = None
     try:
@@ -136,12 +131,13 @@ async def bulk_create_users(file: UploadFile = File(...), role: str = Form(...))
         role_id = ROLE_MAP.get(role)
         valid_rows = []
         errors = []
-        # Updated INSERT query (removed email column)
+
         insert_query = """
             INSERT INTO users (username, password_hash, full_name, college_id, department_id, role_id, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
-        placeholder_count = insert_query.count('%s')  # Now 7
+        placeholder_count = insert_query.count('%s')  # 7
+
         with get_db() as conn:
             with conn.cursor() as cursor:
                 for idx, row in df.iterrows():
@@ -154,16 +150,20 @@ async def bulk_create_users(file: UploadFile = File(...), role: str = Form(...))
                             continue
                         college_id = college_res['college_id']
 
-                        # Department lookup
-                        cursor.execute("SELECT department_id FROM departments WHERE department_name = %s AND college_id = %s",
-                                       (row['department_name'], college_id))
+                        # Department lookup via college_departments
+                        cursor.execute("""
+                            SELECT d.department_id
+                            FROM departments d
+                            JOIN college_departments cd ON cd.department_id = d.department_id
+                            WHERE d.department_name = %s AND cd.college_id = %s
+                        """, (row['department_name'], college_id))
                         dept_res = cursor.fetchone()
                         if not dept_res:
                             errors.append(f"Row {idx+1}: Invalid dept '{row['department_name']}' for college")
                             continue
                         dept_id = dept_res['department_id']
 
-                        # Username check
+                        # Username uniqueness
                         cursor.execute("SELECT user_id FROM users WHERE username = %s", (row['username'],))
                         if cursor.fetchone():
                             errors.append(f"Row {idx+1}: Duplicate username '{row['username']}'")
@@ -172,40 +172,31 @@ async def bulk_create_users(file: UploadFile = File(...), role: str = Form(...))
                         # Hash password
                         password_hash = bcrypt.hashpw(str(row['password']).encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
-                        # Exact 6 args + datetime = 7
-                        row_args = [
+                        # Append row args + timestamp
+                        full_row = (
                             row['username'],
                             password_hash,
                             row['full_name'],
                             college_id,
                             dept_id,
-                            role_id
-                        ]
-                        full_row = row_args + [datetime.now()]  # Append timestamp
-                        if len(full_row) != placeholder_count:
-                            errors.append(f"Row {idx+1}: Arg mismatch (got {len(full_row)}, expected {placeholder_count})")
-                            continue
-                        valid_rows.append(tuple(full_row))  # Ensure tuple
+                            role_id,
+                            datetime.now()
+                        )
+                        valid_rows.append(full_row)
 
                     except Exception as row_err:
                         errors.append(f"Row {idx+1}: {str(row_err)}")
 
-                # Temporarily comment for debugging (re-enable after)
-                # if len(errors) > len(df) * 0.2:
-                #     raise HTTPException(status_code=400, detail=f"Too many errors ({len(errors)}/{len(df)})")
-
-                # Always attempt insert if valid rows exist
                 if valid_rows:
                     conn.begin()
                     cursor.executemany(insert_query, valid_rows)
                     conn.commit()
 
-                # Always return full errors for now
                 return {
                     "status": "partial" if errors else "success",
                     "message": f"Processed {len(valid_rows)}/{len(df)} rows: {len(errors)} errors",
                     "count": len(valid_rows),
-                    "errors": errors,  # Full list visible now
+                    "errors": errors,
                     "data": {"processed_rows": len(valid_rows)}
                 }
 

@@ -11,7 +11,7 @@ router = APIRouter()
 class CollegeOnboard(BaseModel):
     name: str
     address: str
-    departments: List[str]  # List of department_names to create
+    departments: List[str]
 
     @field_validator('departments')
     @classmethod
@@ -35,27 +35,35 @@ async def onboard_college(data: CollegeOnboard):
                 cursor.execute(college_query, (data.name, data.address, datetime.now()))
                 college_id = cursor.lastrowid
 
-                # Step 2: Create departments for this college (check for duplicates)
                 created_depts = []
+
                 for dept_name in data.departments:
-                    # Check if dept already exists for this college
+                    # Step 2: Check if department exists in master table
                     cursor.execute(
-                        "SELECT department_id FROM departments WHERE department_name = %s AND college_id = %s",
-                        (dept_name, college_id)
+                        "SELECT department_id FROM departments WHERE department_name = %s",
+                        (dept_name,)
                     )
-                    if cursor.fetchone():
-                        created_depts.append(f"{dept_name} (already exists)")
-                        continue
+                    dept = cursor.fetchone()
 
-                    # Generate simple code (e.g., first 4 chars + random, but keep simple)
-                    dept_code = dept_name[:4].upper() + str(college_id)  # Unique per college
+                    if dept:
+                        department_id = dept["department_id"]
+                        created_depts.append(f"{dept_name} (exists)")
+                    else:
+                        # Create department in master table
+                        dept_code = dept_name[:4].upper() + str(int(datetime.timestamp(datetime.now())))  # unique code
+                        dept_query = """
+                            INSERT INTO departments (department_name, department_code, is_active, created_at, updated_at)
+                            VALUES (%s, %s, %s, %s, %s)
+                        """
+                        cursor.execute(dept_query, (dept_name, dept_code, True, datetime.now(), datetime.now()))
+                        department_id = cursor.lastrowid
+                        created_depts.append(f"{dept_name} (created)")
 
-                    dept_query = """
-                        INSERT INTO departments (department_name, department_code, college_id, is_active, created_at)
-                        VALUES (%s, %s, %s, %s, %s)
-                    """
-                    cursor.execute(dept_query, (dept_name, dept_code, college_id, True, datetime.now()))
-                    created_depts.append(f"{dept_name} (created)")
+                    # Step 3: Map department to college
+                    cursor.execute(
+                        "INSERT IGNORE INTO college_departments (college_id, department_id, created_at, updated_at) VALUES (%s, %s, %s, %s)",
+                        (college_id, department_id, datetime.now(), datetime.now())
+                    )
 
                 conn.commit()
 

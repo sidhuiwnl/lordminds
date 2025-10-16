@@ -18,6 +18,7 @@ const SuperAdminUpload = () => {
     endDate: "",
     file: null,
     // Overview form data
+    topicSelectionDepartment: "",
     topicName: "",
     subTopicName: "",
     noOfSubTopic: "",
@@ -122,7 +123,7 @@ const SuperAdminUpload = () => {
   const handleOverviewSubmit = async(e) => {
     e.preventDefault();
     // Handle assignment form submission
-    console.log("depatment",formData.department);
+    console.log("depatment",formData.topicSelectionDepartment);
 
     
 
@@ -131,7 +132,7 @@ const SuperAdminUpload = () => {
     
 
 
-    formDataToSend.append('department_id', formData.department || 11); // Example department ID
+    formDataToSend.append('department_id', formData.topicSelectionDepartment); // Example department ID
     formDataToSend.append('topic_name', formData.topicName);
     formDataToSend.append('sub_topic_name', formData.subTopicName);
     formDataToSend.append('no_of_sub_topics', formData.noOfSubTopic);
@@ -202,6 +203,7 @@ const SuperAdminUpload = () => {
     formDataToSend.append('sub_topic_name', formData.mcqSubTopicName);
     formDataToSend.append('no_of_sub_topics', formData.mcqNoOfSubTopic);
     formDataToSend.append('file', formData.mcqFile);
+    formDataToSend.append('file_name', formData.mcqFile.name);
 
     const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/tests/create`,{
       method : "POST",
@@ -504,6 +506,20 @@ const SuperAdminUpload = () => {
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-6">
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select Department</label>
+                <select 
+                  name="topicSelectionDepartment" 
+                  value={formData.topicSelectionDepartment} 
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                >
+                  <option value="">Select Department</option>
+                  {departments.map((dept, index) => (
+                    <option key={index} value={dept.department_id}>{dept.department_name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Topic Name</label>
                 <input 
                   type="text" 
@@ -621,7 +637,7 @@ const SuperAdminUpload = () => {
                     <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Topic Name</th>
                     <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Sub-topic Name</th>
                     <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Video Link</th>
-                    <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-r-0">Overview Document</th>
+                    {/* <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-r-0">Overview Document</th> */}
                     <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-r-0">Students</th>
                   </tr>
                 </thead>
@@ -648,9 +664,9 @@ const SuperAdminUpload = () => {
           <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
             {subTopic.overview_video_url}
           </td>
-          <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
+          {/* <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
             {subTopic.file_name || "document1.doc"}
-          </td>
+          </td> */}
           <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
             {subTopic.progress || "85%"}
           </td>
@@ -737,13 +753,14 @@ const SuperAdminUpload = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">MCQ's File Upload</label>
                 <div className="relative">
-                  <input 
+                 <input 
                     type="file" 
                     name="mcqFile" 
                     onChange={handleFileChange}
-                    accept=".doc,.pdf"
+                    accept=".xlsx,.xls"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   />
+
                   <div className="absolute inset-y-0 right-0 pr-8 flex items-center pointer-events-none">
                     <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 20l-5.5-5.5M15 20l5.5-5.5" />
@@ -818,7 +835,7 @@ const SuperAdminUpload = () => {
                 {subTopic.total_questions} questions
               </td>
               <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
-                {subTopic.file_name || "N/A"}
+                {subTopic.test_file || ""}
               </td>
               <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
                 65%

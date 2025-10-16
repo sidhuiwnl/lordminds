@@ -63,7 +63,7 @@ async def get_topic_with_subtopics():
                 # For each topic, fetch its subtopics
                 for topic in topics:
                     cursor.execute("""
-                        SELECT sub_topic_id, sub_topic_name, sub_topic_order, overview_video_url, file_name,
+                        SELECT sub_topic_id, sub_topic_name, sub_topic_order, overview_video_url, file_name,test_file,
                                CASE 
                                    WHEN overview_content IS NOT NULL 
                                    THEN TRUE 
