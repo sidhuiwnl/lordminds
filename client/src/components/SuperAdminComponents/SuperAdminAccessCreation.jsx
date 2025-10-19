@@ -22,7 +22,7 @@ const SuperAdminAccessCreation = () => {
   const [showAddDeptModal, setShowAddDeptModal] = useState(false);
   const [deptForm, setDeptForm] = useState({ name: "", code: "" });
 
-  const API_BASE = "http://localhost:8000"; // Adjust to your FastAPI server URL
+  const API_BASE = import.meta.env.VITE_BACKEND_API_URL; // Adjust to your FastAPI server URL
 
   // Define accessTypes here (before return)
   const accessTypes = [
