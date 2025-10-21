@@ -1,77 +1,82 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 
 const GrammarLessons = () => {
-  const lessons = [
-    {
-      id: 1,
-      title: "Present Tense",
-      description: "The Present Tense is used to express actions that are happening now, habits, general truths, or ongoing situations. It has four main forms in English.",
-      progress: 20,
-    },
-    {
-      id: 2,
-      title: "Present Continuous",
-      description: "The Present Continuous is used for actions happening right now or temporary situations. It has four main forms in English.",
-      progress: 55,
-    },
-    {
-      id: 3,
-      title: "Present Perfect",
-      description: "The Present Perfect is used for actions that began in the past and continue to the present or have an effect on the present. It has four main forms in English.",
-      progress: 48,
-    },
-    {
-      id: 4,
-      title: "Present Perfect Continuous",
-      description: "The Present Perfect Continuous is used for actions that began in the past and are still continuing, emphasizing the duration. It has four main forms in English.",
-      progress: 20,
-    },
-    {
-      id: 5,
-      title: "Past Simple",
-      description: "The Past Simple is used for actions that are completed in the past. It has four main forms in English.",
-      progress: 75,
-    },
-    {
-      id: 6,
-      title: "Past Continuous",
-      description: "The Past Continuous is used for actions that were ongoing at a specific time in the past. It has four main forms in English.",
-      progress: 35,
-    },
-  ];
+  const { topic } = useParams(); // 🔹 Gets topic_id from URL
+  const [subtopics, setSubtopics] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // 🔹 Fetch subtopics dynamically
+  useEffect(() => {
+    async function fetchSubtopics() {
+      try {
+        const response = await fetch(
+          `${import.meta.env.VITE_BACKEND_API_URL}/users/${topic}/subtopics`
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch subtopics");
+        }
+
+        const data = await response.json();
+        setSubtopics(data.data || []);
+      } catch (error) {
+        console.error("Error fetching subtopics:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchSubtopics();
+  }, [topic]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen text-gray-600">
+        Loading subtopics...
+      </div>
+    );
+  }
+
+  if (subtopics.length === 0) {
+    return (
+      <div className="flex justify-center items-center min-h-screen text-gray-500">
+        No subtopics found.
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
+      <h2 className="text-xl font-bold text-gray-800 mb-6">Subtopics</h2>
+
       <div className="space-y-4 lg:space-y-6 mx-0 lg:mx-4">
-        {lessons.map((lesson) => (
+        {subtopics.map((sub) => (
           <div
-            key={lesson.id}
+            key={sub.sub_topic_id}
             className="bg-white rounded-2xl shadow-sm p-4 lg:p-6 border-t-4 border-r-4 border-[#1b65a6] rounded-bl-lg rounded-tr-lg"
           >
             <div className="flex flex-col sm:flex-row justify-between items-start gap-3 sm:gap-0 mb-3 lg:mb-4">
-              <h3 className="font-bold text-base lg:text-lg text-gray-800">{lesson.title}</h3>
-              <button className="bg-yellow-400 text-gray-900 px-3 lg:px-4 py-2 rounded-sm text-xs lg:text-sm font-medium hover:bg-yellow-500 transition-colors w-full sm:w-auto">
+              <h3 className="font-bold text-base lg:text-lg text-gray-800">
+                {sub.sub_topic_name}
+              </h3>
+              <a
+                href={"/student/lessonsoverview"}
+                rel="noopener noreferrer"
+                className="bg-yellow-400 text-gray-900 px-3 lg:px-4 py-2 rounded-sm text-xs lg:text-sm font-medium hover:bg-yellow-500 transition-colors w-full sm:w-auto text-center"
+              >
                 Start
-              </button>
+              </a>
             </div>
-            <p className="text-xs lg:text-sm text-gray-600 mb-3 lg:mb-4">{lesson.description}</p>
-            <p className="text-xs lg:text-sm font-medium text-gray-600 mb-2">Progress</p>
-            <div className="relative mb-3 lg:mb-4">
-              <div className="w-full bg-gray-200 rounded-full h-3 lg:h-4 pr-10 lg:pr-12">
-                <div
-                  className="h-3 lg:h-4 rounded-full bg-[#1b65a6] relative transition-all duration-300"
-                  style={{ width: `${lesson.progress}%` }}
-                >
-                  {lesson.progress > 0 && (
-                    <span className="absolute right-0 top-1/2 -translate-y-1/2 -translate-x-1/2 text-[10px] lg:text-xs font-bold text-white whitespace-nowrap">
-                      {lesson.progress}%
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-            <p className="text-xs lg:text-sm text-gray-600">
-              Progress: {lesson.progress}%
+
+            <p className="text-xs lg:text-sm text-gray-600 mb-3 lg:mb-4">
+              {sub.has_document
+                ? `Document: The Present Tense is used to express actions that are happening now, habits, general truths, or ongoing situations. It has four main forms in English.`
+                : "No document available"}
+            </p>
+
+            <p className="text-xs text-gray-500">
+              Created at: {new Date(sub.created_at).toLocaleDateString()}
             </p>
           </div>
         ))}

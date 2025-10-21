@@ -321,3 +321,80 @@ async def get_assignments_by_department(college_id: int, department_id: int):
             status_code=500,
             detail=f"Error fetching assignments for department {department_id} in college {college_id}: {str(e)}"
         )
+
+
+
+@router.get("/colleges/{college_id}/departments/{department_id}/topics")
+async def get_topics_by_college_and_department(college_id: int, department_id: int):
+    """
+    Fetch all active topics for a given department in a specific college.
+    Includes department and topic details.
+    """
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                  SELECT 
+                    t.topic_id,
+                    t.topic_name,
+                    t.total_sub_topics,
+                    d.department_name,
+                    c.name AS college_name
+                FROM topics t
+                INNER JOIN departments d ON t.department_id = d.department_id
+                INNER JOIN college_departments cd ON d.department_id = cd.department_id
+                INNER JOIN colleges c ON cd.college_id = c.college_id
+                WHERE d.department_id = %s
+                AND c.college_id = %s
+                AND t.is_active = 1
+                """, (department_id, college_id))
+
+                topics = cursor.fetchall()
+
+               
+                return {
+                    "status": "success",
+                    "count": len(topics),
+                    "data": topics
+                }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error fetching topics for department {department_id} in college {college_id}: {str(e)}"
+        )
+    
+@router.get("/{topic_id}/subtopics")
+async def get_subtopics_by_topic(topic_id: int):
+    """Fetch all active subtopics for a given topic"""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        sub_topic_id,
+                        sub_topic_name,
+                        sub_topic_order,
+                        overview_video_url,
+                        file_name,
+                        CASE 
+                            WHEN overview_content IS NOT NULL 
+                            THEN TRUE 
+                            ELSE FALSE 
+                        END as has_document,
+                        is_active,
+                        created_at
+                    FROM sub_topics 
+                    WHERE topic_id = %s AND is_active = TRUE
+                    ORDER BY sub_topic_order
+                """, (topic_id,))
+                subtopics = cursor.fetchall()
+
+                return {
+                    "status": "success",
+                    "count": len(subtopics),
+                    "data": subtopics
+                }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching subtopics for topic {topic_id}: {str(e)}")    

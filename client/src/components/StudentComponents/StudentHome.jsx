@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 const StudentHome = () => {
   const [assignmentData, setAssignmentData] = useState([]);
+  const [topics, setTopics] = useState([]);
 
   // ✅ Fetch user details (to get college_id & department_id)
   async function getUserDetails() {
@@ -17,21 +19,18 @@ const StudentHome = () => {
         `${import.meta.env.VITE_BACKEND_API_URL}/users/${user.user_id}`,
         {
           method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
         }
       );
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch user details");
-      }
+      if (!response.ok) throw new Error("Failed to fetch user details");
 
       const data = await response.json();
       const userData = data.data;
 
       if (userData.college_id && userData.department_id) {
         await fetchAssignments(userData.college_id, userData.department_id);
+        await fetchTopics(userData.college_id, userData.department_id);
       } else {
         console.error("Missing college_id or department_id for user");
       }
@@ -40,22 +39,15 @@ const StudentHome = () => {
     }
   }
 
-  // ✅ Fetch assignments using college_id & department_id
+  // ✅ Fetch assignments
   async function fetchAssignments(college_id, department_id) {
     try {
       const response = await fetch(
         `${import.meta.env.VITE_BACKEND_API_URL}/users/colleges/${college_id}/departments/${department_id}/assignments`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
+        { method: "GET", headers: { "Content-Type": "application/json" } }
       );
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch assignments");
-      }
+      if (!response.ok) throw new Error("Failed to fetch assignments");
 
       const data = await response.json();
       setAssignmentData(data.data || []);
@@ -64,89 +56,40 @@ const StudentHome = () => {
     }
   }
 
+  // ✅ Fetch topics dynamically
+  async function fetchTopics(college_id, department_id) {
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_BACKEND_API_URL}/users/colleges/${college_id}/departments/${department_id}/topics`,
+        { method: "GET", headers: { "Content-Type": "application/json" } }
+      );
+
+      if (!response.ok) throw new Error("Failed to fetch topics");
+
+      const data = await response.json();
+
+      // Map API response to UI-friendly format
+      const formattedTopics = (data.data || []).map((topic) => ({
+        id: topic.topic_id,
+        title: topic.topic_name,
+        status: "Not Started", // You can update status dynamically later
+        icon: "📘",
+        progress: 0, // Default progress
+        score: 0,
+        color: "gray",
+        department: topic.department_name,
+        college: topic.college_name,
+      }));
+
+      setTopics(formattedTopics);
+    } catch (error) {
+      console.error("Error fetching topics:", error);
+    }
+  }
+
   useEffect(() => {
     getUserDetails();
   }, []);
-
-  console.log("Fetched Assignment Data:", assignmentData);
-
-  // 🧠 Mock Topics Data
-  const topics = [
-    {
-      id: 1,
-      title: "Topic 1",
-      status: "Completed",
-      icon: "🏆",
-      progress: 100,
-      score: 92,
-      color: "green",
-    },
-    {
-      id: 2,
-      title: "Topic 2",
-      status: "Learning Now",
-      icon: "▶️",
-      progress: 20,
-      score: 38,
-      color: "orange",
-    },
-    {
-      id: 3,
-      title: "Topic 3",
-      status: "Ongoing",
-      icon: "⏳",
-      progress: 45,
-      score: 45,
-      color: "blue",
-    },
-    {
-      id: 4,
-      title: "Topic 4",
-      status: "Exploring",
-      icon: "🔍",
-      progress: 85,
-      score: 92,
-      color: "yellow",
-    },
-    {
-      id: 5,
-      title: "Topic 5",
-      status: "Not Started",
-      icon: "🔒",
-      progress: 0,
-      score: 0,
-      color: "gray",
-    },
-    {
-      id: 6,
-      title: "Topic 6",
-      status: "Not Started",
-      icon: "🔒",
-      progress: 0,
-      score: 0,
-      color: "gray",
-    },
-    {
-      id: 7,
-      title: "Topic 7",
-      status: "Not Started",
-      icon: "🔒",
-      progress: 0,
-      score: 0,
-      color: "gray",
-    },
-    {
-      id: 8,
-      title: "Topic 8",
-      status: "Not Started",
-      icon: "🔒",
-      progress: 0,
-      score: 0,
-      color: "gray",
-    },
-  ];
-
-  console.log("Rendering StudentHome with assignments:", assignmentData);
 
   return (
     <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
@@ -207,7 +150,7 @@ const StudentHome = () => {
         <span className="text-gray-400 text-xs lg:text-base">...</span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+      <div  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
         {topics.map((topic) => {
           const colorClasses = {
             green: "bg-green-500 border-green-400",
@@ -225,11 +168,11 @@ const StudentHome = () => {
           };
           const progressColor = colorClasses[topic.color] || colorClasses.gray;
           const statusColor = statusClasses[topic.color] || statusClasses.gray;
-          const textColor =
-            topic.color === "yellow" ? "text-gray-900" : "text-white";
+          const textColor = topic.color === "yellow" ? "text-gray-900" : "text-white";
 
           return (
-            <div
+            <Link
+              to={`/student/${topic.id}/subtopics`}
               key={topic.id}
               className="bg-white rounded-2xl shadow-sm p-4 lg:p-6 border border-gray-100"
             >
@@ -242,6 +185,10 @@ const StudentHome = () => {
                 >
                   {topic.icon} {topic.status}
                 </span>
+              </div>
+
+              <div className="text-xs text-gray-500 mb-2">
+                Department: {topic.department} | College: {topic.college}
               </div>
 
               <div className="relative mb-3 lg:mb-4">
@@ -264,7 +211,7 @@ const StudentHome = () => {
               <p className="text-xs lg:text-sm text-gray-600 text-left">
                 Progress: {topic.progress}% | Score: {topic.score}/100
               </p>
-            </div>
+            </Link>
           );
         })}
       </div>
