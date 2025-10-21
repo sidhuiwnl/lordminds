@@ -209,3 +209,115 @@ async def bulk_create_users(file: UploadFile = File(...), role: str = Form(...))
             except:
                 pass
         raise HTTPException(status_code=500, detail=f"Error in bulk user creation: {str(e)}")
+
+
+@router.post("/login")
+async def login(username: str = Form(...), password: str = Form(...)):
+    """Authenticate user and return basic info"""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT u.user_id, u.username, u.password_hash, r.name
+                    FROM users u
+                    JOIN roles r ON u.role_id = r.role_id
+                    WHERE u.username = %s
+                """, (username,))
+                user = cursor.fetchone()
+                if not user or not bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
+                    raise HTTPException(status_code=401, detail="Invalid username or password")
+
+                return {
+                    "status": "success",
+                    "message": "Login successful",
+                    "data": {
+                        "user_id": user['user_id'],
+                        "username": user['username'],
+                        "role": user['name']
+                    }
+                }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error during login: {str(e)}")
+
+
+@router.get("/{user_id}")
+async def get_user(user_id: int):
+    """Fetch user details by user_id"""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT * from users u
+                    WHERE u.user_id = %s
+                """, (user_id,))
+                user = cursor.fetchone()
+                if not user:
+                    raise HTTPException(status_code=404, detail=f"User with ID {user_id} not found")
+
+                return {
+                    "status": "success",
+                    "data": user
+                }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching user {user_id}: {str(e)}")
+
+
+
+@router.get("/colleges/{college_id}/departments/{department_id}/assignments")
+async def get_assignments_by_department(college_id: int, department_id: int):
+    """Fetch assignments for a given department within a specific college"""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                # Ensure the department belongs to this college
+                cursor.execute("""
+                    SELECT 1
+                    FROM college_departments
+                    WHERE college_id = %s AND department_id = %s
+                """, (college_id, department_id))
+                
+                relation = cursor.fetchone()
+                if not relation:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Department {department_id} does not belong to College {college_id}"
+                    )
+
+                # Fetch assignments for that department
+                cursor.execute("""
+                    SELECT 
+                        a.assignment_id,
+                        a.assignment_topic,
+                        a.description,
+                        a.end_date,
+                        d.department_name,
+                        c.name AS college_name
+                    FROM assignments a
+                    JOIN departments d ON a.department_id = d.department_id
+                    JOIN college_departments cd ON d.department_id = cd.department_id
+                    JOIN colleges c ON cd.college_id = c.college_id
+                    WHERE d.department_id = %s AND c.college_id = %s
+                    ORDER BY a.end_date DESC
+                """, (department_id, college_id))
+
+                assignments = cursor.fetchall()
+
+                return {
+                    "status": "success",
+                    "count": len(assignments),
+                    "data": assignments
+                }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching assignments for department {department_id} in college {college_id}: {str(e)}"
+        )
