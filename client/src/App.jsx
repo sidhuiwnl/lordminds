@@ -26,8 +26,8 @@ const App = () => {
         <Route path="/" element={<LoginPage />} />
         <Route path="/student/studenthome" element={<StudentHomePage />} />
         <Route path="/student/:topic/subtopics" element={<GrammarLessonsPage />} />
-        <Route path="/student/lessonsoverview" element={<LessonsOverviewPage />} />
-        <Route path="/student/assessments" element={<AssessmentPage />} />
+        <Route path="/student/:subtopic/lessonsoverview" element={<LessonsOverviewPage />} />
+        <Route path="/student/:subtopic/assessments" element={<AssessmentPage />} />
         <Route path="/student/currentmarks" element={<CurrentMarksPage />} />
         <Route path="/student/assignmentmarks" element={<AssignmentMarksPage />} />
         <Route path="/student/totalduration" element={<TotalDurationPage />} />

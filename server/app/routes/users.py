@@ -1,3 +1,4 @@
+
 from fastapi import APIRouter, HTTPException, Form, File, UploadFile
 from config.database import get_db
 from pydantic import BaseModel, Field, field_validator
@@ -6,6 +7,7 @@ import bcrypt
 import pandas as pd
 from io import BytesIO
 from datetime import datetime
+
 
 router = APIRouter()
 
@@ -398,3 +400,79 @@ async def get_subtopics_by_topic(topic_id: int):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching subtopics for topic {topic_id}: {str(e)}")    
+    
+
+@router.get("/subtopic/{sub_topic_id}")
+async def get_subtopic_details(sub_topic_id: int):
+    """Fetch details of a specific subtopic by its ID"""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        sub_topic_id,
+                        sub_topic_name,
+                        sub_topic_order,
+                        overview_video_url,
+                        overview_content,       
+                        file_name,
+                        CASE 
+                            WHEN overview_content IS NOT NULL 
+                            THEN TRUE 
+                            ELSE FALSE 
+                        END as has_document,
+                        is_active,
+                        created_at
+                    FROM sub_topics 
+                    WHERE sub_topic_id = %s AND is_active = TRUE
+                """, (sub_topic_id,))
+                subtopic = cursor.fetchone()
+
+                if not subtopic:
+                    raise HTTPException(status_code=404, detail=f"Subtopic with ID {sub_topic_id} not found")
+
+                return {
+                    "status": "success",
+                    "data": subtopic
+                }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching subtopic {sub_topic_id}: {str(e)}")  
+      
+    
+
+@router.get("/subtopic/{sub_topic_id}/questions")
+async def get_questions_by_subtopic(sub_topic_id: int):
+    """Fetch all active questions for a given subtopic"""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        question_id,
+                        question_text,
+                        question_data,
+                        marks,
+                        order_no,
+                        created_at
+                    FROM questions 
+                    WHERE test_scope = 'sub_topic' 
+                      AND reference_id = %s
+                """, (sub_topic_id,))
+                
+                # Fetch all results directly as list of dicts
+                questions = cursor.fetchall()
+
+                return {
+                    "status": "success",
+                    "count": len(questions),
+                    "data": questions
+                }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching questions for subtopic {sub_topic_id}: {str(e)}"
+        )
