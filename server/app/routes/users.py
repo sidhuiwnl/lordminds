@@ -7,9 +7,24 @@ import bcrypt
 import pandas as pd
 from io import BytesIO
 from datetime import datetime
+from voice.voice_analyzer import VoiceAnalyzer
+import shutil
 
 
 router = APIRouter()
+analyzer = VoiceAnalyzer()
+
+
+@router.post("/analyze-voice")
+async def analyze_voice(file: UploadFile = File(...)):
+    temp_path = f"temp_{file.filename}"
+    with open(temp_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    result = analyzer.analyze_audio(temp_path)
+    return result
+
+
 
 class UserCreate(BaseModel):
     role: str = Field(..., pattern=r'^(student|teacher|administrator)$')  # Updated to pattern (raw string for regex)
