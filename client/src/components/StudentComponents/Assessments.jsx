@@ -195,6 +195,7 @@ import RecordRTC from "recordrtc";
 const Assessments = () => {
   const { subtopic } = useParams();
   const [questions, setQuestions] = useState([]);
+  const [heading, setHeading] = useState('');
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -234,7 +235,23 @@ const Assessments = () => {
       }
     };
 
-    if (subtopic) fetchQuestions();
+    const fetchSubTopicDetails = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/users/subtopic/${subtopic}`,{
+          method: "GET",
+          headers: {"Content-Type": "application/json" },
+        });
+        const data = await res.json();
+        setHeading(data.data.sub_topic_name);
+      } catch (err) {
+        console.error("Error fetching subtopic details:", err);
+      }
+    };
+
+    if (subtopic){
+       fetchQuestions();
+       fetchSubTopicDetails();
+    };
   }, [subtopic]);
 
   const currentQuestion = questions[currentStep - 1];
@@ -331,7 +348,7 @@ const Assessments = () => {
       <div className="space-y-4 lg:space-y-6 mx-0 lg:mx-4">
         <div className="bg-white rounded-2xl shadow-sm p-4 lg:p-6 border-t-4 border-r-4 border-[#1b65a6] rounded-bl-lg rounded-tr-lg">
           <h2 className="font-bold text-lg lg:text-xl text-gray-800 mb-3 lg:mb-4">
-            Assessment – Subtopic {subtopic}
+             {heading}
           </h2>
 
           <p className="text-xs lg:text-sm font-medium text-gray-700 mb-3 lg:mb-4">
@@ -339,27 +356,35 @@ const Assessments = () => {
           </p>
 
           {/* Options */}
-          <div className="border border-blue-200 rounded-lg p-3 lg:p-4 mb-4 lg:mb-6">
-            <div className="space-y-2 lg:space-y-3">
-              {currentQuestion.question_data?.options?.map((option, index) => (
+          <div className="space-y-3 mb-4 lg:mb-6">
+            {currentQuestion.question_data?.options?.map((option, index) => {
+              const optionLetter = String.fromCharCode(65 + index); // A, B, C, D...
+              const isSelected = answers[currentQuestion.question_id] === option;
+              
+              return (
                 <label
                   key={index}
-                  className="flex items-start lg:items-center space-x-3 cursor-pointer"
+                  className="flex items-center space-x-3 cursor-pointer p-3 lg:p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                 >
+                  <div className="flex items-center justify-center w-5 h-5 rounded-full border-2 border-gray-400 flex-shrink-0">
+                    {isSelected && (
+                      <div className="w-3 h-3 rounded-full bg-[#1b65a6]"></div>
+                    )}
+                  </div>
                   <input
                     type="radio"
                     name={`answer-${currentQuestion.question_id}`}
                     value={option}
-                    checked={answers[currentQuestion.question_id] === option}
+                    checked={isSelected}
                     onChange={() => handleOptionChange(option)}
-                    className="w-4 h-4 text-[#1b65a6] border-gray-300 focus:ring-[#1b65a6] rounded-full mt-0.5 lg:mt-0 flex-shrink-0"
+                    className="sr-only"
                   />
-                  <span className="text-xs lg:text-sm text-gray-600">
-                    {typeof option === "boolean" ? option.toString() : option}
+                  <span className="text-sm lg:text-base text-gray-700">
+                    <span className="font-medium">{optionLetter} :</span> {typeof option === "boolean" ? option.toString() : option}
                   </span>
                 </label>
-              ))}
-            </div>
+              );
+            })}
           </div>
 
           {/* Audio Controls */}
@@ -410,6 +435,54 @@ const Assessments = () => {
             </div>
           )}
 
+          {/* Question Navigation Circles */}
+          <div className="flex items-center justify-center gap-2 mb-4 lg:mb-6 overflow-x-auto pb-2">
+            <button
+              onClick={handlePrevious}
+              disabled={currentStep === 1}
+              className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+
+            {questions.map((_, index) => {
+              const questionNum = index + 1;
+              const isActive = currentStep === questionNum;
+              const isAnswered = answers[questions[index].question_id];
+              
+              return (
+                <button
+                  key={questionNum}
+                  onClick={() => {
+                    setCurrentStep(questionNum);
+                    setAnalysisResult(null);
+                  }}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0 transition-all ${
+                    isActive
+                      ? 'bg-yellow-400 text-gray-900'
+                      : isAnswered
+                      ? 'bg-yellow-400 text-gray-900'
+                      : 'bg-gray-300 text-gray-600 hover:bg-gray-400'
+                  }`}
+                >
+                  {questionNum}
+                </button>
+              );
+            })}
+
+            <button
+              onClick={handleNext}
+              disabled={currentStep === totalSteps}
+              className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+
           {/* Pagination */}
           <div className="flex items-center justify-between gap-3 sm:gap-0">
             <button
@@ -417,14 +490,14 @@ const Assessments = () => {
               disabled={currentStep === 1}
               className="w-full sm:w-auto px-4 py-2 text-xs lg:text-sm font-medium text-[#1b65a6] border border-[#1b65a6] rounded-full hover:bg-[#1b65a6] hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              &lt; Previous
+              &lt;&lt; Previous
             </button>
             <button
               onClick={handleNext}
               disabled={currentStep === totalSteps}
               className="w-full sm:w-auto px-4 lg:px-6 py-2 bg-yellow-400 text-gray-900 text-xs lg:text-sm font-medium rounded-full hover:bg-yellow-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Next &gt;
+              Next &gt;&gt;
             </button>
           </div>
         </div>

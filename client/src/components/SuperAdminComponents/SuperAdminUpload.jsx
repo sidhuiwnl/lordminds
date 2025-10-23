@@ -576,7 +576,7 @@ const SuperAdminUpload = () => {
               >
                 <option value="">Select College</option>
                 {colleges.map((college, index) => (
-                  <option key={index} value={college.college_id}>{college.college_name}</option>
+                  <option key={index} value={college.college_id}>{college.name}</option>
                 ))}
               </select>
             </div>
@@ -774,7 +774,7 @@ const SuperAdminUpload = () => {
               >
                 <option value="">Select College</option>
                 {colleges.map((college, index) => (
-                  <option key={index} value={college.college_id}>{college.college_name}</option>
+                  <option key={index} value={college.college_id}>{college.name}</option>
                 ))}
               </select>
             </div>

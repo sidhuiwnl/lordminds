@@ -123,9 +123,9 @@ const StudentHome = () => {
                   {assignment.is_submitted ? "✅ Submitted" : "🕒 Pending"}
                 </span>
               </div>
-              <p className="text-xs lg:text-sm text-gray-600 mb-1">
+              {/* <p className="text-xs lg:text-sm text-gray-600 mb-1">
                 {assignment.description}
-              </p>
+              </p> */}
               <p className="text-xs text-gray-500 mb-4 lg:mb-6">
                 Due: {new Date(assignment.end_date).toLocaleDateString()}
               </p>

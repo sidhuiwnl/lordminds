@@ -37,7 +37,7 @@ const Sidebar = ({ isOpen, onClose, isMobile = false }) => {
   return (
     <div className={sidebarClasses}>
       {/* Top Logo and Titles */}
-      <div className="p-4 lg:p-6 pb-2 lg:pb-4 border-b border-blue-400/20 flex-shrink-0">
+      <div className="p-4 lg:p-6 pb-2 lg:pb-4 mt-3  border-b border-blue-400/20 flex-shrink-0">
         <div className="flex items-center gap-3 mb-4">
           <img 
             src="/assets/logo.png" 
