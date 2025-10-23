@@ -11,6 +11,7 @@ const SuperAdminUpload = () => {
   const [selectedTab, setSelectedTab] = useState("upload-assignment");
   const [formData, setFormData] = useState({
     // Assignment form data
+    assignmentCollege: "",
     department: "",
     assignmentNo: "",
     assignmentTopic: "",
@@ -18,6 +19,7 @@ const SuperAdminUpload = () => {
     endDate: "",
     file: null,
     // Overview form data
+    topicSelectionCollege: "",
     topicSelectionDepartment: "",
     topicName: "",
     subTopicName: "",
@@ -26,6 +28,7 @@ const SuperAdminUpload = () => {
     overviewDocument: null,
     overviewText: "",
     // MCQ form data
+    mcqCollege: "",
     mcqDepartment: "",
     mcqTopicName: "",
     mcqSubTopicName: "",
@@ -34,7 +37,10 @@ const SuperAdminUpload = () => {
   });
   const[assignmentData,setAssignmentData] = useState([])
   const[overviewDetails,setOverviewDetails] = useState([])
-  const[departments,setDepartments] = useState([])
+  const[colleges,setColleges] = useState([])
+  const[assignmentDepartments,setAssignmentDepartments] = useState([])
+  const[overviewDepartments,setOverviewDepartments] = useState([])
+  const[mcqDepartments,setMcqDepartments] = useState([])
   const [topics, setTopics] = useState([])
   const[topicWithSub,setTopicWithSub] = useState([])
 
@@ -88,6 +94,32 @@ const SuperAdminUpload = () => {
     }
   };
 
+  const fetchDepartmentsForCollege = async (collegeId, setter) => {
+    if (!collegeId) {
+      setter([]);
+      return;
+    }
+    try {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/colleges/${collegeId}/departments`, {
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setter(data.data || []);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to fetch departments");
+      setter([]);
+    }
+  };
+
   const handleAssignmentSubmit = async(e) => {
     e.preventDefault();
     // Handle assignment form submission
@@ -98,6 +130,7 @@ const SuperAdminUpload = () => {
     formDataToSend.append("test_type", "assignment");
 
     
+    formDataToSend.append('college_id', formData.assignmentCollege);
     formDataToSend.append('department_id', formData.department); // Example department ID
     formDataToSend.append('assignment_number', formData.assignmentNo);
     formDataToSend.append('assignment_topic', formData.assignmentTopic);
@@ -132,6 +165,7 @@ const SuperAdminUpload = () => {
     
 
 
+    formDataToSend.append('college_id', formData.topicSelectionCollege);
     formDataToSend.append('department_id', formData.topicSelectionDepartment); // Example department ID
     formDataToSend.append('topic_name', formData.topicName);
     formDataToSend.append('sub_topic_name', formData.subTopicName);
@@ -198,6 +232,7 @@ const SuperAdminUpload = () => {
     
     formDataToSend.append("test_type", "sub_topic");
 
+    formDataToSend.append('college_id', formData.mcqCollege);
     formDataToSend.append('department_id', formData.mcqDepartment || 1); // Example department ID
     formDataToSend.append('topic_name', formData.mcqTopicName);
     formDataToSend.append('sub_topic_name', formData.mcqSubTopicName);
@@ -257,8 +292,8 @@ const SuperAdminUpload = () => {
       setOverviewDetails(data.data)
     }
 
-    async function fetchDepartments() {
-      const resposne = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/departments`,{
+    async function fetchColleges() {
+      const resposne = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/colleges`,{
         method : "GET",
         headers : {
           "Accept" : "application/json",
@@ -271,7 +306,7 @@ const SuperAdminUpload = () => {
       }
 
       const data = await resposne.json()
-      setDepartments(data.data)
+      setColleges(data.data)
 
     } 
 
@@ -295,9 +330,21 @@ const SuperAdminUpload = () => {
 
     overviewDetails()
     assignmentDetails()
-    fetchDepartments()
+    fetchColleges()
     fetchTopicWithSubTopic()
   },[])
+
+  useEffect(() => {
+    fetchDepartmentsForCollege(formData.assignmentCollege, setAssignmentDepartments);
+  }, [formData.assignmentCollege]);
+
+  useEffect(() => {
+    fetchDepartmentsForCollege(formData.topicSelectionCollege, setOverviewDepartments);
+  }, [formData.topicSelectionCollege]);
+
+  useEffect(() => {
+    fetchDepartmentsForCollege(formData.mcqCollege, setMcqDepartments);
+  }, [formData.mcqCollege]);
 
   useEffect(() => {
     if (formData.mcqDepartment) {
@@ -354,6 +401,21 @@ const SuperAdminUpload = () => {
           <form onSubmit={handleAssignmentSubmit} className="bg-white rounded-lg shadow p-4 lg:p-6 mb-6">
             <h2 className="text-lg lg:text-xl font-semibold text-gray-800 mb-4 lg:mb-6">Fill the details to create a assignment</h2>
             
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Select College</label>
+              <select 
+                name="assignmentCollege" 
+                value={formData.assignmentCollege} 
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              >
+                <option value="">Select College</option>
+                {colleges.map((college, index) => (
+                  <option key={index} value={college.college_id}>{college.name}</option>
+                ))}
+              </select>
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Select Department</label>
@@ -364,7 +426,7 @@ const SuperAdminUpload = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 >
                   <option value="">Select Department</option>
-                  {departments.map((dept, index) => (
+                  {assignmentDepartments.map((dept, index) => (
                     <option key={index} value={dept.department_id}>{dept.department_name}</option>
                   ))}
                 </select>
@@ -504,7 +566,22 @@ const SuperAdminUpload = () => {
           <form onSubmit={handleOverviewSubmit} className="bg-white rounded-lg shadow p-4 lg:p-6 mb-6">
             <h2 className="text-lg lg:text-xl font-semibold text-gray-800 mb-4 lg:mb-6">Fill the details to upload overview</h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-6">
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Select College</label>
+              <select 
+                name="topicSelectionCollege" 
+                value={formData.topicSelectionCollege} 
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              >
+                <option value="">Select College</option>
+                {colleges.map((college, index) => (
+                  <option key={index} value={college.college_id}>{college.college_name}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 lg:gap-6 mb-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Select Department</label>
                 <select 
@@ -514,7 +591,7 @@ const SuperAdminUpload = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 >
                   <option value="">Select Department</option>
-                  {departments.map((dept, index) => (
+                  {overviewDepartments.map((dept, index) => (
                     <option key={index} value={dept.department_id}>{dept.department_name}</option>
                   ))}
                 </select>
@@ -687,6 +764,21 @@ const SuperAdminUpload = () => {
           <form onSubmit={handleMcqSubmit} className="bg-white rounded-lg shadow p-4 lg:p-6 mb-6">
             <h2 className="text-lg lg:text-xl font-semibold text-gray-800 mb-4 lg:mb-6">Fill the details to Upload MCQ's</h2>
             
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Select College</label>
+              <select 
+                name="mcqCollege" 
+                value={formData.mcqCollege} 
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              >
+                <option value="">Select College</option>
+                {colleges.map((college, index) => (
+                  <option key={index} value={college.college_id}>{college.college_name}</option>
+                ))}
+              </select>
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 lg:gap-6 mb-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Select Department</label>
@@ -697,7 +789,7 @@ const SuperAdminUpload = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 >
                   <option value="">Select Department</option>
-                  {departments.map((dept, index) => (
+                  {mcqDepartments.map((dept, index) => (
                     <option key={index} value={dept.department_id}>{dept.department_name}</option>
                   ))}
                 </select>

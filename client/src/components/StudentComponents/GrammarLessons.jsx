@@ -19,7 +19,14 @@ const GrammarLessons = () => {
         }
 
         const data = await response.json();
-        setSubtopics(data.data || []);
+
+        // Mock progress if not provided by API
+        const enrichedData = (data.data || []).map((item) => ({
+          ...item,
+          progress: item.progress || Math.floor(Math.random() * 100),
+        }));
+
+        setSubtopics(enrichedData);
       } catch (error) {
         console.error("Error fetching subtopics:", error);
       } finally {
@@ -69,15 +76,29 @@ const GrammarLessons = () => {
               </a>
             </div>
 
-            <p className="text-xs lg:text-sm text-gray-600 mb-3 lg:mb-4">
-              {sub.has_document
-                ? `Document: The Present Tense is used to express actions that are happening now, habits, general truths, or ongoing situations. It has four main forms in English.`
-                : "No document available"}
+            <p className="text-xs lg:text-sm text-gray-600 font-semibold mb-3 lg:mb-4">
+              The Present Tense is used to express actions that are happening
+              now, habits, general truths, or ongoing situations. It has four
+              main forms in English.
             </p>
 
-            <p className="text-xs text-gray-500">
-              Created at: {new Date(sub.created_at).toLocaleDateString()}
-            </p>
+            
+            <div className="mt-2">
+              <p className="text-xs font-semibold text-gray-700 mb-1">
+                Progress
+              </p>
+              <div className="w-full bg-gray-200 rounded-full h-[25px] relative overflow-hidden">
+                <div
+                  className="bg-blue-500 h-6 rounded-full transition-all duration-500"
+                  style={{ width: `${sub.progress}%` }}
+                >
+                  <span className="absolute left-2 text-xs text-white font-semibold">
+                    {sub.progress}%
+                  </span>
+                </div>
+              </div>
+            </div>
+           
           </div>
         ))}
       </div>

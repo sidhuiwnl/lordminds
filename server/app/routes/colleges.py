@@ -105,3 +105,27 @@ async def get_colleges():
                 }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching colleges: {str(e)}")
+    
+
+@router.get("/{college_id}/departments")
+async def get_college_departments(college_id: int):
+    """Fetch departments associated with a specific college"""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                query = """
+                    SELECT d.department_id, d.department_name, d.department_code
+                    FROM departments d
+                    JOIN college_departments cd ON d.department_id = cd.department_id
+                    WHERE cd.college_id = %s
+                    ORDER BY d.department_name
+                """
+                cursor.execute(query, (college_id,))
+                departments = cursor.fetchall()
+                return {
+                    "status": "success",
+                    "count": len(departments),
+                    "data": departments
+                }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching departments for college {college_id}: {str(e)}")    
