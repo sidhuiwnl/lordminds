@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Select from 'react-select';
 
-const SuperAdminAccessCreation = () => {
+const AdminAccessCreation = () => {
   const [selectedAccessType, setSelectedAccessType] = useState("college-onboarding");
   const [formData, setFormData] = useState({
     collegeName: "",
@@ -33,8 +33,8 @@ const SuperAdminAccessCreation = () => {
     { id: "college-onboarding", label: "College Onboarding" },
     { id: "student", label: "Student Access" },
     { id: "teacher", label: "Teacher Access" },
-    { id: "admin", label: "Administrator Access" },
-    { id: "topic", label: "Topic Creation" }
+    // { id: "admin", label: "Administrator Access" },
+    // { id: "topic", label: "Topic Creation" }
   ];
 
   const fetchColleges = async () => {
@@ -630,4 +630,4 @@ const SuperAdminAccessCreation = () => {
   );
 };
 
-export default SuperAdminAccessCreation;
+export default AdminAccessCreation;

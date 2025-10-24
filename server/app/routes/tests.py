@@ -13,16 +13,15 @@ router = APIRouter()
 UPLOAD_DIR = "uploads/tests"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-
 @router.post("/create", status_code=201)
 async def create_test(
     test_type: str = Form(...),  # 'assignment' or 'sub_topic'
-
+    
     # Common fields
-    department_id: int = Form(...),
     file: UploadFile = File(...),
 
     # Assignment fields
+    department_id: int = Form(None),
     assignment_number: str = Form(None),
     assignment_topic: str = Form(None),
     total_marks: float = Form(100),
@@ -33,7 +32,6 @@ async def create_test(
     # Subtopic fields
     topic_name: str = Form(None),
     sub_topic_name: str = Form(None),
-    no_of_sub_topics: int = Form(None),
     file_name: str = Form(None),
 ):
     """Create assignment or subtopic test — optimized for speed."""
@@ -57,19 +55,25 @@ async def create_test(
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
-                # ✅ Step 2: Validate department
-                cursor.execute(
-                    "SELECT department_id FROM departments WHERE department_id=%s",
-                    (department_id,)
-                )
-                if not cursor.fetchone():
-                    raise HTTPException(status_code=400, detail="Department not found.")
 
-                # ✅ Step 3: Handle Assignment creation
+                # ------------------------------
+                # Step 2: Assignment validations
+                # ------------------------------
                 if test_type == "assignment":
+                    if not department_id:
+                        raise HTTPException(status_code=400, detail="department_id is required for assignments.")
+
+                    cursor.execute(
+                        "SELECT department_id FROM departments WHERE department_id=%s",
+                        (department_id,)
+                    )
+                    if not cursor.fetchone():
+                        raise HTTPException(status_code=400, detail="Department not found.")
+
                     if not (assignment_number and assignment_topic and start_date and end_date):
                         raise HTTPException(status_code=400, detail="Missing required assignment fields.")
 
+                    # Insert assignment
                     cursor.execute(
                         """
                         INSERT INTO assignments
@@ -93,37 +97,36 @@ async def create_test(
                     ref_id = cursor.lastrowid
                     test_scope = "assignment"
 
-                # ✅ Step 4: Handle Subtopic creation
+                # ------------------------------
+                # Step 3: Subtopic validations
+                # ------------------------------
                 elif test_type == "sub_topic":
                     if not (topic_name and sub_topic_name):
                         raise HTTPException(status_code=400, detail="Missing topic_name or sub_topic_name.")
 
-                    # Validate topic & subtopic
+                    # Get topic_id by topic_name
                     cursor.execute(
-                        "SELECT topic_id FROM topics WHERE department_id=%s AND topic_name=%s AND is_active=TRUE",
-                        (department_id, topic_name),
+                        "SELECT topic_id FROM topics WHERE topic_name=%s AND is_active=TRUE",
+                        (topic_name,)
                     )
                     topic = cursor.fetchone()
                     if not topic:
                         raise HTTPException(status_code=400, detail="Topic not found.")
                     topic_id = topic["topic_id"]
 
+                    # Check if sub_topic exists
                     cursor.execute(
                         "SELECT sub_topic_id FROM sub_topics WHERE topic_id=%s AND sub_topic_name=%s AND is_active=TRUE",
-                        (topic_id, sub_topic_name),
-                    )
-                    cursor.execute(
-                        "SELECT sub_topic_id FROM sub_topics WHERE topic_id=%s AND sub_topic_name=%s AND is_active=TRUE",
-                        (topic_id, sub_topic_name),
+                        (topic_id, sub_topic_name)
                     )
                     sub_topic = cursor.fetchone()
 
                     if sub_topic:
-                        # If exists, optionally update test_file
+                        # Update test_file
                         ref_id = sub_topic["sub_topic_id"]
                         cursor.execute(
                             "UPDATE sub_topics SET test_file=%s, updated_at=NOW() WHERE sub_topic_id=%s",
-                            (file.filename, ref_id),
+                            (file.filename, ref_id)
                         )
                     else:
                         # Insert new subtopic
@@ -133,7 +136,7 @@ async def create_test(
                             (topic_id, sub_topic_name, file_name, test_file, is_active, created_at, updated_at)
                             VALUES (%s, %s, %s, %s, TRUE, NOW(), NOW())
                             """,
-                            (topic_id, sub_topic_name, file_name or file.filename, file.filename),
+                            (topic_id, sub_topic_name, file_name or file.filename, file.filename)
                         )
                         conn.commit()
                         ref_id = cursor.lastrowid
@@ -143,12 +146,16 @@ async def create_test(
                 else:
                     raise HTTPException(status_code=400, detail="Invalid test_type. Must be 'assignment' or 'sub_topic'.")
 
-        # ✅ Step 5: Parse Excel after DB insert (outside transaction for I/O)
+        # ------------------------------
+        # Step 4: Parse Excel for questions
+        # ------------------------------
         df = pd.read_excel(file_path)
         if df.empty:
             raise HTTPException(status_code=400, detail="Uploaded Excel file is empty or invalid.")
 
-        # ✅ Step 6: Build question data for bulk insert
+        # ------------------------------
+        # Step 5: Prepare question rows
+        # ------------------------------
         question_rows = []
         with get_db() as conn:
             with conn.cursor() as cursor:
@@ -157,13 +164,14 @@ async def create_test(
 
                     cursor.execute(
                         "SELECT question_type_id FROM question_type WHERE question_type=%s",
-                        (q_type,),
+                        (q_type,)
                     )
                     q_type_row = cursor.fetchone()
                     if not q_type_row:
                         raise HTTPException(status_code=400, detail=f"Invalid question type: {q_type}")
                     q_type_id = q_type_row["question_type_id"]
 
+                    # Build question data JSON
                     qd = {}
                     if q_type == "mcq":
                         qd = {
@@ -208,7 +216,9 @@ async def create_test(
                         )
                     )
 
-                # ✅ Step 7: Bulk insert
+                # ------------------------------
+                # Step 6: Bulk insert questions
+                # ------------------------------
                 cursor.executemany(
                     """
                     INSERT INTO questions

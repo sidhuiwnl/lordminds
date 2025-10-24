@@ -175,7 +175,7 @@ async def upload_assignment(
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
-@router.get("/")
+@router.get("/get-all")
 async def get_assignments():
     """Get all assignments with file info"""
     try:
@@ -199,3 +199,24 @@ async def get_assignments():
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
+@router.get("/get/{assignment_id}/questions")
+async def get_assignment_questions(assignment_id: int):
+    """Get questions for a specific assignment"""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT * FROM questions
+                    WHERE test_scope = 'assignment' AND reference_id = %s
+                    ORDER BY order_no
+                """, (assignment_id,))
+                questions = cursor.fetchall()
+
+                # Parse JSON data
+                for question in questions:
+                    if question['question_data']:
+                        question['question_data'] = json.loads(question['question_data'])
+
+                return questions
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")

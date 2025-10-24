@@ -26,7 +26,7 @@ async def get_question_types():
         )
 
 
-@router.get("/")
+@router.get("/get-questions")
 async def get_questions(assignment_id : int = None):
     """Get questions, optionally filtered by assignment_id"""
     try:

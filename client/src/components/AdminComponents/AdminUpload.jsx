@@ -7,7 +7,7 @@ import { ToastContainer, toast } from 'react-toastify';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.js`;
 
-const SuperAdminUpload = () => {
+const AdminUpload = () => {
   const [selectedTab, setSelectedTab] = useState("upload-assignment");
   const [formData, setFormData] = useState({
     // Assignment form data
@@ -197,7 +197,13 @@ const SuperAdminUpload = () => {
 
   const handleMcqSubmit = async(e) => {
     e.preventDefault();
+    // Handle assignment form submission
+    
+
+
     const formDataToSend = new FormData();
+
+    
     formDataToSend.append("test_type", "sub_topic");
 
     // formDataToSend.append('college_id', formData.mcqCollege);
@@ -914,4 +920,4 @@ const SuperAdminUpload = () => {
   );
 };
 
-export default SuperAdminUpload;
+export default AdminUpload;

@@ -42,9 +42,12 @@ const LoginPage = () => {
       // ✅ Navigate based on role if needed
       if (result.data.role === "student") {
         navigate("/student/studenthome");
-      } else if (result.data.role === "teacher") {
-        navigate("/teacher/dashboard");
-      } else {
+      } else if (result.data.role === "administrator") {
+        navigate("/admin/adminhome");
+      }else if (result.data.role === "super_admin") {
+        navigate("superadmin/superadminhome");
+      } 
+      else {
         navigate("/");
       }
     } catch (err) {

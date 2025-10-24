@@ -3,7 +3,7 @@ from config.database import get_db
 
 router = APIRouter()
 
-@router.get("/")
+@router.get("/get-departments")
 async def get_departments():
     """Fetch all departments"""
     try:

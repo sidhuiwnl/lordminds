@@ -90,7 +90,7 @@ async def onboard_college(data: CollegeOnboard):
 
 
 
-@router.get("/")
+@router.get("/get-all")
 async def get_colleges():
     """Fetch all colleges"""
     try:

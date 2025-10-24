@@ -19,12 +19,20 @@ import SuperAdminReportsPage from './pages/SuperAdminPages/SuperAdminReportsPage
 import SuperAdminUploadPage from './pages/SuperAdminPages/SuperAdminUploadPage';
 import SuperAdminAccessCreationPage from './pages/SuperAdminPages/SuperAdminAccessCreationPage';
 
+
+import AdminHomePage from './pages/Administrator/AdminHomePage';
+import AdminReportsPage from './pages/Administrator/AdminReportsPage';
+import AdminUploadPage from './pages/Administrator/AdminUploadPage';
+import AdminAccessCreationPage from './pages/Administrator/AdminAccessCreationPage';
+import AssignmentPage from './pages/StudentPages/AssignmentPage';
+
 const App = () => {
   return (
     <Router>
       <Routes>
         <Route path="/" element={<LoginPage />} />
         <Route path="/student/studenthome" element={<StudentHomePage />} />
+        <Route path="/student/assignment/:assignment" element={<AssignmentPage />} />
         <Route path="/student/:topic/subtopics" element={<GrammarLessonsPage />} />
         <Route path="/student/:subtopic/lessonsoverview" element={<LessonsOverviewPage />} />
         <Route path="/student/:subtopic/assessments" element={<AssessmentPage />} />
@@ -38,6 +46,11 @@ const App = () => {
         <Route path="/superadmin/reports" element={<SuperAdminReportsPage />} />
         <Route path="/superadmin/uploads" element={<SuperAdminUploadPage />} />
         <Route path="/superadmin/access-creation" element={<SuperAdminAccessCreationPage />} />
+
+        <Route path="/admin/adminhome" element={<AdminHomePage />} />
+        <Route path="/admin/reports" element={<AdminReportsPage />} />
+        <Route path="/admin/uploads" element={<AdminUploadPage />} />
+        <Route path="/admin/access-creation" element={<AdminAccessCreationPage />} />
 
       </Routes>
     </Router>

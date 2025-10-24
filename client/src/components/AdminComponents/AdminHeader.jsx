@@ -1,7 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 
-const SuperAdminHeader = ({ onMenuToggle }) => {
+const AdminHeader = ({ onMenuToggle }) => {
 
   const navigate = useNavigate();
 
@@ -33,7 +33,7 @@ const SuperAdminHeader = ({ onMenuToggle }) => {
           Welcome Naveen
         </h1>
         <p className="text-white text-xs sm:text-sm font-light">
-          Super Admin
+          Admin
         </p>
       </div>
 
@@ -104,4 +104,4 @@ const SuperAdminHeader = ({ onMenuToggle }) => {
   );
 };
 
-export default SuperAdminHeader;
+export default AdminHeader;
