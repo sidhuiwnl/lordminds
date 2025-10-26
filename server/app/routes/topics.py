@@ -214,3 +214,62 @@ async def assign_topics_to_college_department(payload: AssignTopicsRequest):
         # Log full error for debugging (add logger if needed)
         print(f"Unexpected error in assign_topics: {str(e)}")  # Or use logging
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+    
+
+@router.get("/{user_id}/subtopics")
+async def get_user_subtopics(user_id: int):
+    """Fetch subtopics for the department of the given user"""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                # 1️⃣ Get user's department_id
+                cursor.execute("""
+                    SELECT department_id 
+                    FROM users 
+                    WHERE user_id = %s AND is_active = TRUE
+                """, (user_id,))
+                user = cursor.fetchone()
+                if not user:
+                    raise HTTPException(status_code=404, detail="User not found")
+                department_id = user['department_id']
+
+                # 2️⃣ Fetch topics for the department
+                cursor.execute("""
+                    SELECT topic_id, topic_name, topic_number 
+                    FROM topics 
+                    WHERE department_id = %s AND is_active = TRUE
+                    ORDER BY topic_number
+                """, (department_id,))
+                topics = cursor.fetchall()
+                topic_ids = [t['topic_id'] for t in topics]
+
+                if not topic_ids:
+                    return {"status": "success", "count": 0, "data": []}
+
+                # 3️⃣ Fetch subtopics for these topics
+                cursor.execute(f"""
+                    SELECT sub_topic_id, topic_id, sub_topic_name, sub_topic_order, overview_video_url,
+                           file_name, test_file,
+                           CASE WHEN overview_content IS NOT NULL THEN TRUE ELSE FALSE END as has_document,
+                           is_active, created_at
+                    FROM sub_topics
+                    WHERE topic_id IN ({','.join(['%s']*len(topic_ids))}) AND is_active = TRUE
+                    ORDER BY sub_topic_order
+                """, tuple(topic_ids))
+                subtopics_all = cursor.fetchall()
+
+                # 4️⃣ Map subtopics to their topics
+                topic_dict = {t['topic_id']: t for t in topics}
+                for st in subtopics_all:
+                    topic_dict[st['topic_id']].setdefault('sub_topics', []).append(st)
+
+                return {
+                    "status": "success",
+                    "count": len(topics),
+                    "data": list(topic_dict.values())
+                }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching subtopics for user: {str(e)}")    

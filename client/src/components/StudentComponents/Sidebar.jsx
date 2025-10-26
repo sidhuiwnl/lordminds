@@ -90,7 +90,7 @@ const Sidebar = ({ isOpen, onClose, isMobile = false }) => {
 
         {/* Lesson */}
         <button
-          onClick={() => handleMenuClick("lesson", "/student/grammarlessons")}
+          onClick={() => handleMenuClick("lesson", "/student/grammerlessons")}
           className={`flex items-center gap-3 w-full px-3 py-3 font-medium transition-all duration-200 rounded-l-3xl text-sm lg:text-base ${
             activeMenu === "lesson"
               ? "bg-white text-[#1b65a6] shadow-lg transform scale-[1.02]"

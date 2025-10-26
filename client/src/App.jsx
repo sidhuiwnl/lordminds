@@ -40,6 +40,7 @@ const App = () => {
         <Route path="/student/assignmentmarks" element={<AssignmentMarksPage />} />
         <Route path="/student/totalduration" element={<TotalDurationPage />} />
         <Route path="/student/overallresult" element={<OverallResultPage />} />
+        <Route path="/student/grammerlessons" element={<GrammarLessonsPage />} />
 
         {/* superadmin routes */}
         <Route path="/superadmin/superadminhome" element={<SuperAdminHomePage />} />

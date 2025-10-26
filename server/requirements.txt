@@ -1,0 +1,12 @@
+FastAPI
+pymysql
+dotenv
+aiofiles
+pandas
+python-multipart
+bcrypt
+SpeechRecognition
+librosa
+textblob
+uvicorn
+openpyxl

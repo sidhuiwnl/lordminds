@@ -1,17 +1,26 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
 
 const GrammarLessons = () => {
-  const { topic } = useParams(); // 🔹 Gets topic_id from URL
   const [subtopics, setSubtopics] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 🔹 Fetch subtopics dynamically
   useEffect(() => {
     async function fetchSubtopics() {
       try {
+        // 🧩 Get user details from localStorage
+        const storedUser = localStorage.getItem("user");
+        const user = storedUser ? JSON.parse(storedUser) : null;
+        const userId = user?.user_id;
+
+        if (!userId) {
+          console.error("User ID not found in localStorage");
+          setLoading(false);
+          return;
+        }
+
+        // 🧩 Fetch subtopics for the user
         const response = await fetch(
-          `${import.meta.env.VITE_BACKEND_API_URL}/users/${topic}/subtopics`
+          `${import.meta.env.VITE_BACKEND_API_URL}/topics/${userId}/subtopics`
         );
 
         if (!response.ok) {
@@ -20,13 +29,17 @@ const GrammarLessons = () => {
 
         const data = await response.json();
 
-        // Mock progress if not provided by API
-        const enrichedData = (data.data || []).map((item) => ({
-          ...item,
-          progress: item.progress || Math.floor(Math.random() * 100),
-        }));
+        // 🧩 Flatten nested topic/subtopic structure
+        const allSubtopics =
+          data.data?.flatMap((topicItem) =>
+            topicItem.sub_topics.map((sub) => ({
+              ...sub,
+              topic_name: topicItem.topic_name, // optional
+              progress: Math.floor(Math.random() * 100), // mock progress
+            }))
+          ) || [];
 
-        setSubtopics(enrichedData);
+        setSubtopics(allSubtopics);
       } catch (error) {
         console.error("Error fetching subtopics:", error);
       } finally {
@@ -35,7 +48,7 @@ const GrammarLessons = () => {
     }
 
     fetchSubtopics();
-  }, [topic]);
+  }, []);
 
   if (loading) {
     return (
@@ -64,9 +77,15 @@ const GrammarLessons = () => {
             className="bg-white rounded-2xl shadow-sm p-4 lg:p-6 border-t-4 border-r-4 border-[#1b65a6] rounded-bl-lg rounded-tr-lg"
           >
             <div className="flex flex-col sm:flex-row justify-between items-start gap-3 sm:gap-0 mb-3 lg:mb-4">
-              <h3 className="font-bold text-base lg:text-lg text-gray-800">
-                {sub.sub_topic_name}
-              </h3>
+              <div>
+                <h3 className="font-bold text-base lg:text-lg text-gray-800">
+                  {sub.sub_topic_name}
+                </h3>
+                <p className="text-xs text-gray-500">
+                  Topic: {sub.topic_name}
+                </p>
+              </div>
+
               <a
                 href={`/student/${sub.sub_topic_id}/lessonsoverview`}
                 rel="noopener noreferrer"
@@ -82,14 +101,13 @@ const GrammarLessons = () => {
               main forms in English.
             </p>
 
-            
             <div className="mt-2">
               <p className="text-xs font-semibold text-gray-700 mb-1">
                 Progress
               </p>
               <div className="w-full bg-gray-200 rounded-full h-[25px] relative overflow-hidden">
                 <div
-                  className="bg-blue-500 h-6 rounded-full transition-all duration-500"
+                  className="bg-blue-500 h-6 rounded-full transition-all duration-500 relative"
                   style={{ width: `${sub.progress}%` }}
                 >
                   <span className="absolute left-2 text-xs text-white font-semibold">
@@ -98,7 +116,6 @@ const GrammarLessons = () => {
                 </div>
               </div>
             </div>
-           
           </div>
         ))}
       </div>
