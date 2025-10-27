@@ -106,62 +106,62 @@ const StudentHome = () => {
   return (
     <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
       {/* ===================== ASSIGNMENTS SECTION ===================== */}
-      <h2 className="text-lg lg:text-xl font-bold text-gray-800 mb-4">
-        Assignments
-      </h2>
+      {/* ===================== ASSIGNMENTS SECTION ===================== */}
+<h2 className="text-lg lg:text-xl font-bold text-gray-800 mb-4">
+  Assignments
+</h2>
 
-      {assignmentData.length === 0 ? (
-        <EmptyState
-          title="No Assignments Yet"
-          message="Assignments will appear here once your instructors assign them. Check back soon!"
-          icon="📋"
-        />
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 mb-6 lg:mb-8">
-          {assignmentData.map((assignment) => (
-            <div
-              key={assignment.assignment_id}
-              className={`bg-white rounded-2xl shadow-sm p-4 lg:p-6 ${
-                assignment.is_submitted ? "opacity-80" : ""
+{assignmentData.length === 0 ? (
+  <EmptyState
+    title="No Assignments Yet"
+    message="Assignments will appear here once your instructors assign them. Check back soon!"
+    icon="📋"
+  />
+) : (
+  <div className="overflow-x-auto mb-6 lg:mb-8">
+    <div className="flex gap-4 lg:gap-6 min-w-min pb-4">
+      {assignmentData.map((assignment) => (
+        <div
+          key={assignment.assignment_id}
+          className={`min-w-[260px] lg:min-w-[500px] bg-white rounded-2xl shadow-sm p-4 lg:p-6 flex-shrink-0 ${
+            assignment.is_submitted ? "opacity-80" : ""
+          }`}
+        >
+          <div className="flex justify-between items-start mb-3">
+            <h3 className="font-bold text-base lg:text-lg text-gray-800">
+              {assignment.assignment_topic}
+            </h3>
+            <span
+              className={`text-xs lg:text-sm font-medium flex items-center gap-1 px-2 py-1 rounded-full ${
+                assignment.is_submitted
+                  ? "bg-green-100 text-green-800"
+                  : "bg-yellow-100 text-yellow-800"
               }`}
             >
-              <div className="flex justify-between items-start mb-3">
-                <h3 className="font-bold text-base lg:text-lg text-gray-800">
-                  {assignment.assignment_topic}
-                </h3>
-                <span
-                  className={`text-xs lg:text-sm font-medium flex items-center gap-1 px-2 py-1 rounded-full ${
-                    assignment.is_submitted
-                      ? "bg-green-100 text-green-800"
-                      : "bg-yellow-100 text-yellow-800"
-                  }`}
-                >
-                  {assignment.is_submitted ? "✅ Submitted" : "🕒 Pending"}
-                </span>
-              </div>
-              {/* <p className="text-xs lg:text-sm text-gray-600 mb-1">
-                {assignment.description}
-              </p> */}
-              <p className="text-xs text-gray-500 mb-4 lg:mb-6">
-                Due: {new Date(assignment.end_date).toLocaleDateString()}
-              </p>
-              <button
-                onClick={() => {
-                  navigate(`/student/assignment/${assignment.assignment_id}`);
-                }}
-                disabled={assignment.is_submitted}
-                className={`w-full py-2 lg:py-2.5 hover:cursor-pointer rounded-full text-xs lg:text-sm font-medium transition-colors ${
-                  assignment.is_submitted
-                    ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                    : "bg-yellow-400 text-gray-900 hover:bg-yellow-500"
-                }`}
-              >
-                {assignment.is_submitted ? "Submitted" : "Attend Now"}
-              </button>
-            </div>
-          ))}
+              {assignment.is_submitted ? "✅ Submitted" : "🕒 Pending"}
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 mb-4 lg:mb-6">
+            Due: {new Date(assignment.end_date).toLocaleDateString()}
+          </p>
+          <button
+            onClick={() => {
+              navigate(`/student/assignment/${assignment.assignment_id}`);
+            }}
+            disabled={assignment.is_submitted}
+            className={`w-full py-2 lg:py-2.5 rounded-full text-xs lg:text-sm font-medium transition-colors ${
+              assignment.is_submitted
+                ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                : "bg-yellow-400 text-gray-900 hover:bg-yellow-500"
+            }`}
+          >
+            {assignment.is_submitted ? "Submitted" : "Attend Now"}
+          </button>
         </div>
-      )}
+      ))}
+    </div>
+  </div>
+)}
 
       {/* ===================== TOPICS SECTION ===================== */}
       <div className="flex justify-between items-center mb-4 lg:mb-6">

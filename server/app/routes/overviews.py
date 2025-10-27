@@ -71,8 +71,8 @@ async def upload_overview(
                 insert_sub_topic = """
                     INSERT INTO sub_topics
                     (topic_id, sub_topic_name, sub_topic_order, overview_video_url, 
-                     file_name, overview_content, is_active, created_at, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, TRUE, NOW(), NOW())
+                      overview_content, is_active, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, TRUE, NOW(), NOW())
                 """
                 cursor.execute(
                     insert_sub_topic,
@@ -81,7 +81,6 @@ async def upload_overview(
                         sub_topic_name,
                         next_order,
                         video_link,
-                        file_name,
                         overview_content,
                     ),
                 )

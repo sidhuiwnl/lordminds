@@ -125,18 +125,22 @@ async def create_test(
                         # Update test_file
                         ref_id = sub_topic["sub_topic_id"]
                         cursor.execute(
-                            "UPDATE sub_topics SET test_file=%s, updated_at=NOW() WHERE sub_topic_id=%s",
-                            (file.filename, ref_id)
+                            """
+                            UPDATE sub_topics 
+                            SET file_name=%s, test_file=%s, updated_at=NOW()
+                            WHERE sub_topic_id=%s
+                            """,
+                            (file.filename, file_path, ref_id)
                         )
+                        conn.commit()
                     else:
-                        # Insert new subtopic
                         cursor.execute(
                             """
                             INSERT INTO sub_topics
                             (topic_id, sub_topic_name, file_name, test_file, is_active, created_at, updated_at)
                             VALUES (%s, %s, %s, %s, TRUE, NOW(), NOW())
                             """,
-                            (topic_id, sub_topic_name, file_name or file.filename, file.filename)
+                            (topic_id, sub_topic_name, file.filename, file_path)
                         )
                         conn.commit()
                         ref_id = cursor.lastrowid

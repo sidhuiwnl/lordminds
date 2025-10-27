@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Form, HTTPException
 from pydantic import BaseModel
 from config.database import get_db
 
@@ -273,3 +273,25 @@ async def get_user_subtopics(user_id: int):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching subtopics for user: {str(e)}")    
+    
+
+class TopicCreate(BaseModel):
+    topic_name: str
+
+@router.post("/create-topic")
+async def create_topic(data: TopicCreate):
+    """Create a new topic (only topic_name)"""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO topics (topic_name, is_active, created_at)
+                    VALUES (%s, TRUE, CURRENT_TIMESTAMP)
+                """, (data.topic_name,))
+                conn.commit()
+                return {
+                    "status": "success",
+                    "message": f"Topic '{data.topic_name}' created successfully."
+                }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating topic: {str(e)}")

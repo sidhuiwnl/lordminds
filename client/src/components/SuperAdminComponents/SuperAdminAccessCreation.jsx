@@ -520,8 +520,9 @@ const SuperAdminAccessCreation = () => {
               <h2 className="font-bold text-lg lg:text-xl text-gray-800">Fill the details to create {getFormTitle()}</h2>
               {selectedAccessType === "student" && (
                  <div className="flex gap-3">
-                <button 
-                  type="button" 
+                <a 
+                 download
+                 href="/sample_students.xlsx"
                   className="bg-gray-500 text-white px-5 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow flex items-center gap-1"
                   onClick={() => {
                     // Implement download template logic, e.g., generate and download Excel
@@ -532,7 +533,7 @@ const SuperAdminAccessCreation = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                   Download Template
-                </button>
+                </a>
                 <div className="relative">
                   <input 
                     type="file" 

@@ -1,5 +1,4 @@
 import React, { useState, useRef, useMemo, useEffect } from "react";
-import { Edit, Trash2 } from "lucide-react";
 import JoditEditor from 'jodit-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
@@ -35,27 +34,57 @@ const AdminUpload = () => {
     mcqNoOfSubTopic: "",
     mcqFile: null,
   });
-  const[assignmentData,setAssignmentData] = useState([])
-  const[overviewDetails,setOverviewDetails] = useState([])
-  const[colleges,setColleges] = useState([])
-  const[assignmentDepartments,setAssignmentDepartments] = useState([])
-  const[overviewDepartments,setOverviewDepartments] = useState([])
-  const[mcqDepartments,setMcqDepartments] = useState([])
+  const [assignmentData, setAssignmentData] = useState([])
+  const [overviewDetails, setOverviewDetails] = useState([])
+  const [colleges, setColleges] = useState([])
+  const [assignmentDepartments, setAssignmentDepartments] = useState([])
+  const [overviewDepartments, setOverviewDepartments] = useState([])
+  const [mcqDepartments, setMcqDepartments] = useState([])
   const [topics, setTopics] = useState([])
-  const[topicWithSub,setTopicWithSub] = useState([])
+  const [topicWithSub, setTopicWithSub] = useState([])
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [topicName, setTopicName] = useState("");
 
-  
+  const handleAddTopic = async () => {
+    if (!topicName.trim()) return;
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/topics/create-topic`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ topic_name: topicName }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        window.location.reload();
+        console.log("✅ Success:", data.message);
+        toast(data.message); // or show toast
+        setTopicName("");
+        setIsModalOpen(false);
+      } else {
+        console.error("❌ Server error:", data.detail);
+        toast("Failed to create topic: " + data.detail);
+      }
+    } catch (error) {
+      console.error("⚠️ Network error:", error);
+      toast("Something went wrong. Please try again.");
+    }
+  };
 
   const editor = useRef(null);
 
 
-  
-  
+
+
 
   const tabs = [
     { id: "upload-assignment", label: "Upload Assignment" },
     { id: "upload-overview", label: "Upload Overview" },
-    { id: "upload-mcq", label: "Upload MCQ" }
+    { id: "upload-mcq", label: "Upload Questions" }
   ];
 
   const handleInputChange = (e) => {
@@ -122,16 +151,16 @@ const AdminUpload = () => {
     }
   };
 
-  const handleAssignmentSubmit = async(e) => {
+  const handleAssignmentSubmit = async (e) => {
     e.preventDefault();
     // Handle assignment form submission
-   console.log("depatment",formData.department);
+    console.log("depatment", formData.department);
 
     const formDataToSend = new FormData();
 
     formDataToSend.append("test_type", "assignment");
 
-    
+
     formDataToSend.append('college_id', formData.assignmentCollege);
     formDataToSend.append('department_id', formData.department); // Example department ID
     formDataToSend.append('assignment_number', formData.assignmentNo);
@@ -140,24 +169,25 @@ const AdminUpload = () => {
     formDataToSend.append('end_date', formData.endDate);
     formDataToSend.append('file', formData.file);
 
-    const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/tests/create`,{
-      method : "POST",
-      headers : {
-        "Accept" : "application/json",
+    const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/tests/create`, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
       },
-      body : formDataToSend
+      body: formDataToSend
     })
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-
+   
     toast.success("Assignment uploaded successfully!")
+     window.location.reload();
   };
 
 
 
-  const handleOverviewSubmit = async(e) => {
+  const handleOverviewSubmit = async (e) => {
     e.preventDefault();
     const formDataToSend = new FormData();
     // formDataToSend.append('college_id', formData.topicSelectionCollege);
@@ -169,20 +199,21 @@ const AdminUpload = () => {
     formDataToSend.append('file_name', formData.overviewDocument.name);
     formDataToSend.append('overview_content', formData.overviewText);
 
-    const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/overviews/upload`,{
-      method : "POST",
-      headers : {
-        "Accept" : "application/json",
+    const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/overviews/upload`, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
       },
-      body : formDataToSend
+      body: formDataToSend
     })
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-
-    toast.success("Overview uploaded successfully!")
     
+    toast.success("Overview uploaded successfully!")
+    window.location.reload();
+
   };
 
   const handleEditorChange = (newContent) => {
@@ -195,15 +226,9 @@ const AdminUpload = () => {
     placeholder: 'Start editing the extracted text...',
   }), []);
 
-  const handleMcqSubmit = async(e) => {
+  const handleMcqSubmit = async (e) => {
     e.preventDefault();
-    // Handle assignment form submission
-    
-
-
     const formDataToSend = new FormData();
-
-    
     formDataToSend.append("test_type", "sub_topic");
 
     // formDataToSend.append('college_id', formData.mcqCollege);
@@ -214,29 +239,31 @@ const AdminUpload = () => {
     formDataToSend.append('file', formData.mcqFile);
     formDataToSend.append('file_name', formData.mcqFile.name);
 
-    const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/tests/create`,{
-      method : "POST",
-      headers : {
-        "Accept" : "application/json",
+    const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/tests/create`, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
       },
-      body : formDataToSend
+      body: formDataToSend
     })
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-
+    
     toast.success("MCQ uploaded successfully!")
+    window.location.reload();
+
   };
 
-  
+
 
   useEffect(() => {
     async function assignmentDetails() {
-      const resposne = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/assignments/get-all`,{
-        method : "GET",
-        headers : {
-          "Accept" : "application/json",
+      const resposne = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/assignments/get-all`, {
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
         },
 
       })
@@ -250,10 +277,10 @@ const AdminUpload = () => {
     }
 
     async function overviewDetails() {
-      const resposne = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/overviews/get_all`,{
-        method : "GET",
-        headers : {
-          "Accept" : "application/json",
+      const resposne = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/overviews/get_all`, {
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
         },
 
       })
@@ -267,10 +294,10 @@ const AdminUpload = () => {
     }
 
     async function fetchColleges() {
-      const resposne = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/colleges/get-all`,{
-        method : "GET",
-        headers : {
-          "Accept" : "application/json",
+      const resposne = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/colleges/get-all`, {
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
         },
 
       })
@@ -282,13 +309,13 @@ const AdminUpload = () => {
       const data = await resposne.json()
       setColleges(data.data)
 
-    } 
+    }
 
     async function fetchTopicWithSubTopic() {
-       const resposne = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/topics/get-topic-with-subtopics`,{
-        method : "GET",
-        headers : {
-          "Accept" : "application/json",
+      const resposne = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/topics/get-topic-with-subtopics`, {
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
         },
 
       })
@@ -306,7 +333,7 @@ const AdminUpload = () => {
     assignmentDetails()
     fetchColleges()
     fetchTopicWithSubTopic()
-  },[])
+  }, [])
 
   useEffect(() => {
     fetchDepartmentsForCollege(formData.assignmentCollege, setAssignmentDepartments);
@@ -326,32 +353,31 @@ const AdminUpload = () => {
     } else {
       setTopics([]);
     }
-  }, [formData.mcqDepartment, topicWithSub]); 
+  }, [formData.mcqDepartment, topicWithSub]);
 
- function formatDate(dateStr) {
-  const date = new Date(dateStr);
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = date.getFullYear();
-  return `${day}-${month}-${year}`;
-}
-  
+  function formatDate(dateStr) {
+    const date = new Date(dateStr);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}-${month}-${year}`;
+  }
 
- 
+
+
 
   return (
     <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
       {/* Radio Tabs - Centered */}
-      <ToastContainer/>
+      <ToastContainer />
       <div className="flex justify-center gap-2 lg:gap-4 mb-6 overflow-x-auto pb-2">
         {tabs.map((tab) => (
-          <div 
-            key={tab.id} 
-            className={`flex items-center gap-2 px-3 py-2 lg:px-6 lg:py-4 bg-white rounded-lg border-2 shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md flex-shrink-0 min-w-[140px] lg:min-w-0 ${
-              selectedTab === tab.id 
-                ? 'border-blue-500 bg-blue-50' 
-                : 'border-gray-200'
-            }`}
+          <div
+            key={tab.id}
+            className={`flex items-center gap-2 px-3 py-2 lg:px-6 lg:py-4 bg-white rounded-lg border-2 shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md flex-shrink-0 min-w-[140px] lg:min-w-0 ${selectedTab === tab.id
+              ? 'border-blue-500 bg-blue-50'
+              : 'border-gray-200'
+              }`}
             onClick={() => setSelectedTab(tab.id)}
           >
             <input
@@ -374,12 +400,12 @@ const AdminUpload = () => {
           {/* Assignment Form */}
           <form onSubmit={handleAssignmentSubmit} className="bg-white rounded-lg shadow p-4 lg:p-6 mb-6">
             <h2 className="text-lg lg:text-xl font-semibold text-gray-800 mb-4 lg:mb-6">Fill the details to create a assignment</h2>
-            
+
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">Select College</label>
-              <select 
-                name="assignmentCollege" 
-                value={formData.assignmentCollege} 
+              <select
+                name="assignmentCollege"
+                value={formData.assignmentCollege}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               >
@@ -389,13 +415,14 @@ const AdminUpload = () => {
                 ))}
               </select>
             </div>
-            
+
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Select Department</label>
-                <select 
-                  name="department" 
-                  value={formData.department} 
+                <select
+                  name="department"
+                  value={formData.department}
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 >
@@ -408,10 +435,10 @@ const AdminUpload = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Assignment No</label>
-                <input 
-                  type="text" 
-                  name="assignmentNo" 
-                  value={formData.assignmentNo} 
+                <input
+                  type="text"
+                  name="assignmentNo"
+                  value={formData.assignmentNo}
                   onChange={handleInputChange}
                   placeholder="Type assignment no"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
@@ -420,10 +447,10 @@ const AdminUpload = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Assignment Topic</label>
-                <input 
-                  type="text" 
-                  name="assignmentTopic" 
-                  value={formData.assignmentTopic} 
+                <input
+                  type="text"
+                  name="assignmentTopic"
+                  value={formData.assignmentTopic}
                   onChange={handleInputChange}
                   placeholder="Type assignment topic"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
@@ -434,10 +461,10 @@ const AdminUpload = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Assignment Starting Date</label>
-                <input 
-                  type="date" 
-                  name="startDate" 
-                  value={formData.startDate} 
+                <input
+                  type="date"
+                  name="startDate"
+                  value={formData.startDate}
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
@@ -445,10 +472,10 @@ const AdminUpload = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Assignment Ending Date</label>
-                <input 
-                  type="date" 
-                  name="endDate" 
-                  value={formData.endDate} 
+                <input
+                  type="date"
+                  name="endDate"
+                  value={formData.endDate}
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
@@ -457,9 +484,9 @@ const AdminUpload = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">File Upload</label>
                 <div className="relative">
-                  <input 
-                    type="file" 
-                    name="file" 
+                  <input
+                    type="file"
+                    name="file"
                     onChange={handleFileChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   />
@@ -474,14 +501,16 @@ const AdminUpload = () => {
             </div>
 
             <div className="flex justify-end gap-2">
-              <button 
-                type="button" 
+              <a
+                href="/sample_question_upload.xlsx"
+                download
                 className="bg-gray-500 text-white px-6 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow"
+
               >
                 Download Template
-              </button>
-              <button 
-                type="submit" 
+              </a>
+              <button
+                type="submit"
                 className="bg-yellow-400 text-gray-800 px-6 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow"
               >
                 Upload Assignment
@@ -516,9 +545,9 @@ const AdminUpload = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-500">
-                  {assignmentData.map((assignment) => (
-                    <tr key={assignment.no}>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">{assignment.assignment_number}</td>
+                  {assignmentData.map((assignment, index) => (
+                    <tr key={index}>
+                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">{index + 1}</td>
                       <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{assignment.department_name}</td>
                       <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{assignment.assignment_topic}</td>
                       <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{formatDate(assignment.start_date)}</td>
@@ -539,55 +568,38 @@ const AdminUpload = () => {
           {/* Overview Form */}
           <form onSubmit={handleOverviewSubmit} className="bg-white rounded-lg shadow p-4 lg:p-6 mb-6">
             <h2 className="text-lg lg:text-xl font-semibold text-gray-800 mb-4 lg:mb-6">Fill the details to upload overview</h2>
-            
-            {/* <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Select College</label>
-              <select 
-                name="topicSelectionCollege" 
-                value={formData.topicSelectionCollege} 
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              >
-                <option value="">Select College</option>
-                {colleges.map((college, index) => (
-                  <option key={index} value={college.college_id}>{college.name}</option>
-                ))}
-              </select>
-            </div> */}
-            
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 lg:gap-6 mb-6">
-              {/* <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Select Department</label>
-                <select 
-                  name="topicSelectionDepartment" 
-                  value={formData.topicSelectionDepartment} 
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                >
-                  <option value="">Select Department</option>
-                  {overviewDepartments.map((dept, index) => (
-                    <option key={index} value={dept.department_id}>{dept.department_name}</option>
-                  ))}
-                </select>
-              </div> */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Topic Name</label>
-                <input 
-                  type="text" 
-                  name="topicName" 
-                  value={formData.topicName} 
-                  onChange={handleInputChange}
-                  placeholder="Type topic name"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                />
+                <div className="flex flex-row gap-2">
+                  <select
+                    name="topicName"
+                    value={formData.topicName}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  >
+                    <option value="">Select Topic</option>
+                    {topics.map((topic) => (
+                      <option key={topic.topic_id} value={topic.topic_name}>{topic.topic_name}</option>
+                    ))}
+
+                  </select>
+                  <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg shadow-md transition"
+                  >
+                    +
+                  </button>
+                </div>
+
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Sub - Topic Name</label>
-                <input 
-                  type="text" 
-                  name="subTopicName" 
-                  value={formData.subTopicName} 
+                <input
+                  type="text"
+                  name="subTopicName"
+                  value={formData.subTopicName}
                   onChange={handleInputChange}
                   placeholder="Type sub-topic name"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
@@ -596,10 +608,10 @@ const AdminUpload = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">No of Sub-Topic</label>
-                <input 
-                  type="number" 
-                  name="noOfSubTopic" 
-                  value={formData.noOfSubTopic} 
+                <input
+                  type="number"
+                  name="noOfSubTopic"
+                  value={formData.noOfSubTopic}
                   onChange={handleInputChange}
                   placeholder="Type no of sub-topic"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
@@ -610,10 +622,10 @@ const AdminUpload = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 mb-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Overview Video</label>
-                <input 
-                  type="url" 
-                  name="overviewVideo" 
-                  value={formData.overviewVideo} 
+                <input
+                  type="url"
+                  name="overviewVideo"
+                  value={formData.overviewVideo}
                   onChange={handleInputChange}
                   placeholder="Enter video URL"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
@@ -624,9 +636,9 @@ const AdminUpload = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Overview Document</label>
                 <div className="relative">
-                  <input 
-                    type="file" 
-                    name="overviewDocument" 
+                  <input
+                    type="file"
+                    name="overviewDocument"
                     onChange={handleFileChange}
                     accept=".pdf,.docx"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
@@ -658,8 +670,8 @@ const AdminUpload = () => {
             )}
 
             <div className="flex justify-end">
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 className="bg-yellow-400 text-gray-800 px-6 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow"
               >
                 Upload Overview
@@ -692,40 +704,40 @@ const AdminUpload = () => {
                     <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-r-0">Students</th>
                   </tr>
                 </thead>
-               <tbody className="divide-y divide-gray-500">
-  {overviewDetails.flatMap((overview) => 
-    overview.sub_topics.map((subTopic, subIndex) => {
-      const isFirstSubTopic = subIndex === 0;
-      
-      return (
-        <tr key={`${overview.topic_id}-${subTopic.sub_topic_id}`}>
-          {isFirstSubTopic && (
-            <>
-              <td rowSpan={overview.sub_topics.length} className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">
-                {overview.topic_id}
-              </td>
-              <td rowSpan={overview.sub_topics.length} className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-                {overview.topic_name}
-              </td>
-            </>
-          )}
-          <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-            {subTopic.sub_topic_name}
-          </td>
-          <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-            {subTopic.overview_video_url}
-          </td>
-          {/* <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
+                <tbody className="divide-y divide-gray-500">
+                  {overviewDetails.flatMap((overview) =>
+                    overview.sub_topics.map((subTopic, subIndex) => {
+                      const isFirstSubTopic = subIndex === 0;
+
+                      return (
+                        <tr key={`${overview.topic_id}-${subTopic.sub_topic_id}`}>
+                          {isFirstSubTopic && (
+                            <>
+                              <td rowSpan={overview.sub_topics.length} className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">
+                                {overview.topic_id}
+                              </td>
+                              <td rowSpan={overview.sub_topics.length} className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
+                                {overview.topic_name}
+                              </td>
+                            </>
+                          )}
+                          <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
+                            {subTopic.sub_topic_name}
+                          </td>
+                          <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
+                            {subTopic.overview_video_url}
+                          </td>
+                          {/* <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
             {subTopic.file_name || "document1.doc"}
           </td> */}
-          <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
-            {subTopic.progress || "85%"}
-          </td>
-        </tr>
-      );
-    })
-  )}
-</tbody>
+                          <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
+                            {subTopic.progress || "85%"}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
               </table>
             </div>
           </div>
@@ -736,44 +748,14 @@ const AdminUpload = () => {
         <>
           {/* MCQ Form */}
           <form onSubmit={handleMcqSubmit} className="bg-white rounded-lg shadow p-4 lg:p-6 mb-6">
-            <h2 className="text-lg lg:text-xl font-semibold text-gray-800 mb-4 lg:mb-6">Fill the details to Upload MCQ's</h2>
-            
-            {/* <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Select College</label>
-              <select 
-                name="mcqCollege" 
-                value={formData.mcqCollege} 
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              >
-                <option value="">Select College</option>
-                {colleges.map((college, index) => (
-                  <option key={index} value={college.college_id}>{college.name}</option>
-                ))}
-              </select>
-            </div> */}
-            
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 lg:gap-6 mb-6">
-              {/* <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Select Department</label>
-                <select 
-                  name="mcqDepartment" 
-                  value={formData.mcqDepartment} 
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                >
-                  <option value="">Select Department</option>
-                  {mcqDepartments.map((dept, index) => (
-                    <option key={index} value={dept.department_id}>{dept.department_name}</option>
-                  ))}
-                </select>
-              </div> */}
+            <h2 className="text-lg lg:text-xl font-semibold text-gray-800 mb-4 lg:mb-6">Fill the details to Upload Question's</h2>
 
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 lg:gap-6 mb-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Topic Name</label>
-                <select 
-                  name="mcqTopicName" 
-                  value={formData.mcqTopicName} 
+                <select
+                  name="mcqTopicName"
+                  value={formData.mcqTopicName}
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 >
@@ -786,9 +768,9 @@ const AdminUpload = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Sub - Topic Name</label>
-                <select 
-                  name="mcqSubTopicName" 
-                  value={formData.mcqSubTopicName} 
+                <select
+                  name="mcqSubTopicName"
+                  value={formData.mcqSubTopicName}
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 >
@@ -804,10 +786,10 @@ const AdminUpload = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">No of Sub-Topic</label>
-                <input 
-                  type="number" 
-                  name="mcqNoOfSubTopic" 
-                  value={formData.mcqNoOfSubTopic} 
+                <input
+                  type="number"
+                  name="mcqNoOfSubTopic"
+                  value={formData.mcqNoOfSubTopic}
                   onChange={handleInputChange}
                   placeholder="Type no of sub-topic"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
@@ -819,9 +801,9 @@ const AdminUpload = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">MCQ's File Upload</label>
                 <div className="relative">
-                 <input 
-                    type="file" 
-                    name="mcqFile" 
+                  <input
+                    type="file"
+                    name="mcqFile"
                     onChange={handleFileChange}
                     accept=".xlsx,.xls"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
@@ -838,17 +820,19 @@ const AdminUpload = () => {
             </div>
 
             <div className="flex justify-end gap-2">
-              <button 
-                type="button" 
+              <a
+                href="/sample_question_upload.xlsx"
+                download
                 className="bg-gray-500 text-white px-6 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow"
+
               >
                 Download Template
-              </button>
-              <button 
-                type="submit" 
+              </a>
+              <button
+                type="submit"
                 className="bg-yellow-400 text-gray-800 px-6 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow"
               >
-                Upload MCQ's
+                Upload Questions's
               </button>
             </div>
 
@@ -867,57 +851,109 @@ const AdminUpload = () => {
               </button>
             </div>
             <div className="overflow-x-auto max-h-96 overflow-y-auto">
-  <table className="w-full min-w-[800px] border-collapse">
-    <thead>
-      <tr className="bg-[#1b64a5] text-white sticky top-0">
-        <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-l-0">No</th>
-        <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Topic Name</th>
-        <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Sub-topic Name</th>
-        <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Number of questions</th>
-        <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-r-0">MCQ Document</th>
-        <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-r-0">Progress</th>
-      </tr>
-    </thead>
-    <tbody className="divide-y divide-gray-500">
-      {topicWithSub.flatMap((topic, topicIndex) =>
-        topic.sub_topics.map((subTopic, subIndex) => {
-          const isFirstSubTopic = subIndex === 0;
-          const globalRowIndex = topicWithSub.slice(0, topicIndex).reduce((acc, t) => acc + t.sub_topics.length, 0) + subIndex + 1;
-          
-          return (
-            <tr key={`${topic.topic_id}-${subTopic.sub_topic_id}`}>
-              <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">
-                {globalRowIndex}
-              </td>
-              {isFirstSubTopic && (
-                <td rowSpan={topic.sub_topics.length} className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-                  {topic.topic_name}
-                </td>
-              )}
-              <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-                {subTopic.sub_topic_name}
-              </td>
-              <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-                {subTopic.total_questions} questions
-              </td>
-              <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
-                {subTopic.test_file || ""}
-              </td>
-              <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
-                65%
-              </td>
-            </tr>
-          );
-        })
-      )}
-    </tbody>
-  </table>
-</div>
+              <table className="w-full min-w-[800px] border-collapse">
+                <thead>
+                  <tr className="bg-[#1b64a5] text-white sticky top-0">
+                    <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-l-0">No</th>
+                    <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Topic Name</th>
+                    <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Sub-topic Name</th>
+                    <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Number of questions</th>
+                    <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-r-0">MCQ Document</th>
+                    <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-r-0">Progress</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-500">
+                  {topicWithSub?.map((topic, topicIndex) =>
+                    topic.sub_topics?.map((subTopic, subIndex) => {
+                      const isFirstSubTopic = subIndex === 0;
+
+                      return (
+                        <tr key={`${topic.topic_id}-${subTopic.sub_topic_id}`}>
+                          {/* No column (same for all subtopics of same topic) */}
+                          {isFirstSubTopic && (
+                            <td
+                              rowSpan={topic.sub_topics.length}
+                              className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0"
+                            >
+                              {topicIndex + 1}
+                            </td>
+                          )}
+
+                          {/* Topic Name */}
+                          {isFirstSubTopic && (
+                            <td
+                              rowSpan={topic.sub_topics.length}
+                              className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0"
+                            >
+                              {topic.topic_name}
+                            </td>
+                          )}
+
+                          {/* Sub Topic Name */}
+                          <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
+                            {subTopic.sub_topic_name}
+                          </td>
+
+                          {/* Total Questions */}
+                          <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
+                            {subTopic.total_questions} questions
+                          </td>
+
+                          {/* Test File */}
+                          <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
+                            {subTopic.file_name || ""}
+                          </td>
+
+                          {/* Progress */}
+                          <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
+                            65%
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+
+              </table>
+            </div>
           </div>
         </>
       )}
+      {isModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-50">
+          <div className="bg-white rounded-xl p-6 shadow-lg w-80">
+            <h3 className="text-lg font-medium mb-4 text-gray-900">
+              Add New Topic
+            </h3>
+            <input
+              type="text"
+              value={topicName}
+              onChange={(e) => setTopicName(e.target.value)}
+              placeholder="Enter topic name"
+              className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+            />
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="px-3 py-1 rounded-lg bg-gray-300 hover:bg-gray-400 text-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddTopic}
+                className="px-3 py-1 rounded-lg bg-blue-500 hover:bg-blue-600 text-white"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
+
   );
+
 };
 
 export default AdminUpload;
