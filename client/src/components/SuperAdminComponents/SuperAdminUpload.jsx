@@ -44,6 +44,11 @@ const SuperAdminUpload = () => {
   const [topicWithSub, setTopicWithSub] = useState([])
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [topicName, setTopicName] = useState("");
+  const [assignmentPage, setAssignmentPage] = useState(1);
+  const [overviewPage, setOverviewPage] = useState(1);
+  const [mcqPage, setMcqPage] = useState(1);
+
+  const rowsPerPage = 10;
 
   const handleAddTopic = async () => {
     if (!topicName.trim()) return;
@@ -76,10 +81,6 @@ const SuperAdminUpload = () => {
   };
 
   const editor = useRef(null);
-
-
-
-
 
   const tabs = [
     { id: "upload-assignment", label: "Upload Assignment" },
@@ -363,8 +364,113 @@ const SuperAdminUpload = () => {
     return `${day}-${month}-${year}`;
   }
 
+  // Pagination logic for Assignment
+  const assignmentTotal = assignmentData.length;
+  const assignmentTotalPages = Math.ceil(assignmentTotal / rowsPerPage);
+  const paginatedAssignmentData = useMemo(() => 
+    assignmentData.slice((assignmentPage - 1) * rowsPerPage, assignmentPage * rowsPerPage), 
+    [assignmentData, assignmentPage]
+  );
+  const assignmentStartIdx = (assignmentPage - 1) * rowsPerPage + 1;
+  const assignmentEndIdx = Math.min(assignmentPage * rowsPerPage, assignmentTotal);
 
+  const handleAssignmentPrev = () => {
+    if (assignmentPage > 1) setAssignmentPage(assignmentPage - 1);
+  };
 
+  const handleAssignmentNext = () => {
+    if (assignmentPage < assignmentTotalPages) setAssignmentPage(assignmentPage + 1);
+  };
+
+  // Pagination logic for Overview
+  const overviewRows = useMemo(() => 
+    overviewDetails.flatMap((overview) =>
+      overview.sub_topics.map((subTopic) => ({
+        topic_id: overview.topic_id,
+        topic_name: overview.topic_name,
+        sub_topic_name: subTopic.sub_topic_name,
+        overview_video_url: subTopic.overview_video_url,
+        progress: subTopic.progress || "85%"
+      }))
+    ), 
+    [overviewDetails]
+  );
+  const overviewTotal = overviewRows.length;
+  const overviewTotalPages = Math.ceil(overviewTotal / rowsPerPage);
+  const paginatedOverviewRows = useMemo(() => 
+    overviewRows.slice((overviewPage - 1) * rowsPerPage, overviewPage * rowsPerPage), 
+    [overviewRows, overviewPage]
+  );
+  const overviewStartIdx = (overviewPage - 1) * rowsPerPage + 1;
+  const overviewEndIdx = Math.min(overviewPage * rowsPerPage, overviewTotal);
+
+  const handleOverviewPrev = () => {
+    if (overviewPage > 1) setOverviewPage(overviewPage - 1);
+  };
+
+  const handleOverviewNext = () => {
+    if (overviewPage < overviewTotalPages) setOverviewPage(overviewPage + 1);
+  };
+
+  // Pagination logic for MCQ
+  const mcqRows = useMemo(() => 
+    topicWithSub.flatMap((topic, topicIndex) =>
+      topic.sub_topics?.map((subTopic) => ({
+        sNo: topicIndex + 1,
+        topic_name: topic.topic_name,
+        sub_topic_name: subTopic.sub_topic_name,
+        total_questions: subTopic.total_questions,
+        file_name: subTopic.file_name || "",
+        progress: "65%"
+      })) || []
+    ), 
+    [topicWithSub]
+  );
+  const mcqTotal = mcqRows.length;
+  const mcqTotalPages = Math.ceil(mcqTotal / rowsPerPage);
+  const paginatedMcqRows = useMemo(() => 
+    mcqRows.slice((mcqPage - 1) * rowsPerPage, mcqPage * rowsPerPage), 
+    [mcqRows, mcqPage]
+  );
+  const mcqStartIdx = (mcqPage - 1) * rowsPerPage + 1;
+  const mcqEndIdx = Math.min(mcqPage * rowsPerPage, mcqTotal);
+
+  const handleMcqPrev = () => {
+    if (mcqPage > 1) setMcqPage(mcqPage - 1);
+  };
+
+  const handleMcqNext = () => {
+    if (mcqPage < mcqTotalPages) setMcqPage(mcqPage + 1);
+  };
+
+  const renderPagination = (currentPage, totalPages, startIdx, endIdx, total, prevHandler, nextHandler) => (
+    <div className="p-4 border-t border-gray-200 bg-gray-50">
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="text-sm text-gray-700">
+          Showing {startIdx} to {endIdx} of {total} entries
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={prevHandler}
+            disabled={currentPage <= 1}
+            className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-gray-700">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            onClick={nextHandler}
+            disabled={currentPage >= totalPages}
+            className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
@@ -545,9 +651,11 @@ const SuperAdminUpload = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-500">
-                  {assignmentData.map((assignment, index) => (
+                  {paginatedAssignmentData.map((assignment, index) => (
                     <tr key={index}>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">{index + 1}</td>
+                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">
+                        {((assignmentPage - 1) * rowsPerPage + index + 1)}
+                      </td>
                       <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{assignment.department_name}</td>
                       <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{assignment.assignment_topic}</td>
                       <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{formatDate(assignment.start_date)}</td>
@@ -559,6 +667,7 @@ const SuperAdminUpload = () => {
                 </tbody>
               </table>
             </div>
+            {renderPagination(assignmentPage, assignmentTotalPages, assignmentStartIdx, assignmentEndIdx, assignmentTotal, handleAssignmentPrev, handleAssignmentNext)}
           </div>
         </>
       )}
@@ -705,41 +814,32 @@ const SuperAdminUpload = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-500">
-                  {overviewDetails.flatMap((overview) =>
-                    overview.sub_topics.map((subTopic, subIndex) => {
-                      const isFirstSubTopic = subIndex === 0;
-
-                      return (
-                        <tr key={`${overview.topic_id}-${subTopic.sub_topic_id}`}>
-                          {isFirstSubTopic && (
-                            <>
-                              <td rowSpan={overview.sub_topics.length} className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">
-                                {overview.topic_id}
-                              </td>
-                              <td rowSpan={overview.sub_topics.length} className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-                                {overview.topic_name}
-                              </td>
-                            </>
-                          )}
-                          <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-                            {subTopic.sub_topic_name}
-                          </td>
-                          <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-                            {subTopic.overview_video_url}
-                          </td>
-                          {/* <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
+                  {paginatedOverviewRows.map((row, index) => (
+                    <tr key={`${row.topic_id}-${row.sub_topic_name}-${index}`}>
+                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">
+                        {row.topic_id}
+                      </td>
+                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
+                        {row.topic_name}
+                      </td>
+                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
+                        {row.sub_topic_name}
+                      </td>
+                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
+                        {row.overview_video_url}
+                      </td>
+                      {/* <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
             {subTopic.file_name || "document1.doc"}
           </td> */}
-                          <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
-                            {subTopic.progress || "85%"}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
+                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
+                        {row.progress}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
+            {renderPagination(overviewPage, overviewTotalPages, overviewStartIdx, overviewEndIdx, overviewTotal, handleOverviewPrev, handleOverviewNext)}
           </div>
         </>
       )}
@@ -863,59 +963,33 @@ const SuperAdminUpload = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-500">
-                  {topicWithSub?.map((topic, topicIndex) =>
-                    topic.sub_topics?.map((subTopic, subIndex) => {
-                      const isFirstSubTopic = subIndex === 0;
-
-                      return (
-                        <tr key={`${topic.topic_id}-${subTopic.sub_topic_id}`}>
-                          {/* No column (same for all subtopics of same topic) */}
-                          {isFirstSubTopic && (
-                            <td
-                              rowSpan={topic.sub_topics.length}
-                              className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0"
-                            >
-                              {topicIndex + 1}
-                            </td>
-                          )}
-
-                          {/* Topic Name */}
-                          {isFirstSubTopic && (
-                            <td
-                              rowSpan={topic.sub_topics.length}
-                              className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0"
-                            >
-                              {topic.topic_name}
-                            </td>
-                          )}
-
-                          {/* Sub Topic Name */}
-                          <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-                            {subTopic.sub_topic_name}
-                          </td>
-
-                          {/* Total Questions */}
-                          <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-                            {subTopic.total_questions} questions
-                          </td>
-
-                          {/* Test File */}
-                          <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
-                            {subTopic.file_name || ""}
-                          </td>
-
-                          {/* Progress */}
-                          <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
-                            65%
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
+                  {paginatedMcqRows.map((row, index) => (
+                    <tr key={`${row.sNo}-${row.sub_topic_name}-${index}`}>
+                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">
+                        {row.sNo}
+                      </td>
+                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
+                        {row.topic_name}
+                      </td>
+                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
+                        {row.sub_topic_name}
+                      </td>
+                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
+                        {row.total_questions} questions
+                      </td>
+                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
+                        {row.file_name}
+                      </td>
+                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
+                        {row.progress}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
 
               </table>
             </div>
+            {renderPagination(mcqPage, mcqTotalPages, mcqStartIdx, mcqEndIdx, mcqTotal, handleMcqPrev, handleMcqNext)}
           </div>
         </>
       )}

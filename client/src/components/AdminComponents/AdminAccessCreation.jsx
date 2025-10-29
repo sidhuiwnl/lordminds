@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Select from 'react-select';
 
 const AdminAccessCreation = () => {
@@ -21,10 +21,19 @@ const AdminAccessCreation = () => {
   const [colleges, setColleges] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [topics, setTopics] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [teachers, setTeachers] = useState([]);
+  const [admins, setAdmins] = useState([]);
   const [showAddDeptModal, setShowAddDeptModal] = useState(false);
   const [deptForm, setDeptForm] = useState({ name: "", code: "" });
+  const [studentPage, setStudentPage] = useState(1);
+  const [teacherPage, setTeacherPage] = useState(1);
+  const [adminPage, setAdminPage] = useState(1);
+  const [selectedCollegeFilter, setSelectedCollegeFilter] = useState('');
+  const [selectedDepartmentFilter, setSelectedDepartmentFilter] = useState('');
+  const [studentDepartments, setStudentDepartments] = useState([]);
 
-  
+  const rowsPerPage = 10;
 
   const API_BASE = import.meta.env.VITE_BACKEND_API_URL; // Adjust to your FastAPI server URL
 
@@ -33,7 +42,8 @@ const AdminAccessCreation = () => {
     { id: "college-onboarding", label: "College Onboarding" },
     { id: "student", label: "Student Access" },
     { id: "teacher", label: "Teacher Access" },
-    
+    // { id: "admin", label: "Administrator Access" },
+    // { id: "topic", label: "Topic Creation" }
   ];
 
   const fetchColleges = async () => {
@@ -75,13 +85,86 @@ const AdminAccessCreation = () => {
     }
   };
 
+  const fetchStudents = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/users/get/students`);
+      if (res.ok) {
+        const data = await res.json();
+        setStudents(data.data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching students:", error);
+    }
+  };
+
+  const fetchTeachers = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/users/get/teachers`);
+      if (res.ok) {
+        const data = await res.json();
+        setTeachers(data.data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching teachers:", error);
+    }
+  };
+
+  const fetchAdmins = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/users/get/administrators`);
+      if (res.ok) {
+        const data = await res.json();
+        setAdmins(data.data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching admins:", error);
+    }
+  };
+
+  const fetchStudentDepartments = async (collegeId) => {
+    if (!collegeId) {
+      setStudentDepartments([]);
+      return;
+    }
+    try {
+      const response = await fetch(`${API_BASE}/colleges/${collegeId}/departments`, {
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setStudentDepartments(data.data || []);
+    } catch (error) {
+      console.error(error);
+      setStudentDepartments([]);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
-      await Promise.all([fetchColleges(), fetchDepartments(), fetchTopics()]);
+      await Promise.all([fetchColleges(), fetchDepartments(), fetchTopics(), fetchStudents(), fetchTeachers(), fetchAdmins()]);
     };
 
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (selectedCollegeFilter) {
+      const college = colleges.find(c => c.name === selectedCollegeFilter);
+      if (college && college.college_id) {
+        fetchStudentDepartments(college.college_id);
+      }
+    } else {
+      setStudentDepartments([]);
+      setSelectedDepartmentFilter('');
+    }
+  }, [selectedCollegeFilter, colleges]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -168,7 +251,10 @@ const AdminAccessCreation = () => {
         const res = await fetch(`${API_BASE}/users/bulk`, { method: "POST", body: form });
         const result = await res.json();
         setMessage({ type: res.ok ? "success" : "error", text: res.ok ? result.message : result.detail || "Bulk creation failed" });
-        if (res.ok) setSelectedFile(null);
+        if (res.ok) {
+          setSelectedFile(null);
+          await fetchStudents();
+        }
       }
 
       else if (selectedAccessType === "topic") {
@@ -211,9 +297,13 @@ const AdminAccessCreation = () => {
         });
         const result = await res.json();
         setMessage({ type: res.ok ? "success" : "error", text: res.ok ? result.message : result.detail || "User creation failed" });
-        if (res.ok) setFormData({
-          collegeName: "", collegeAddress: "", selectedDepartments: [], name: "", department: "", username: "", password: "", college: "", selectedTopics: []
-        });
+        if (res.ok) {
+          setFormData({
+            collegeName: "", collegeAddress: "", selectedDepartments: [], name: "", department: "", username: "", password: "", college: "", selectedTopics: []
+          });
+          const fetchFunc = selectedAccessType === 'student' ? fetchStudents : selectedAccessType === 'teacher' ? fetchTeachers : fetchAdmins;
+          await fetchFunc();
+        }
       }
 
       clearMessage();
@@ -482,6 +572,256 @@ const AdminAccessCreation = () => {
     );
   };
 
+  function formatDate(dateStr) {
+    const date = new Date(dateStr);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}-${month}-${year}`;
+  }
+
+  // Filtered students
+  const filteredStudents = useMemo(() => 
+    students.filter(student => 
+      (!selectedCollegeFilter || student.college_name === selectedCollegeFilter) &&
+      (!selectedDepartmentFilter || student.department_name === selectedDepartmentFilter)
+    ), 
+    [students, selectedCollegeFilter, selectedDepartmentFilter]
+  );
+
+  // Pagination logic for Students
+  const studentTotal = filteredStudents.length;
+  const studentTotalPages = Math.ceil(studentTotal / rowsPerPage);
+  const paginatedStudents = useMemo(() => 
+    filteredStudents.slice((studentPage - 1) * rowsPerPage, studentPage * rowsPerPage), 
+    [filteredStudents, studentPage]
+  );
+  const studentStartIdx = (studentPage - 1) * rowsPerPage + 1;
+  const studentEndIdx = Math.min(studentPage * rowsPerPage, studentTotal);
+
+  const handleStudentPrev = () => {
+    if (studentPage > 1) setStudentPage(studentPage - 1);
+  };
+
+  const handleStudentNext = () => {
+    if (studentPage < studentTotalPages) setStudentPage(studentPage + 1);
+  };
+
+  // Pagination logic for Teachers
+  const teacherTotal = teachers.length;
+  const teacherTotalPages = Math.ceil(teacherTotal / rowsPerPage);
+  const paginatedTeachers = useMemo(() => 
+    teachers.slice((teacherPage - 1) * rowsPerPage, teacherPage * rowsPerPage), 
+    [teachers, teacherPage]
+  );
+  const teacherStartIdx = (teacherPage - 1) * rowsPerPage + 1;
+  const teacherEndIdx = Math.min(teacherPage * rowsPerPage, teacherTotal);
+
+  const handleTeacherPrev = () => {
+    if (teacherPage > 1) setTeacherPage(teacherPage - 1);
+  };
+
+  const handleTeacherNext = () => {
+    if (teacherPage < teacherTotalPages) setTeacherPage(teacherPage + 1);
+  };
+
+  // Pagination logic for Admins
+  const adminTotal = admins.length;
+  const adminTotalPages = Math.ceil(adminTotal / rowsPerPage);
+  const paginatedAdmins = useMemo(() => 
+    admins.slice((adminPage - 1) * rowsPerPage, adminPage * rowsPerPage), 
+    [admins, adminPage]
+  );
+  const adminStartIdx = (adminPage - 1) * rowsPerPage + 1;
+  const adminEndIdx = Math.min(adminPage * rowsPerPage, adminTotal);
+
+  const handleAdminPrev = () => {
+    if (adminPage > 1) setAdminPage(adminPage - 1);
+  };
+
+  const handleAdminNext = () => {
+    if (adminPage < adminTotalPages) setAdminPage(adminPage + 1);
+  };
+
+  const renderPagination = (currentPage, totalPages, startIdx, endIdx, total, prevHandler, nextHandler) => (
+    <div className="p-4 border-t border-gray-200 bg-gray-50">
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="text-sm text-gray-700">
+          Showing {startIdx} to {endIdx} of {total} entries
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={prevHandler}
+            disabled={currentPage <= 1}
+            className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-gray-700">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            onClick={nextHandler}
+            disabled={currentPage >= totalPages}
+            className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderUserTable = () => {
+    if (selectedAccessType === "student") {
+      return (
+        <div className="bg-white rounded-lg shadow overflow-hidden mt-6">
+          <div className="p-4 bg-gray-50">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Filter by College</label>
+                <select
+                  value={selectedCollegeFilter}
+                  onChange={(e) => {
+                    setSelectedCollegeFilter(e.target.value);
+                    setSelectedDepartmentFilter('');
+                    setStudentPage(1);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                >
+                  <option value="">All Colleges</option>
+                  {colleges.map((college) => (
+                    <option key={college.college_id || college.id} value={college.name}>{college.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Department</label>
+                <select
+                  value={selectedDepartmentFilter}
+                  onChange={(e) => {
+                    setSelectedDepartmentFilter(e.target.value);
+                    setStudentPage(1);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  disabled={!selectedCollegeFilter}
+                >
+                  <option value="">All Departments</option>
+                  {studentDepartments.map((dept) => (
+                    <option key={dept.department_id} value={dept.department_name}>{dept.department_name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 lg:p-6 border-b border-gray-200 gap-4">
+            <h2 className="text-lg lg:text-xl font-semibold text-gray-800">List of Students</h2>
+          </div>
+          <div className="overflow-x-auto max-h-96 overflow-y-auto">
+            <table className="w-full min-w-[800px] border-collapse">
+              <thead>
+                <tr className="bg-[#1b64a5] text-white sticky top-0">
+                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-l-0">S.NO</th>
+                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Full Name</th>
+                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Username</th>
+                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">College Name</th>
+                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Department Name</th>
+                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-r-0">Created At</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-500">
+                {paginatedStudents.map((student, index) => (
+                  <tr key={student.user_id}>
+                    <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">
+                      {((studentPage - 1) * rowsPerPage + index + 1)}
+                    </td>
+                    <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{student.full_name}</td>
+                    <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{student.username}</td>
+                    <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{student.college_name}</td>
+                    <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{student.department_name}</td>
+                    <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">{formatDate(student.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {renderPagination(studentPage, studentTotalPages, studentStartIdx, studentEndIdx, studentTotal, handleStudentPrev, handleStudentNext)}
+        </div>
+      );
+    } else if (selectedAccessType === "teacher") {
+      return (
+        <div className="bg-white rounded-lg shadow overflow-hidden mt-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 lg:p-6 border-b border-gray-200 gap-4">
+            <h2 className="text-lg lg:text-xl font-semibold text-gray-800">List of Teachers</h2>
+          </div>
+          <div className="overflow-x-auto max-h-96 overflow-y-auto">
+            <table className="w-full min-w-[800px] border-collapse">
+              <thead>
+                <tr className="bg-[#1b64a5] text-white sticky top-0">
+                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-l-0">S.NO</th>
+                  {/* <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Full Name</th> */}
+                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Username</th>
+                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">College Name</th>
+                  {/* <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Department Name</th> */}
+                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-r-0">Created At</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-500">
+                {paginatedTeachers.map((teacher, index) => (
+                  <tr key={teacher.user_id}>
+                    <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">
+                      {((teacherPage - 1) * rowsPerPage + index + 1)}
+                    </td>
+                    {/* <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{teacher.full_name}</td> */}
+                    <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{teacher.username}</td>
+                    <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{teacher.college_name}</td>
+                    {/* <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{teacher.department_name}</td> */}
+                    <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">{formatDate(teacher.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {renderPagination(teacherPage, teacherTotalPages, teacherStartIdx, teacherEndIdx, teacherTotal, handleTeacherPrev, handleTeacherNext)}
+        </div>
+      );
+    } else if (selectedAccessType === "admin") {
+      return (
+        <div className="bg-white rounded-lg shadow overflow-hidden mt-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 lg:p-6 border-b border-gray-200 gap-4">
+            <h2 className="text-lg lg:text-xl font-semibold text-gray-800">List of Administrators</h2>
+          </div>
+          <div className="overflow-x-auto max-h-96 overflow-y-auto">
+            <table className="w-full min-w-[800px] border-collapse">
+              <thead>
+                <tr className="bg-[#1b64a5] text-white sticky top-0">
+                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-l-0">S.NO</th>
+                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Username</th>
+                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">College Name</th>
+                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-r-0">Created At</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-500">
+                {paginatedAdmins.map((admin, index) => (
+                  <tr key={admin.user_id}>
+                    <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">
+                      {((adminPage - 1) * rowsPerPage + index + 1)}
+                    </td>
+                    <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{admin.username}</td>
+                    <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{admin.college_name}</td>
+                    <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">{formatDate(admin.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {renderPagination(adminPage, adminTotalPages, adminStartIdx, adminEndIdx, adminTotal, handleAdminPrev, handleAdminNext)}
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
       <div className="space-y-4 lg:space-y-6 mx-0 lg:mx-4">
@@ -571,6 +911,8 @@ const AdminAccessCreation = () => {
             </button>
           </div>
         </form>
+
+        {renderUserTable()}
 
         {/* Add Department Modal */}
         {showAddDeptModal && (

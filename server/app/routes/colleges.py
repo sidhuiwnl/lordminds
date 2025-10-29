@@ -20,6 +20,7 @@ class CollegeOnboard(BaseModel):
             raise ValueError('At least one department is required')
         return v
 
+
 @router.post("/onboard")
 async def onboard_college(data: CollegeOnboard):
     """Onboard a new college with address and associated departments"""
@@ -27,18 +28,34 @@ async def onboard_college(data: CollegeOnboard):
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
-                # Step 1: Insert college and get ID
-                college_query = """
-                    INSERT INTO colleges (name, college_address, created_at)
-                    VALUES (%s, %s, %s)
-                """
-                cursor.execute(college_query, (data.name, data.address, datetime.now()))
-                college_id = cursor.lastrowid
+
+                # Step 1: Check if the college already exists
+                cursor.execute(
+                    "SELECT college_id FROM colleges WHERE name = %s AND college_address = %s",
+                    (data.name, data.address)
+                )
+                existing_college = cursor.fetchone()
+
+                if existing_college:
+                    college_id = existing_college["college_id"]
+                    college_action = "existing"
+                else:
+                    # Create a new college
+                    cursor.execute(
+                        """
+                        INSERT INTO colleges (name, college_address, created_at)
+                        VALUES (%s, %s, %s)
+                        """,
+                        (data.name, data.address, datetime.now())
+                    )
+                    college_id = cursor.lastrowid
+                    college_action = "created"
 
                 created_depts = []
 
+                # Step 2: Process each department
                 for dept_name in data.departments:
-                    # Step 2: Check if department exists in master table
+                    # Check if department already exists in master table
                     cursor.execute(
                         "SELECT department_id FROM departments WHERE department_name = %s",
                         (dept_name,)
@@ -49,19 +66,25 @@ async def onboard_college(data: CollegeOnboard):
                         department_id = dept["department_id"]
                         created_depts.append(f"{dept_name} (exists)")
                     else:
-                        # Create department in master table
-                        dept_code = dept_name[:4].upper() + str(int(datetime.timestamp(datetime.now())))  # unique code
-                        dept_query = """
+                        # Create new department
+                        dept_code = dept_name[:4].upper() + str(int(datetime.timestamp(datetime.now())))
+                        cursor.execute(
+                            """
                             INSERT INTO departments (department_name, department_code, is_active, created_at, updated_at)
                             VALUES (%s, %s, %s, %s, %s)
-                        """
-                        cursor.execute(dept_query, (dept_name, dept_code, True, datetime.now(), datetime.now()))
+                            """,
+                            (dept_name, dept_code, True, datetime.now(), datetime.now())
+                        )
                         department_id = cursor.lastrowid
                         created_depts.append(f"{dept_name} (created)")
 
-                    # Step 3: Map department to college
+                    # Step 3: Map department to college (avoid duplicates)
                     cursor.execute(
-                        "INSERT IGNORE INTO college_departments (college_id, department_id, created_at, updated_at) VALUES (%s, %s, %s, %s)",
+                        """
+                        INSERT IGNORE INTO college_departments
+                        (college_id, department_id, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s)
+                        """,
                         (college_id, department_id, datetime.now(), datetime.now())
                     )
 
@@ -69,7 +92,7 @@ async def onboard_college(data: CollegeOnboard):
 
                 return {
                     "status": "success",
-                    "message": f"College '{data.name}' onboarded successfully with {len(created_depts)} departments",
+                    "message": f"College '{data.name}' ({college_action}) onboarded successfully with {len(created_depts)} departments",
                     "data": {
                         "college_id": college_id,
                         "college_name": data.name,

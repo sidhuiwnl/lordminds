@@ -37,8 +37,8 @@ class UserCreate(BaseModel):
     @field_validator('department_name', mode='before')  # v2: Use field_validator with mode
     @classmethod
     def validate_department(cls, v, info):
-        if info.data.get('role') in ['student', 'teacher'] and not v:
-            raise ValueError('department_name is required for student or teacher')
+        if info.data.get('role') in ['student'] and not v:
+            raise ValueError('department_name is required for student')
         return v
 
     @field_validator('full_name', mode='before')  # v2: Use field_validator with mode
@@ -491,3 +491,101 @@ async def get_questions_by_subtopic(sub_topic_id: int):
             status_code=500,
             detail=f"Error fetching questions for subtopic {sub_topic_id}: {str(e)}"
         )
+    
+
+@router.get("/get/students")
+async def get_all_students():
+    """Fetch all users with the 'student' role"""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        u.user_id,
+                        u.username,
+                        u.full_name,
+                        c.name AS college_name,
+                        d.department_name,
+                        u.created_at
+                    FROM users u
+                    JOIN roles r ON u.role_id = r.role_id
+                    JOIN colleges c ON u.college_id = c.college_id
+                    LEFT JOIN departments d ON u.department_id = d.department_id
+                    WHERE r.name = 'student'
+                    ORDER BY u.created_at DESC
+                """)
+                students = cursor.fetchall()
+
+                return {
+                    "status": "success",
+                    "count": len(students),
+                    "data": students
+                }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching students: {str(e)}")       
+    
+
+@router.get("/get/teachers")
+async def get_all_teachers():
+    """Fetch all users with the 'teacher' role"""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        u.user_id,
+                        u.username,
+                        u.full_name,
+                        c.name AS college_name,
+                        d.department_name,
+                        u.created_at
+                    FROM users u
+                    JOIN roles r ON u.role_id = r.role_id
+                    JOIN colleges c ON u.college_id = c.college_id
+                    LEFT JOIN departments d ON u.department_id = d.department_id
+                    WHERE r.name = 'teacher'
+                    ORDER BY u.created_at DESC
+                """)
+                teachers = cursor.fetchall()
+
+                return {
+                    "status": "success",
+                    "count": len(teachers),
+                    "data": teachers
+                }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching teachers: {str(e)}")    
+    
+@router.get("/get/administrators")
+async def get_all_administrators():
+    """Fetch all users with the 'teacher' role"""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        u.user_id,
+                        u.username,
+                        u.full_name,
+                        c.name AS college_name,
+                        d.department_name,
+                        u.created_at
+                    FROM users u
+                    JOIN roles r ON u.role_id = r.role_id
+                    JOIN colleges c ON u.college_id = c.college_id
+                    LEFT JOIN departments d ON u.department_id = d.department_id
+                    WHERE r.name = 'administrator'
+                    ORDER BY u.created_at DESC
+                """)
+                teachers = cursor.fetchall()
+
+                return {
+                    "status": "success",
+                    "count": len(teachers),
+                    "data": teachers
+                }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching teachers: {str(e)}")
