@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useEffect } from "react";
+import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import JoditEditor from 'jodit-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
@@ -383,18 +383,21 @@ const SuperAdminUpload = () => {
   };
 
   // Pagination logic for Overview
-  const overviewRows = useMemo(() => 
-    overviewDetails.flatMap((overview) =>
-      overview.sub_topics.map((subTopic) => ({
+  const overviewRows = useMemo(() => {
+    let serial = 1;
+    return overviewDetails.reduce((acc, overview) => {
+      const subRows = overview.sub_topics.map((subTopic) => ({
+        topicSerial: serial,
         topic_id: overview.topic_id,
         topic_name: overview.topic_name,
         sub_topic_name: subTopic.sub_topic_name,
         overview_video_url: subTopic.overview_video_url,
         progress: subTopic.progress || "85%"
-      }))
-    ), 
-    [overviewDetails]
-  );
+      }));
+      serial++;
+      return [...acc, ...subRows];
+    }, []);
+  }, [overviewDetails]);
   const overviewTotal = overviewRows.length;
   const overviewTotalPages = Math.ceil(overviewTotal / rowsPerPage);
   const paginatedOverviewRows = useMemo(() => 
@@ -413,19 +416,21 @@ const SuperAdminUpload = () => {
   };
 
   // Pagination logic for MCQ
-  const mcqRows = useMemo(() => 
-    topicWithSub.flatMap((topic, topicIndex) =>
-      topic.sub_topics?.map((subTopic) => ({
-        sNo: topicIndex + 1,
+  const mcqRows = useMemo(() => {
+    let serial = 1;
+    return topicWithSub.reduce((acc, topic) => {
+      const subRows = topic.sub_topics?.map((subTopic) => ({
+        topicSerial: serial,
         topic_name: topic.topic_name,
         sub_topic_name: subTopic.sub_topic_name,
         total_questions: subTopic.total_questions,
         file_name: subTopic.file_name || "",
         progress: "65%"
-      })) || []
-    ), 
-    [topicWithSub]
-  );
+      })) || [];
+      serial++;
+      return [...acc, ...subRows];
+    }, []);
+  }, [topicWithSub]);
   const mcqTotal = mcqRows.length;
   const mcqTotalPages = Math.ceil(mcqTotal / rowsPerPage);
   const paginatedMcqRows = useMemo(() => 
@@ -442,6 +447,19 @@ const SuperAdminUpload = () => {
   const handleMcqNext = () => {
     if (mcqPage < mcqTotalPages) setMcqPage(mcqPage + 1);
   };
+
+  const getRowspan = useCallback((rows, startIdx, groupKey) => {
+    let count = 1;
+    const groupValue = rows[startIdx][groupKey];
+    for (let j = startIdx + 1; j < rows.length; j++) {
+      if (rows[j][groupKey] === groupValue) {
+        count++;
+      } else {
+        break;
+      }
+    }
+    return count;
+  }, []);
 
   const renderPagination = (currentPage, totalPages, startIdx, endIdx, total, prevHandler, nextHandler) => (
     <div className="p-4 border-t border-gray-200 bg-gray-50">
@@ -470,6 +488,79 @@ const SuperAdminUpload = () => {
         </div>
       </div>
     </div>
+  );
+
+  const renderOverviewTbody = () => (
+    <tbody className="divide-y divide-gray-500">
+      {paginatedOverviewRows.map((row, idx) => {
+        const isGroupStart = idx === 0 || paginatedOverviewRows[idx].topicSerial !== paginatedOverviewRows[idx - 1].topicSerial;
+        let rowspan = 1;
+        if (isGroupStart) {
+          rowspan = getRowspan(paginatedOverviewRows, idx, 'topicSerial');
+        }
+        return (
+          <tr key={`${row.topic_id}-${row.sub_topic_name}-${idx}`}>
+            {isGroupStart && (
+              <td rowSpan={rowspan} className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">
+                {row.topicSerial}
+              </td>
+            )}
+            {isGroupStart && (
+              <td rowSpan={rowspan} className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
+                {row.topic_name}
+              </td>
+            )}
+            <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
+              {row.sub_topic_name}
+            </td>
+            <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
+              {row.overview_video_url}
+            </td>
+            <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
+              {row.progress}
+            </td>
+          </tr>
+        );
+      })}
+    </tbody>
+  );
+
+  const renderMcqTbody = () => (
+    <tbody className="divide-y divide-gray-500">
+      {paginatedMcqRows.map((row, idx) => {
+        const isGroupStart = idx === 0 || paginatedMcqRows[idx].topicSerial !== paginatedMcqRows[idx - 1].topicSerial;
+        let rowspan = 1;
+        if (isGroupStart) {
+          rowspan = getRowspan(paginatedMcqRows, idx, 'topicSerial');
+        }
+        return (
+          <tr key={`${row.topic_name}-${row.sub_topic_name}-${idx}`}>
+            {isGroupStart && (
+              <td rowSpan={rowspan} className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">
+                {row.topicSerial}
+              </td>
+            )}
+            {isGroupStart && (
+              <td rowSpan={rowspan} className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
+                {row.topic_name}
+              </td>
+            )}
+            <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
+              {row.sub_topic_name}
+            </td>
+            <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
+              {row.total_questions} questions
+            </td>
+            <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
+              {row.file_name}
+            </td>
+            <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
+              {row.progress}
+            </td>
+          </tr>
+        );
+      })}
+    </tbody>
   );
 
   return (
@@ -809,34 +900,10 @@ const SuperAdminUpload = () => {
                     <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Topic Name</th>
                     <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Sub-topic Name</th>
                     <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Video Link</th>
-                    {/* <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-r-0">Overview Document</th> */}
                     <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-r-0">Students</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-500">
-                  {paginatedOverviewRows.map((row, index) => (
-                    <tr key={`${row.topic_id}-${row.sub_topic_name}-${index}`}>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">
-                        {row.topic_id}
-                      </td>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-                        {row.topic_name}
-                      </td>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-                        {row.sub_topic_name}
-                      </td>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-                        {row.overview_video_url}
-                      </td>
-                      {/* <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
-            {subTopic.file_name || "document1.doc"}
-          </td> */}
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
-                        {row.progress}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
+                {renderOverviewTbody()}
               </table>
             </div>
             {renderPagination(overviewPage, overviewTotalPages, overviewStartIdx, overviewEndIdx, overviewTotal, handleOverviewPrev, handleOverviewNext)}
@@ -962,31 +1029,7 @@ const SuperAdminUpload = () => {
                     <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-r-0">Progress</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-500">
-                  {paginatedMcqRows.map((row, index) => (
-                    <tr key={`${row.sNo}-${row.sub_topic_name}-${index}`}>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">
-                        {row.sNo}
-                      </td>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-                        {row.topic_name}
-                      </td>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-                        {row.sub_topic_name}
-                      </td>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-                        {row.total_questions} questions
-                      </td>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
-                        {row.file_name}
-                      </td>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
-                        {row.progress}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-
+                {renderMcqTbody()}
               </table>
             </div>
             {renderPagination(mcqPage, mcqTotalPages, mcqStartIdx, mcqEndIdx, mcqTotal, handleMcqPrev, handleMcqNext)}

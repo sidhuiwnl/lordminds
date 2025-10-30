@@ -220,3 +220,103 @@ async def get_assignment_questions(assignment_id: int):
                 return questions
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+
+@router.get("/assignment-marks")
+async def get_assignment_marks():
+    """Fetch total marks obtained for each student across all assignments"""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                query = """
+                    SELECT 
+                        u.user_id,
+                        u.username AS student_name,
+                        SUM(am.marks_obtained) AS total_marks_obtained,
+                        SUM(am.max_marks) AS total_max_marks
+                    FROM assignment_marks am
+                    JOIN users u ON am.student_id = u.user_id
+                    GROUP BY u.user_id, u.username
+                    ORDER BY total_marks_obtained DESC
+                """
+                cursor.execute(query)
+                data = cursor.fetchall()
+
+                # Format result
+                result = [
+                    {
+                        "student_name": row["student_name"],
+                        "total_marks_obtained": row["total_marks_obtained"],
+                        "total_max_marks": row["total_max_marks"],
+                        "average_percentage": round(
+                            (row["total_marks_obtained"] / row["total_max_marks"]) * 100, 2
+                        ) if row["total_max_marks"] else 0
+                    }
+                    for row in data
+                ]
+
+                return {
+                    "status": "success",
+                    "count": len(result),
+                    "data": result
+                }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching total assignment marks: {str(e)}"
+        )
+
+    
+
+@router.get("/topic-averages")
+async def get_topic_average_marks():
+    """
+    Fetch student-wise topic average marks 
+    (aggregating all sub-topic marks under each topic)
+    """
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                query = """
+                    SELECT 
+                        u.username AS student_name,
+                        t.topic_name AS topic_name,
+                        ROUND(SUM(stm.marks_obtained) / SUM(stm.max_marks) * 100, 2) AS average_percentage,
+                        SUM(stm.marks_obtained) AS total_obtained,
+                        SUM(stm.max_marks) AS total_max
+                    FROM sub_topic_marks stm
+                    JOIN users u ON stm.student_id = u.user_id
+                    JOIN sub_topics st ON stm.sub_topic_id = st.sub_topic_id
+                    JOIN topics t ON st.topic_id = t.topic_id
+                    GROUP BY u.username, t.topic_name
+                    ORDER BY u.username, t.topic_name
+                """
+                cursor.execute(query)
+                results = cursor.fetchall()
+
+                # Group by student
+                student_data = {}
+                for row in results:
+                    name = row["student_name"]
+                    if name not in student_data:
+                        student_data[name] = {
+                            "student_name": name,
+                            "topics": []
+                        }
+                    student_data[name]["topics"].append({
+                        "topic_name": row["topic_name"],
+                        "total_obtained": float(row["total_obtained"]),
+                        "total_max": float(row["total_max"]),
+                        "average_percentage": float(row["average_percentage"])
+                    })
+
+                return {
+                    "status": "success",
+                    "count": len(student_data),
+                    "data": list(student_data.values())
+                }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching topic averages: {str(e)}")

@@ -151,4 +151,7 @@ async def get_college_departments(college_id: int):
                     "data": departments
                 }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching departments for college {college_id}: {str(e)}")    
+        raise HTTPException(status_code=500, detail=f"Error fetching departments for college {college_id}: {str(e)}")
+
+    
+        
