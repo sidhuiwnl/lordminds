@@ -50,34 +50,37 @@ const LessonsOverviewPage = () => {
 
       <div className="space-y-4 lg:space-y-6 mx-0 lg:mx-4">
         <div className="bg-white rounded-2xl shadow-sm p-4 lg:p-6 border-t-4 border-r-4 border-[#1b65a6] rounded-bl-lg rounded-tr-lg">
-          {/* Video Player */}
-          <div className="relative mb-3 lg:mb-4">
-            <video
-              className="w-full h-48 lg:h-64 rounded-lg object-cover"
-              controls
-              poster=""
-            >
-              <source src={overview.overview_video_url} type="video/mp4" />
-              Your browser does not support the video tag.
-            </video>
-          </div>
+          
+          
+          {overview.overview_video_url ? (
+            <div className="relative mb-3 lg:mb-4">
+              <video
+                className="w-full h-48 lg:h-64 rounded-lg object-cover"
+                controls
+              >
+                <source src={overview.overview_video_url} type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+            </div>
+          ) : null}
 
-          {/* Overview Content */}
-          <div
-            className="text-xs lg:text-sm text-gray-600 mb-3 lg:mb-4"
-            dangerouslySetInnerHTML={{ __html: overview.overview_content }}
-          />
+        
+          {overview.overview_content ? (
+            <div
+              className="text-xs lg:text-sm text-gray-600 mb-3 lg:mb-4"
+              dangerouslySetInnerHTML={{
+                __html: overview.overview_content,
+              }}
+            />
+          ) : null}
 
-          {/* Document info */}
-          {overview.has_document && overview.file_name && (
-            <p className="text-xs lg:text-sm text-gray-600 mb-3">
-              Document: {overview.file_name}
-            </p>
-          )}
-
-          {/* Attend Quiz Button */}
+        
+          
           <div className="flex justify-end">
-            <Link to={`/student/${overview.sub_topic_id}/assessments`} className="bg-yellow-400 text-gray-900 px-3 lg:px-4 py-2 rounded-sm text-xs lg:text-sm font-medium hover:bg-yellow-500 transition-colors">
+            <Link
+              to={`/student/${overview.sub_topic_id}/assessments`}
+              className="bg-yellow-400 text-gray-900 px-3 lg:px-4 py-2 rounded-sm text-xs lg:text-sm font-medium hover:bg-yellow-500 transition-colors"
+            >
               Attend Quiz
             </Link>
           </div>

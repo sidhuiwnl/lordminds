@@ -1,9 +1,9 @@
 import React from "react";
 import StudentHeader from "../../components/StudentComponents/StudentHeader";
 import Sidebar from "../../components/StudentComponents/Sidebar";
-import GrammarLessons from "../../components/StudentComponents/GrammarLessons";
+import SubtopicsComponent from "../../components/StudentComponents/SubTopic";
 
-const GrammarLessonsPage = () => {
+const SubtopicsPage = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   const toggleMobileMenu = () => {
@@ -34,11 +34,11 @@ const GrammarLessonsPage = () => {
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
-          <GrammarLessons />
+          <SubtopicsComponent />
         </main>
       </div>
     </div>
   );
 };
 
-export default GrammarLessonsPage;
+export default SubtopicsPage;

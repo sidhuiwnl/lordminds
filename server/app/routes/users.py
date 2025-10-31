@@ -589,3 +589,167 @@ async def get_all_administrators():
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching teachers: {str(e)}")
+    
+
+@router.get("/topicwise/testmarks/{student_id}")
+async def get_topicwise_test_marks(student_id: int):
+    """Fetch topic-wise test marks (aggregated from sub_topics) for a given student"""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        t.topic_id,
+                        t.topic_name,
+                        SUM(stm.marks_obtained) AS total_marks_obtained,
+                        SUM(stm.max_marks) AS total_marks_possible
+                    FROM sub_topic_marks stm
+                    JOIN sub_topics st ON stm.sub_topic_id = st.sub_topic_id
+                    JOIN topics t ON st.topic_id = t.topic_id
+                    WHERE stm.student_id = %s
+                    GROUP BY t.topic_id, t.topic_name
+                """, (student_id,))
+                
+                topicwise_marks = cursor.fetchall()
+
+                return {
+                    "status": "success",
+                    "count": len(topicwise_marks),
+                    "data": topicwise_marks
+                }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching topic-wise test marks for student {student_id}: {str(e)}"
+        )
+
+
+@router.get("/assignmentmarks/{student_id}")
+async def get_assignment_marks(student_id: int):
+    """
+    Fetch total marks per assignment topic for a given student
+    """
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        asg.assignment_topic,
+                        SUM(a.marks_obtained) AS total_marks_obtained,
+                        SUM(a.max_marks) AS total_max_marks,
+                        MAX(a.graded_at) AS last_graded_at
+                    FROM assignment_marks a
+                    JOIN assignments asg ON a.assignment_id = asg.assignment_id
+                    WHERE a.student_id = %s
+                    GROUP BY asg.assignment_topic
+                    ORDER BY last_graded_at DESC
+                """, (student_id,))
+                
+                assignment_marks = cursor.fetchall()
+
+                return {
+                    "status": "success",
+                    "count": len(assignment_marks),
+                    "data": assignment_marks
+                }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching assignment marks for student {student_id}: {str(e)}"
+        )
+
+
+@router.get("/totalduration/{user_id}")
+async def get_total_duration(user_id: int):
+    """
+    Fetch total duration (in hours) spent by a specific student.
+    """
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        u.user_id,
+                        u.username AS student_name,
+                        ROUND(SUM(us.duration_seconds) / 3600, 2) AS total_hours
+                    FROM user_sessions us
+                    JOIN users u ON us.user_id = u.user_id
+                    WHERE u.user_id = %s
+                    GROUP BY u.user_id, u.username;
+                """, (user_id,))
+                
+                data = cursor.fetchone()
+                
+                if not data:
+                    return {"status": "success", "message": "No sessions found", "data": {}}
+                
+                return {
+                    "status": "success",
+                    "data": data
+                }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching total duration for user {user_id}: {str(e)}"
+        )
+
+
+@router.get("/overallreport/{user_id}")
+async def get_overall_report(user_id: int):
+    """
+    Overall report: aggregated marks and total hours for a single student.
+    """
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT
+                      u.user_id,
+                      u.username AS student_name,
+
+                      COALESCE(st.total_subtopic_marks, 0)             AS total_subtopic_marks,
+                      
+
+                      COALESCE(am.total_assignment_marks, 0)           AS total_assignment_marks,
+                      
+                      COALESCE(us.total_hours, 0)                      AS total_hours
+
+                    FROM users u
+
+                    LEFT JOIN (
+                      SELECT student_id,
+                             SUM(marks_obtained) AS total_subtopic_marks,
+                             SUM(max_marks) AS total_subtopic_max_marks
+                      FROM sub_topic_marks
+                      GROUP BY student_id
+                    ) st ON st.student_id = u.user_id
+
+                    LEFT JOIN (
+                      SELECT student_id,
+                             SUM(marks_obtained) AS total_assignment_marks,
+                             SUM(max_marks) AS total_assignment_max_marks
+                      FROM assignment_marks
+                      GROUP BY student_id
+                    ) am ON am.student_id = u.user_id
+
+                    LEFT JOIN (
+                      SELECT user_id,
+                             ROUND(SUM(duration_seconds) / 3600, 2) AS total_hours
+                      FROM user_sessions
+                      GROUP BY user_id
+                    ) us ON us.user_id = u.user_id
+
+                    WHERE u.user_id = %s;
+                """, (user_id,))
+
+                row = cursor.fetchone()
+                if not row:
+                    raise HTTPException(status_code=404, detail=f"No user found with id {user_id}")
+
+                return {"status": "success", "data": row}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

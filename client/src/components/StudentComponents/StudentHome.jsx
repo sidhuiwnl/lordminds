@@ -1,14 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const StudentHome = () => {
   const navigate = useNavigate();
-
   const [assignmentData, setAssignmentData] = useState([]);
   const [topics, setTopics] = useState([]);
 
-  // ✅ Fetch user details (to get college_id & department_id)
   async function getUserDetails() {
     try {
       const user = JSON.parse(localStorage.getItem("user"));
@@ -53,7 +50,16 @@ const StudentHome = () => {
       if (!response.ok) throw new Error("Failed to fetch assignments");
 
       const data = await response.json();
-      setAssignmentData(data.data || []);
+      const assignments = data.data || [];
+
+      // 🔓 Determine which assignment(s) are unlocked
+      const processedAssignments = assignments.map((assignment, index, arr) => {
+        const firstPendingIndex = arr.findIndex((a) => !a.is_submitted);
+        const isUnlocked = index <= firstPendingIndex; // unlock submitted + first pending
+        return { ...assignment, isUnlocked };
+      });
+
+      setAssignmentData(processedAssignments);
     } catch (error) {
       console.error("Error fetching assignments:", error);
     }
@@ -70,14 +76,12 @@ const StudentHome = () => {
       if (!response.ok) throw new Error("Failed to fetch topics");
 
       const data = await response.json();
-
-      // Map API response to UI-friendly format
       const formattedTopics = (data.data || []).map((topic) => ({
         id: topic.topic_id,
         title: topic.topic_name,
-        status: "Not Started", // You can update status dynamically later
+        status: "Not Started",
         icon: "📘",
-        progress: 0, // Default progress
+        progress: 0,
         score: 0,
         color: "gray",
         department: topic.department_name,
@@ -94,7 +98,7 @@ const StudentHome = () => {
     getUserDetails();
   }, []);
 
-  // Empty state component for consistent UI
+  // 🧱 Empty state
   const EmptyState = ({ title, message, icon = "📝" }) => (
     <div className="col-span-full bg-white rounded-2xl shadow-sm p-8 lg:p-10 flex flex-col items-center justify-center border border-gray-100">
       <div className="text-4xl lg:text-5xl mb-4">{icon}</div>
@@ -106,62 +110,75 @@ const StudentHome = () => {
   return (
     <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
       {/* ===================== ASSIGNMENTS SECTION ===================== */}
-      {/* ===================== ASSIGNMENTS SECTION ===================== */}
-<h2 className="text-lg lg:text-xl font-bold text-gray-800 mb-4">
-  Assignments
-</h2>
+      <h2 className="text-lg lg:text-xl font-bold text-gray-800 mb-4">
+        Assignments
+      </h2>
 
-{assignmentData.length === 0 ? (
-  <EmptyState
-    title="No Assignments Yet"
-    message="Assignments will appear here once your instructors assign them. Check back soon!"
-    icon="📋"
-  />
-) : (
-  <div className="overflow-x-auto mb-6 lg:mb-8">
-    <div className="flex gap-4 lg:gap-6 min-w-min pb-4">
-      {assignmentData.map((assignment) => (
-        <div
-          key={assignment.assignment_id}
-          className={`min-w-[260px] lg:min-w-[500px] bg-white rounded-2xl shadow-sm p-4 lg:p-6 flex-shrink-0 ${
-            assignment.is_submitted ? "opacity-80" : ""
-          }`}
-        >
-          <div className="flex justify-between items-start mb-3">
-            <h3 className="font-bold text-base lg:text-lg text-gray-800">
-              {assignment.assignment_topic}
-            </h3>
-            <span
-              className={`text-xs lg:text-sm font-medium flex items-center gap-1 px-2 py-1 rounded-full ${
-                assignment.is_submitted
-                  ? "bg-green-100 text-green-800"
-                  : "bg-yellow-100 text-yellow-800"
-              }`}
-            >
-              {assignment.is_submitted ? "✅ Submitted" : "🕒 Pending"}
-            </span>
+      {assignmentData.length === 0 ? (
+        <EmptyState
+          title="No Assignments Yet"
+          message="Assignments will appear here once your instructors assign them. Check back soon!"
+          icon="📋"
+        />
+      ) : (
+        <div className="overflow-x-auto mb-6 lg:mb-8">
+          <div className="flex gap-4 lg:gap-6 min-w-min pb-4">
+            {assignmentData.map((assignment) => (
+              <div
+                key={assignment.assignment_id}
+                className={`min-w-[260px] lg:min-w-[500px] bg-white rounded-2xl shadow-sm p-4 lg:p-6 flex-shrink-0 transition-opacity ${
+                  !assignment.isUnlocked ? "opacity-60" : ""
+                }`}
+              >
+                <div className="flex justify-between items-start mb-3">
+                  <h3 className="font-bold text-base lg:text-lg text-gray-800">
+                    {assignment.assignment_topic}
+                  </h3>
+                  <span
+                    className={`text-xs lg:text-sm font-medium flex items-center gap-1 px-2 py-1 rounded-full ${
+                      assignment.is_submitted
+                        ? "bg-green-100 text-green-800"
+                        : assignment.isUnlocked
+                        ? "bg-yellow-100 text-yellow-800"
+                        : "bg-gray-100 text-gray-500"
+                    }`}
+                  >
+                    {assignment.is_submitted
+                      ? "✅ Submitted"
+                      : assignment.isUnlocked
+                      ? "🕒 Pending"
+                      : "🔒 Locked"}
+                  </span>
+                </div>
+
+                <p className="text-xs text-gray-500 mb-4 lg:mb-6">
+                  Due: {new Date(assignment.end_date).toLocaleDateString()}
+                </p>
+
+                <button
+                  onClick={() =>
+                    navigate(`/student/assignment/${assignment.assignment_id}`)
+                  }
+                  disabled={!assignment.isUnlocked}
+                  className={`w-full py-2 lg:py-2.5 rounded-full text-xs lg:text-sm font-medium transition-colors ${
+                    assignment.is_submitted
+                      ? "bg-green-100 text-green-800 cursor-not-allowed"
+                      : assignment.isUnlocked
+                      ? "bg-yellow-400 text-gray-900 hover:bg-yellow-500"
+                      : "bg-gray-200 text-gray-500 cursor-not-allowed"
+                  }`}
+                >
+                  {assignment.is_submitted
+                    ? "✅ Submitted"
+                    : assignment.isUnlocked
+                    ? "Attend Now"
+                    : "🔒 Locked"}
+                </button>
+              </div>
+            ))}
           </div>
-          <p className="text-xs text-gray-500 mb-4 lg:mb-6">
-            Due: {new Date(assignment.end_date).toLocaleDateString()}
-          </p>
-          <button
-            onClick={() => {
-              navigate(`/student/assignment/${assignment.assignment_id}`);
-            }}
-            disabled={assignment.is_submitted}
-            className={`w-full py-2 lg:py-2.5 rounded-full text-xs lg:text-sm font-medium transition-colors ${
-              assignment.is_submitted
-                ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                : "bg-yellow-400 text-gray-900 hover:bg-yellow-500"
-            }`}
-          >
-            {assignment.is_submitted ? "Submitted" : "Attend Now"}
-          </button>
         </div>
-      ))}
-    </div>
-  </div>
-)}
+      )}
 
       {/* ===================== TOPICS SECTION ===================== */}
       <div className="flex justify-between items-center mb-4 lg:mb-6">
@@ -194,7 +211,8 @@ const StudentHome = () => {
             };
             const progressColor = colorClasses[topic.color] || colorClasses.gray;
             const statusColor = statusClasses[topic.color] || statusClasses.gray;
-            const textColor = topic.color === "yellow" ? "text-gray-900" : "text-white";
+            const textColor =
+              topic.color === "yellow" ? "text-gray-900" : "text-white";
 
             return (
               <Link

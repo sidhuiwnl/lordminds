@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 
-const GrammarLessons = () => {
+const SubtopicsComponent = () => {
   const [subtopics, setSubtopics] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -123,4 +123,4 @@ const GrammarLessons = () => {
   );
 };
 
-export default GrammarLessons;
+export default SubtopicsComponent;

@@ -295,3 +295,48 @@ async def create_topic(data: TopicCreate):
                 }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating topic: {str(e)}")
+    
+
+
+@router.get("/overall-report/{college_id}/{department_id}")
+async def get_overall_report(college_id: int, department_id: int):
+    """
+    Fetch overall average marks across all topics for each student
+    in a given college and department.
+    """
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        u.username AS student_name,
+                        ROUND(
+                            (
+                                COALESCE(SUM(stm.marks_obtained), 0) +
+                                COALESCE(SUM(am.marks_obtained), 0)
+                            ) /
+                            NULLIF(
+                                (
+                                    COALESCE(SUM(stm.max_marks), 0) +
+                                    COALESCE(SUM(am.max_marks), 0)
+                                ), 0
+                            ) * 100, 2
+                        ) AS overall_average
+                    FROM users u
+                    LEFT JOIN sub_topic_marks stm ON stm.student_id = u.user_id
+                    LEFT JOIN assignment_marks am ON am.student_id = u.user_id
+                    WHERE u.college_id = %s 
+                      AND u.department_id = %s
+                    GROUP BY u.username
+                    ORDER BY u.username ASC;
+                """, (college_id, department_id))
+
+                data = cursor.fetchall()
+
+                if not data:
+                    return {"status": "error", "message": "No students found for this department"}
+
+                return {"status": "success", "data": data}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

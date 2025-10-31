@@ -4,11 +4,17 @@ const SuperAdminHome = () => {
   const [colleges, setColleges] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [topics, setTopics] = useState([]);
+  const [students, setStudents] = useState([]);
   const [selectedCollege, setSelectedCollege] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState("");
-  const [loading, setLoading] = useState({ colleges: false, departments: false, topics: false });
+  const [loading, setLoading] = useState({
+    colleges: false,
+    departments: false,
+    topics: false,
+    students: false,
+  });
 
-  // Fetch all colleges
+  // ✅ Fetch all colleges
   useEffect(() => {
     const fetchColleges = async () => {
       setLoading((p) => ({ ...p, colleges: true }));
@@ -25,7 +31,7 @@ const SuperAdminHome = () => {
     fetchColleges();
   }, []);
 
-  // Fetch departments when college changes
+  // ✅ Fetch departments when college changes
   useEffect(() => {
     if (!selectedCollege) {
       setDepartments([]);
@@ -50,10 +56,11 @@ const SuperAdminHome = () => {
     fetchDepartments();
   }, [selectedCollege]);
 
-  // Fetch topics when department changes
+  // ✅ Fetch topics when department changes
   useEffect(() => {
     if (!selectedDepartment) {
       setTopics([]);
+      setStudents([]); // clear old data
       return;
     }
 
@@ -74,6 +81,29 @@ const SuperAdminHome = () => {
     fetchTopics();
   }, [selectedDepartment]);
 
+  // ✅ Fetch students' overall averages for selected college & department
+  useEffect(() => {
+    if (!selectedCollege || !selectedDepartment) return;
+
+    const fetchStudentReports = async () => {
+      setLoading((p) => ({ ...p, students: true }));
+      try {
+        const res = await fetch(
+          `${import.meta.env.VITE_BACKEND_API_URL}/topics/overall-report/${selectedCollege}/${selectedDepartment}`
+        );
+        const data = await res.json();
+        if (data.status === "success") setStudents(data.data);
+        else setStudents([]);
+      } catch (error) {
+        console.error("Error fetching student reports:", error);
+      } finally {
+        setLoading((p) => ({ ...p, students: false }));
+      }
+    };
+
+    fetchStudentReports();
+  }, [selectedCollege, selectedDepartment]);
+
   return (
     <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
       {/* Filters */}
@@ -84,6 +114,7 @@ const SuperAdminHome = () => {
           onChange={(e) => {
             setSelectedCollege(e.target.value);
             setSelectedDepartment("");
+            setStudents([]);
           }}
           className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 flex-1 bg-white"
         >
@@ -157,7 +188,7 @@ const SuperAdminHome = () => {
         )}
       </div>
 
-      {/* Static Students Table */}
+      {/* Students Table */}
       <div className="w-full overflow-x-auto bg-white rounded-lg shadow">
         <table className="w-full min-w-[600px] border-collapse">
           <thead>
@@ -174,16 +205,33 @@ const SuperAdminHome = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            <tr>
-              <td className="px-4 lg:px-6 py-4 border border-gray-500">1. Hari</td>
-              <td className="px-4 lg:px-6 py-4 border border-gray-500">78</td>
-              <td className="px-4 lg:px-6 py-4 border border-gray-500">12/25 - 5:25 PM</td>
-            </tr>
-            <tr>
-              <td className="px-4 lg:px-6 py-4 border border-gray-500">2. Bala Kumar</td>
-              <td className="px-4 lg:px-6 py-4 border border-gray-500">72</td>
-              <td className="px-4 lg:px-6 py-4 border border-gray-500">12/25 - 5:25 PM</td>
-            </tr>
+            {loading.students ? (
+              <tr>
+                <td colSpan="3" className="text-center py-4">
+                  Loading student data...
+                </td>
+              </tr>
+            ) : students.length > 0 ? (
+              students.map((student, idx) => (
+                <tr key={idx}>
+                  <td className="px-4 lg:px-6 py-4 border border-gray-500">
+                    {idx + 1}. {student.student_name}
+                  </td>
+                  <td className="px-4 lg:px-6 py-4 border border-gray-500">
+                    {student.overall_average ?? 0}
+                  </td>
+                  <td className="px-4 lg:px-6 py-4 border border-gray-500">
+                    12/25 - 5:25 PM
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="3" className="text-center py-4">
+                  No students found for this department.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

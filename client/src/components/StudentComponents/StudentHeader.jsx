@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const StudentHeader = ({ onMenuToggle }) => {
   const [userId, setUserId] = useState("");
-
+  const navigate = useNavigate();
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
@@ -17,10 +18,12 @@ const StudentHeader = ({ onMenuToggle }) => {
   }, []);
 
   function handleLogout() {
-    
     localStorage.removeItem("user");
-   
     window.location.href = "/";
+  }
+
+  function handleProfileClick() {
+    navigate("/student/profilepage");
   }
 
   return (
@@ -90,14 +93,16 @@ const StudentHeader = ({ onMenuToggle }) => {
         <img
           src="/assets/studentpic.png"
           alt="User"
-          className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+          onClick={handleProfileClick}
+          className="w-8 h-8 rounded-full object-cover flex-shrink-0 cursor-pointer hover:scale-105 transition-transform"
         />
 
         {/* Logout */}
-        <button 
-        onClick={handleLogout}
-        type="button"
-        className="flex hover:cursor-pointer  items-center gap-1 text-white text-xs lg:text-sm font-medium flex-shrink-0">
+        <button
+          onClick={handleLogout}
+          type="button"
+          className="flex hover:cursor-pointer items-center gap-1 text-white text-xs lg:text-sm font-medium flex-shrink-0"
+        >
           <svg
             className="w-4 h-4 lg:w-[22px] lg:h-[22px]"
             viewBox="0 0 24 24"

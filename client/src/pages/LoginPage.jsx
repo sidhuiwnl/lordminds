@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react"; // 👈 Using lucide-react for icons
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -11,6 +12,7 @@ const LoginPage = () => {
 
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const [showPassword, setShowPassword] = React.useState(false); // 👈 New state
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -26,7 +28,7 @@ const LoginPage = () => {
         `${import.meta.env.VITE_BACKEND_API_URL}/users/login`,
         {
           method: "POST",
-          body: formData, // ✅ Sending FormData, not JSON
+          body: formData,
         }
       );
 
@@ -36,18 +38,15 @@ const LoginPage = () => {
         throw new Error(result.detail || "Invalid username or password");
       }
 
-      // ✅ Optional: Save user info to localStorage/session
       localStorage.setItem("user", JSON.stringify(result.data));
 
-      // ✅ Navigate based on role if needed
       if (result.data.role === "student") {
         navigate("/student/studenthome");
       } else if (result.data.role === "administrator") {
         navigate("/admin/adminhome");
-      }else if (result.data.role === "super_admin") {
+      } else if (result.data.role === "super_admin") {
         navigate("superadmin/superadminhome");
-      } 
-      else {
+      } else {
         navigate("/");
       }
     } catch (err) {
@@ -100,6 +99,7 @@ const LoginPage = () => {
               </div>
             )}
 
+            {/* Username Input */}
             <label
               className="block text-gray-700 font-semibold mb-1 mt-2 text-sm"
               htmlFor="username"
@@ -122,6 +122,7 @@ const LoginPage = () => {
               </span>
             </div>
 
+            {/* Password Input */}
             <label
               className="block text-gray-700 font-semibold mb-1 text-sm"
               htmlFor="password"
@@ -131,7 +132,7 @@ const LoginPage = () => {
             <div className="relative mb-4 lg:mb-6">
               <input
                 id="password"
-                type="password"
+                type={showPassword ? "text" : "password"}
                 value={loginData.password}
                 onChange={(e) =>
                   setLoginData({ ...loginData, password: e.target.value })
@@ -139,9 +140,19 @@ const LoginPage = () => {
                 placeholder="Enter your password"
                 className="w-full border border-gray-300 rounded-md py-2 pl-4 pr-10 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               />
-              <span className="absolute right-3 top-2.5 text-gray-400 text-base lg:text-lg">
-                &#128274;
-              </span>
+
+              {/* 👁️ Eye icon for toggling visibility */}
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-3 top-2.5 text-gray-500 hover:text-gray-700 focus:outline-none"
+              >
+                {showPassword ? (
+                  <EyeOff size={18} />
+                ) : (
+                  <Eye size={18} />
+                )}
+              </button>
             </div>
 
             <button

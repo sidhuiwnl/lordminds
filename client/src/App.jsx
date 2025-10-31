@@ -1,58 +1,76 @@
+import React from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import LoginPage from "./pages/LoginPage";
 
 
+import StudentHomePage from "./pages/StudentPages/StudentHomePage";
+
+import LessonsOverviewPage from "./pages/StudentPages/LessonsOverviewPage";
+import AssessmentPage from "./pages/StudentPages/AssessmentPage";
+import CurrentMarksPage from "./pages/StudentPages/CurrentMarksPage";
+import AssignmentMarksPage from "./pages/StudentPages/AssignmentMarksPage";
+import TotalDurationPage from "./pages/StudentPages/TotalDurationPage";
+import OverallResultPage from "./pages/StudentPages/OverallResultPage";
+import AssignmentPage from "./pages/StudentPages/AssignmentPage";
 
 
-
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import LoginPage from './pages/LoginPage';
-import StudentHomePage from './pages/StudentPages/StudentHomePage';
-import GrammarLessonsPage from './pages/StudentPages/GrammarLessonsPage';
-import LessonsOverviewPage from './pages/StudentPages/LessonsOverviewPage';
-import AssessmentPage from './pages/StudentPages/AssessmentPage';
-import CurrentMarksPage from './pages/StudentPages/CurrentMarksPage';
-import AssignmentMarksPage from './pages/StudentPages/AssignmentMarksPage';
-import TotalDurationPage from './pages/StudentPages/TotalDurationPage';
-import OverallResultPage from './pages/StudentPages/OverallResultPage';
-import SuperAdminHomePage from './pages/SuperAdminPages/SuperAdminHomePage';
-import SuperAdminReportsPage from './pages/SuperAdminPages/SuperAdminReportsPage';
-import SuperAdminUploadPage from './pages/SuperAdminPages/SuperAdminUploadPage';
-import SuperAdminAccessCreationPage from './pages/SuperAdminPages/SuperAdminAccessCreationPage';
+import SuperAdminHomePage from "./pages/SuperAdminPages/SuperAdminHomePage";
+import SuperAdminReportsPage from "./pages/SuperAdminPages/SuperAdminReportsPage";
+import SuperAdminUploadPage from "./pages/SuperAdminPages/SuperAdminUploadPage";
+import SuperAdminAccessCreationPage from "./pages/SuperAdminPages/SuperAdminAccessCreationPage";
 
 
-import AdminHomePage from './pages/Administrator/AdminHomePage';
-import AdminReportsPage from './pages/Administrator/AdminReportsPage';
-import AdminUploadPage from './pages/Administrator/AdminUploadPage';
-import AdminAccessCreationPage from './pages/Administrator/AdminAccessCreationPage';
-import AssignmentPage from './pages/StudentPages/AssignmentPage';
+import AdminHomePage from "./pages/Administrator/AdminHomePage";
+import AdminReportsPage from "./pages/Administrator/AdminReportsPage";
+import AdminUploadPage from "./pages/Administrator/AdminUploadPage";
+import AdminAccessCreationPage from "./pages/Administrator/AdminAccessCreationPage";
+
+
+import ProtectedRoute from "./components/ProctecdRoute";
+import ProfilePage from "./pages/StudentPages/ProfilePage";
+import SubtopicsPage from "./pages/StudentPages/SubTopicsPage";
+import TopicsPage from "./pages/StudentPages/Topics";
 
 const App = () => {
   return (
     <Router>
       <Routes>
+       
         <Route path="/" element={<LoginPage />} />
-        <Route path="/student/studenthome" element={<StudentHomePage />} />
-        <Route path="/student/assignment/:assignment" element={<AssignmentPage />} />
-        <Route path="/student/:topic/subtopics" element={<GrammarLessonsPage />} />
-        <Route path="/student/:subtopic/lessonsoverview" element={<LessonsOverviewPage />} />
-        <Route path="/student/:subtopic/assessments" element={<AssessmentPage />} />
-        <Route path="/student/currentmarks" element={<CurrentMarksPage />} />
-        <Route path="/student/assignmentmarks" element={<AssignmentMarksPage />} />
-        <Route path="/student/totalduration" element={<TotalDurationPage />} />
-        <Route path="/student/overallresult" element={<OverallResultPage />} />
-        <Route path="/student/grammerlessons" element={<GrammarLessonsPage />} />
 
-        {/* superadmin routes */}
-        <Route path="/superadmin/superadminhome" element={<SuperAdminHomePage />} />
-        <Route path="/superadmin/reports" element={<SuperAdminReportsPage />} />
-        <Route path="/superadmin/uploads" element={<SuperAdminUploadPage />} />
-        <Route path="/superadmin/access-creation" element={<SuperAdminAccessCreationPage />} />
+        
+        <Route element={<ProtectedRoute allowedRoles={["student"]} />}>
+          <Route path="/student/studenthome" element={<StudentHomePage />} />
+          <Route path="/student/assignment/:assignment" element={<AssignmentPage />} />
+          <Route path="/student/:topic/subtopics" element={<SubtopicsPage />} />
+          <Route path="/student/:subtopic/lessonsoverview" element={<LessonsOverviewPage />} />
+          <Route path="/student/:subtopic/assessments" element={<AssessmentPage />} />
+          <Route path="/student/currentmarks" element={<CurrentMarksPage />} />
+          <Route path="/student/assignmentmarks" element={<AssignmentMarksPage />} />
+          <Route path="/student/totalduration" element={<TotalDurationPage />} />
+          <Route path="/student/overallresult" element={<OverallResultPage />} />
+          <Route path="/student/topics" element={<TopicsPage />} />
+          <Route path="/student/profilepage" element={<ProfilePage />} />
+        </Route>
 
-        <Route path="/admin/adminhome" element={<AdminHomePage />} />
-        <Route path="/admin/reports" element={<AdminReportsPage />} />
-        <Route path="/admin/uploads" element={<AdminUploadPage />} />
-        <Route path="/admin/access-creation" element={<AdminAccessCreationPage />} />
+        
+        <Route element={<ProtectedRoute allowedRoles={["administrator"]} />}>
+          <Route path="/admin/adminhome" element={<AdminHomePage />} />
+          <Route path="/admin/reports" element={<AdminReportsPage />} />
+          <Route path="/admin/uploads" element={<AdminUploadPage />} />
+          <Route path="/admin/access-creation" element={<AdminAccessCreationPage />} />
+        </Route>
 
+       
+        <Route element={<ProtectedRoute allowedRoles={["super_admin"]} />}>
+          <Route path="/superadmin/superadminhome" element={<SuperAdminHomePage />} />
+          <Route path="/superadmin/reports" element={<SuperAdminReportsPage />} />
+          <Route path="/superadmin/uploads" element={<SuperAdminUploadPage />} />
+          <Route path="/superadmin/access-creation" element={<SuperAdminAccessCreationPage />} />
+        </Route>
+
+        
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
   );
