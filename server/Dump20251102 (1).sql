@@ -293,6 +293,42 @@ INSERT INTO `roles` VALUES (1,'super_admin'),(2,'admin'),(3,'administrator'),(4,
 UNLOCK TABLES;
 
 --
+-- Table structure for table `student_subtopic_progress`
+--
+
+DROP TABLE IF EXISTS `student_subtopic_progress`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `student_subtopic_progress` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `student_id` int NOT NULL,
+  `topic_id` int NOT NULL,
+  `sub_topic_id` int NOT NULL,
+  `is_completed` tinyint(1) DEFAULT '0',
+  `score` decimal(5,2) DEFAULT '0.00',
+  `time_spent_minutes` int DEFAULT '0',
+  `last_accessed` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `student_id` (`student_id`),
+  KEY `topic_id` (`topic_id`),
+  KEY `sub_topic_id` (`sub_topic_id`),
+  CONSTRAINT `student_subtopic_progress_ibfk_1` FOREIGN KEY (`student_id`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `student_subtopic_progress_ibfk_2` FOREIGN KEY (`topic_id`) REFERENCES `topics` (`topic_id`),
+  CONSTRAINT `student_subtopic_progress_ibfk_3` FOREIGN KEY (`sub_topic_id`) REFERENCES `sub_topics` (`sub_topic_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `student_subtopic_progress`
+--
+
+LOCK TABLES `student_subtopic_progress` WRITE;
+/*!40000 ALTER TABLE `student_subtopic_progress` DISABLE KEYS */;
+INSERT INTO `student_subtopic_progress` VALUES (1,1,1,1,1,10.00,25,'2025-11-02 13:58:01'),(5,1,1,1,1,10.00,25,'2025-11-02 14:02:41'),(6,1,1,2,1,10.00,30,'2025-11-02 14:02:41');
+/*!40000 ALTER TABLE `student_subtopic_progress` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `student_topic_progress`
 --
 
@@ -323,7 +359,7 @@ CREATE TABLE `student_topic_progress` (
 
 LOCK TABLES `student_topic_progress` WRITE;
 /*!40000 ALTER TABLE `student_topic_progress` DISABLE KEYS */;
-INSERT INTO `student_topic_progress` VALUES (1,1,1,3,3,100.00,60.00,'Completed','2025-11-02 05:53:54');
+INSERT INTO `student_topic_progress` VALUES (1,1,1,2,2,100.00,60.00,'Completed','2025-11-02 13:52:21');
 /*!40000 ALTER TABLE `student_topic_progress` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -485,7 +521,7 @@ CREATE TABLE `users` (
   CONSTRAINT `users_ibfk_1` FOREIGN KEY (`college_id`) REFERENCES `colleges` (`college_id`) ON DELETE RESTRICT,
   CONSTRAINT `users_ibfk_2` FOREIGN KEY (`department_id`) REFERENCES `departments` (`department_id`) ON DELETE SET NULL,
   CONSTRAINT `users_ibfk_3` FOREIGN KEY (`role_id`) REFERENCES `roles` (`role_id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -494,7 +530,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (1,'21AIB38','$2b$12$jouElwAygx/GHEYYN3wFp.J5A1UBpbc.3EBE7fMOjPa8/1vjzhf6C','Sidharth',1,1,5,1,'2025-10-24 17:31:45','2025-11-02 09:23:53','profile_images/user_1_20251102145353.jpeg'),(2,'21AIB30','$2b$12$EX9j10zMqjOKInWtmaqOIeI38eZzUq1RCuHWqoJsJ8gQ/Adqz5T3C','Sankar',2,2,5,1,'2025-10-24 17:35:43','2025-10-24 17:35:43',NULL),(3,'superadmin','$2a$12$iV8iuYIOOgf5BNve1Zje7utPfnFvc6RO4xdsU3yXmsotrySTWwR0q','superadmin',NULL,NULL,1,1,'2025-10-24 17:39:39','2025-10-24 17:39:39',NULL),(8,'Teacher','$2b$12$vmpXfhzWXwDc8ipEDULuxO19NKKFoZhCJwa5xA1q4BQ8YWRChX7eu',NULL,1,NULL,4,1,'2025-10-29 16:36:16','2025-11-02 09:47:18','profile_images/user_8_20251102151718.jpg'),(9,'Administrator','$2b$12$.04MnS.u4AWwOF92KOXgrO3SZfLCzhHPN2UgGGBep7R3qKYT3w7PK',NULL,1,NULL,3,1,'2025-10-29 16:36:33','2025-10-29 16:36:33',NULL),(10,'21CSI38','$2b$12$0H42fQm4c5d4eNywI7du2Os6q31/0DYTY0vUuKJOXuvOxZRSBeADW','Sidharth Babu',1,2,5,1,'2025-10-29 17:04:07','2025-10-29 17:04:07',NULL),(11,'Admin','$2a$12$zcJbM1QgIyl4f3TicukrWuhzo5BsRaLHvWihmG4VHt8zv8JpVfZcy','Admin',NULL,NULL,2,1,'2025-11-01 17:20:05','2025-11-01 17:20:05',NULL);
+INSERT INTO `users` VALUES (1,'21AIB38','$2b$12$jouElwAygx/GHEYYN3wFp.J5A1UBpbc.3EBE7fMOjPa8/1vjzhf6C','Sidharth',1,1,5,1,'2025-10-24 17:31:45','2025-11-02 09:23:53','profile_images/user_1_20251102145353.jpeg'),(2,'21AIB30','$2b$12$EX9j10zMqjOKInWtmaqOIeI38eZzUq1RCuHWqoJsJ8gQ/Adqz5T3C','Sankar',2,2,5,1,'2025-10-24 17:35:43','2025-10-24 17:35:43',NULL),(3,'superadmin','$2a$12$iV8iuYIOOgf5BNve1Zje7utPfnFvc6RO4xdsU3yXmsotrySTWwR0q','superadmin',NULL,NULL,1,1,'2025-10-24 17:39:39','2025-10-24 17:39:39',NULL),(8,'Teacher','$2b$12$vmpXfhzWXwDc8ipEDULuxO19NKKFoZhCJwa5xA1q4BQ8YWRChX7eu',NULL,1,NULL,4,1,'2025-10-29 16:36:16','2025-11-02 09:47:18','profile_images/user_8_20251102151718.jpg'),(9,'Administrator','$2b$12$.04MnS.u4AWwOF92KOXgrO3SZfLCzhHPN2UgGGBep7R3qKYT3w7PK',NULL,1,NULL,3,1,'2025-10-29 16:36:33','2025-10-29 16:36:33',NULL),(10,'21CSI38','$2b$12$0H42fQm4c5d4eNywI7du2Os6q31/0DYTY0vUuKJOXuvOxZRSBeADW','Sidharth Babu',1,2,5,1,'2025-10-29 17:04:07','2025-10-29 17:04:07',NULL),(11,'Admin','$2a$12$zcJbM1QgIyl4f3TicukrWuhzo5BsRaLHvWihmG4VHt8zv8JpVfZcy','Admin',NULL,NULL,2,1,'2025-11-01 17:20:05','2025-11-01 17:20:05',NULL),(12,'Siva Ramana','$2b$12$ZNAcL4AMSeHCYcooSo6mc.cMAllQWxIBxJbJGzTC0bhM/DPbpZoNy','21AIB39',1,2,5,1,'2025-11-02 17:44:51','2025-11-02 17:44:51',NULL);
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -507,4 +543,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-11-02 18:08:25
+-- Dump completed on 2025-11-02 23:25:26
