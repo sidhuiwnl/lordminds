@@ -7,7 +7,6 @@ const SubtopicsComponent = () => {
   useEffect(() => {
     async function fetchSubtopics() {
       try {
-        // 🧩 Get user details from localStorage
         const storedUser = localStorage.getItem("user");
         const user = storedUser ? JSON.parse(storedUser) : null;
         const userId = user?.user_id;
@@ -18,14 +17,11 @@ const SubtopicsComponent = () => {
           return;
         }
 
-        // 🧩 Fetch subtopics for the user
         const response = await fetch(
           `${import.meta.env.VITE_BACKEND_API_URL}/topics/${userId}/subtopics`
         );
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch subtopics");
-        }
+        if (!response.ok) throw new Error("Failed to fetch subtopics");
 
         const data = await response.json();
 
@@ -34,8 +30,9 @@ const SubtopicsComponent = () => {
           data.data?.flatMap((topicItem) =>
             topicItem.sub_topics.map((sub) => ({
               ...sub,
-              topic_name: topicItem.topic_name, // optional
-              progress: Math.floor(Math.random() * 100), // mock progress
+              topic_name: topicItem.topic_name,
+              progress:
+                sub.progress?.completion_percent ?? 0, // 🧠 Use backend progress
             }))
           ) || [];
 
@@ -95,6 +92,7 @@ const SubtopicsComponent = () => {
               </a>
             </div>
 
+            {/* 🧭 Progress bar */}
             <div className="mt-2">
               <p className="text-xs font-semibold text-gray-700 mb-1">
                 Progress
@@ -104,7 +102,7 @@ const SubtopicsComponent = () => {
                   className="bg-blue-500 h-6 rounded-full transition-all duration-500 relative"
                   style={{ width: `${sub.progress}%` }}
                 >
-                  <span className="absolute left-2 text-xs text-white font-semibold">
+                  <span className="absolute left-2 text-xs text-white font-semibold mt-1 ">
                     {sub.progress}%
                   </span>
                 </div>

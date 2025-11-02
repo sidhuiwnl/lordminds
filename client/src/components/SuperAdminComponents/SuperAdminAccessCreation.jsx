@@ -37,7 +37,7 @@ const SuperAdminAccessCreation = () => {
 
   const API_BASE = import.meta.env.VITE_BACKEND_API_URL; // Adjust to your FastAPI server URL
 
-  // Define accessTypes here (before return)
+
   const accessTypes = [
     { id: "college-onboarding", label: "College Onboarding" },
     { id: "student", label: "Student Access" },

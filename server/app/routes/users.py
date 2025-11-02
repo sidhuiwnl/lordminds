@@ -868,3 +868,6 @@ async def add_profile_image(user_id: int, file: UploadFile = File(...)):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+

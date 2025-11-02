@@ -216,9 +216,69 @@ async def assign_topics_to_college_department(payload: AssignTopicsRequest):
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
     
 
+# @router.get("/{user_id}/subtopics")
+# async def get_user_subtopics(user_id: int):
+#     """Fetch subtopics for the department of the given user"""
+#     try:
+#         with get_db() as conn:
+#             with conn.cursor() as cursor:
+#                 # 1️⃣ Get user's department_id
+#                 cursor.execute("""
+#                     SELECT department_id 
+#                     FROM users 
+#                     WHERE user_id = %s AND is_active = TRUE
+#                 """, (user_id,))
+#                 user = cursor.fetchone()
+#                 if not user:
+#                     raise HTTPException(status_code=404, detail="User not found")
+#                 department_id = user['department_id']
+
+#                 # 2️⃣ Fetch topics for the department
+#                 cursor.execute("""
+#                     SELECT topic_id, topic_name, topic_number 
+#                     FROM topics 
+#                     WHERE department_id = %s AND is_active = TRUE
+#                     ORDER BY topic_number
+#                 """, (department_id,))
+#                 topics = cursor.fetchall()
+#                 topic_ids = [t['topic_id'] for t in topics]
+
+#                 if not topic_ids:
+#                     return {"status": "success", "count": 0, "data": []}
+
+#                 # 3️⃣ Fetch subtopics for these topics
+#                 cursor.execute(f"""
+#                     SELECT sub_topic_id, topic_id, sub_topic_name, sub_topic_order, overview_video_url,
+#                            file_name, test_file,
+#                            CASE WHEN overview_content IS NOT NULL THEN TRUE ELSE FALSE END as has_document,
+#                            is_active, created_at
+#                     FROM sub_topics
+#                     WHERE topic_id IN ({','.join(['%s']*len(topic_ids))}) AND is_active = TRUE
+#                     ORDER BY sub_topic_order
+#                 """, tuple(topic_ids))
+#                 subtopics_all = cursor.fetchall()
+
+#                 # 4️⃣ Map subtopics to their topics
+#                 topic_dict = {t['topic_id']: t for t in topics}
+#                 for st in subtopics_all:
+#                     topic_dict[st['topic_id']].setdefault('sub_topics', []).append(st)
+
+#                 return {
+#                     "status": "success",
+#                     "count": len(topics),
+#                     "data": list(topic_dict.values())
+#                 }
+
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error fetching subtopics for user: {str(e)}")   
+# 
+#  
+
 @router.get("/{user_id}/subtopics")
 async def get_user_subtopics(user_id: int):
-    """Fetch subtopics for the department of the given user"""
+    """Fetch subtopics and topic-level progress (in percentage) for the given user"""
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
@@ -248,32 +308,81 @@ async def get_user_subtopics(user_id: int):
 
                 # 3️⃣ Fetch subtopics for these topics
                 cursor.execute(f"""
-                    SELECT sub_topic_id, topic_id, sub_topic_name, sub_topic_order, overview_video_url,
-                           file_name, test_file,
-                           CASE WHEN overview_content IS NOT NULL THEN TRUE ELSE FALSE END as has_document,
-                           is_active, created_at
+                    SELECT 
+                        sub_topic_id, topic_id, sub_topic_name, sub_topic_order, 
+                        overview_video_url, file_name, test_file,
+                        CASE WHEN overview_content IS NOT NULL THEN TRUE ELSE FALSE END AS has_document,
+                        is_active, created_at
                     FROM sub_topics
-                    WHERE topic_id IN ({','.join(['%s']*len(topic_ids))}) AND is_active = TRUE
+                    WHERE topic_id IN ({','.join(['%s'] * len(topic_ids))}) 
+                      AND is_active = TRUE
                     ORDER BY sub_topic_order
                 """, tuple(topic_ids))
                 subtopics_all = cursor.fetchall()
 
-                # 4️⃣ Map subtopics to their topics
-                topic_dict = {t['topic_id']: t for t in topics}
+                if not subtopics_all:
+                    return {"status": "success", "count": 0, "data": []}
+
+                # 4️⃣ Fetch progress for the user's subtopics
+                subtopic_ids = [s['sub_topic_id'] for s in subtopics_all]
+                cursor.execute(f"""
+                    SELECT 
+                        sub_topic_id, 
+                        is_completed, 
+                        COALESCE(score, 0) AS score, 
+                        COALESCE(time_spent_minutes, 0) AS time_spent_minutes,
+                        last_accessed
+                    FROM student_subtopic_progress
+                    WHERE student_id = %s 
+                      AND sub_topic_id IN ({','.join(['%s'] * len(subtopic_ids))})
+                """, (user_id, *subtopic_ids))
+                progress_records = cursor.fetchall()
+                progress_map = {p['sub_topic_id']: p for p in progress_records}
+
+                # 5️⃣ Attach progress percentage to each subtopic
+                topic_dict = {t['topic_id']: {**t, "sub_topics": [], "progress_percent": 0} for t in topics}
+                topic_progress = {}
+
                 for st in subtopics_all:
-                    topic_dict[st['topic_id']].setdefault('sub_topics', []).append(st)
+                    progress = progress_map.get(st['sub_topic_id'], None)
+                    if progress:
+                        percent = 100 if progress['is_completed'] else 0
+                    else:
+                        percent = 0
+                    
+                    st['progress'] = {
+                        "completion_percent": percent,
+                        "is_completed": bool(progress and progress['is_completed']),
+                        "score": progress['score'] if progress else 0,
+                        "time_spent_minutes": progress['time_spent_minutes'] if progress else 0,
+                        "last_accessed": progress['last_accessed'] if progress else None
+                    }
+
+                    # Add subtopic to topic
+                    topic_dict[st['topic_id']]['sub_topics'].append(st)
+
+                # 6️⃣ Calculate topic-wise completion %
+                for topic_id, topic_data in topic_dict.items():
+                    subs = topic_data['sub_topics']
+                    if subs:
+                        completed = sum(1 for s in subs if s['progress']['completion_percent'] == 100)
+                        total = len(subs)
+                        topic_data['progress_percent'] = round((completed / total) * 100, 2)
+                    else:
+                        topic_data['progress_percent'] = 0
 
                 return {
                     "status": "success",
-                    "count": len(topics),
+                    "count": len(topic_dict),
                     "data": list(topic_dict.values())
                 }
 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching subtopics for user: {str(e)}")    
-    
+        raise HTTPException(status_code=500, detail=f"Error fetching subtopic progress: {str(e)}")
+
+
 
 class TopicCreate(BaseModel):
     topic_name: str

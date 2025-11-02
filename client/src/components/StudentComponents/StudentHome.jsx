@@ -39,7 +39,7 @@ const StudentHome = () => {
     }
   }
 
-  // ✅ Fetch assignments
+    
   async function fetchAssignments(college_id, department_id) {
     try {
       const response = await fetch(
