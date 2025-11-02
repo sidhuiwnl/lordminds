@@ -248,3 +248,67 @@ async def create_test(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating test: {str(e)}")
+
+
+
+@router.post("/start/{user_id}")
+async def start_session(user_id: int):
+    """
+    Start a session for a user when they begin a test.
+    """
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO user_sessions (user_id, start_time)
+                    VALUES (%s, %s)
+                """, (user_id, datetime.now()))
+                conn.commit()
+
+                session_id = cursor.lastrowid
+
+                return {
+                    "status": "success",
+                    "message": "Session started successfully",
+                    "session_id": session_id
+                }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error starting session: {str(e)}")
+    
+
+@router.put("/end/{session_id}")
+async def end_session(session_id: int):
+    """
+    End a user's active session (calculate duration automatically).
+    """
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                # Ensure the session exists and is not already ended
+                cursor.execute("""
+                    SELECT * FROM user_sessions 
+                    WHERE id = %s AND end_time IS NULL
+                """, (session_id,))
+                session = cursor.fetchone()
+
+                if not session:
+                    raise HTTPException(status_code=404, detail="Session not found or already ended")
+
+                # End session
+                cursor.execute("""
+                    UPDATE user_sessions
+                    SET end_time = %s
+                    WHERE id = %s
+                """, (datetime.now(), session_id))
+                conn.commit()
+
+                return {
+                    "status": "success",
+                    "message": "Session ended successfully"
+                }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error ending session: {str(e)}")    

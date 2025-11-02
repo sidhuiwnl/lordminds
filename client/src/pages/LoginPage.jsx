@@ -42,11 +42,17 @@ const LoginPage = () => {
 
       if (result.data.role === "student") {
         navigate("/student/studenthome");
-      } else if (result.data.role === "administrator") {
+      } else if (result.data.role === "admin") {
         navigate("/admin/adminhome");
       } else if (result.data.role === "super_admin") {
         navigate("superadmin/superadminhome");
-      } else {
+      }else if (result.data.role === "administrator") {
+        navigate("/administrator/administratorhome");
+      } 
+      else if (result.data.role === "teacher") {
+        navigate("/teacher/teacherhome");
+      } 
+      else {
         navigate("/");
       }
     } catch (err) {

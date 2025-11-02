@@ -1,9 +1,48 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 const AdminHeader = ({ onMenuToggle }) => {
-
+  const [user, setUser] = useState(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          if (parsedUser?.user_id) {
+            const res = await fetch(
+              `${import.meta.env.VITE_BACKEND_API_URL}/users/${parsedUser.user_id}`
+            );
+            const data = await res.json();
+            if (data.status === "success") {
+              setUser(data.data);
+            }
+          }
+        } catch (err) {
+          console.error("Error fetching admin profile:", err);
+        }
+      }
+    };
+
+    fetchUserProfile();
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("user");
+    navigate("/");
+  };
+
+  const getProfileImageSrc = () => {
+    if (user?.profile_image) return `${import.meta.env.VITE_BACKEND_API_URL}/uploads/${user.profile_image}`;
+    if (user?.full_name || user?.username)
+      return `https://ui-avatars.com/api/?name=${encodeURIComponent(
+        user.full_name || user.username
+      )}&background=1b64a5&color=fff&size=112`;
+
+    return "/assets/studentpic.png";
+  };
 
   return (
     <div
@@ -13,12 +52,23 @@ const AdminHeader = ({ onMenuToggle }) => {
       }}
     >
       {/* Mobile Hamburger Menu */}
-      <button 
-        onClick={onMenuToggle} 
+      <button
+        onClick={onMenuToggle}
         className="absolute right-4 top-4 sm:hidden text-white z-10"
       >
-        <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+        <svg
+          width="24"
+          height="24"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M4 6h16M4 12h16M4 18h16"
+          />
         </svg>
       </button>
 
@@ -30,11 +80,9 @@ const AdminHeader = ({ onMenuToggle }) => {
       {/* Headings */}
       <div className="mb-4">
         <h1 className="text-white text-xl sm:text-2xl font-semibold">
-          Welcome Naveen
+          Welcome {user?.username || "Admin"}
         </h1>
-        <p className="text-white text-xs sm:text-sm font-light">
-          Admin
-        </p>
+        <p className="text-white text-xs sm:text-sm font-light">Admin</p>
       </div>
 
       {/* Top-right controls */}
@@ -57,19 +105,20 @@ const AdminHeader = ({ onMenuToggle }) => {
           <span className="absolute top-0 sm:top-1 right-0 sm:right-1 h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-red-600" />
         </button>
 
-        {/* User avatar */}
-        <img
-          src="/assets/superadminpic.png"
-          alt="User"
-          className="w-6 h-6 sm:w-8 sm:h-8 rounded-full object-cover border-2 flex-shrink-0"
-        />
+        {/* Dynamic Profile Image */}
+        <Link to="/admin/profilepage">
+          <img
+            src={getProfileImageSrc()}
+            alt="Admin"
+            className="w-6 h-6 sm:w-8 sm:h-8 rounded-full object-cover border-2 border-white shadow-sm cursor-pointer hover:scale-105 transition-transform"
+          />
+        </Link>
 
         {/* Logout */}
-        <button 
-        onClick={() => {
-          navigate("/");
-        }}
-        className="flex items-center hover:cursor-pointer gap-1 text-white text-xs sm:text-sm font-medium flex-shrink-0">
+        <button
+          onClick={handleLogout}
+          className="flex items-center hover:cursor-pointer gap-1 text-white text-xs sm:text-sm font-medium flex-shrink-0"
+        >
           <svg
             className="w-4 h-4 sm:w-5 sm:h-5"
             viewBox="0 0 24 24"

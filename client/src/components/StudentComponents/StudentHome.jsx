@@ -76,13 +76,15 @@ const StudentHome = () => {
       if (!response.ok) throw new Error("Failed to fetch topics");
 
       const data = await response.json();
+
+      console.log("The topic data",data.data)
       const formattedTopics = (data.data || []).map((topic) => ({
         id: topic.topic_id,
         title: topic.topic_name,
         status: "Not Started",
         icon: "📘",
-        progress: 0,
-        score: 0,
+        progress: topic.avg_progress_percent,
+        score: topic.avg_score,
         color: "gray",
         department: topic.department_name,
         college: topic.college_name,
@@ -193,7 +195,7 @@ const StudentHome = () => {
           icon="📚"
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
           {topics.map((topic) => {
             const colorClasses = {
               green: "bg-green-500 border-green-400",
@@ -209,41 +211,43 @@ const StudentHome = () => {
               yellow: "bg-yellow-100 text-yellow-800",
               gray: "bg-gray-100 text-gray-500",
             };
-            const progressColor = colorClasses[topic.color] || colorClasses.gray;
-            const statusColor = statusClasses[topic.color] || statusClasses.gray;
+            const progressColor =  colorClasses.yellow;
+            const statusColor =  statusClasses.yellow;
             const textColor =
-              topic.color === "yellow" ? "text-gray-900" : "text-white";
+              topic.color === "yellow" ? "text-yellow-400" : "text-white";
 
             return (
               <Link
                 to={`/student/${topic.id}/subtopics`}
                 key={topic.id}
-                className="bg-white rounded-2xl shadow-sm p-4 lg:p-6 border border-gray-100"
+                className="bg-white rounded-2xl shadow-sm p-3 sm:p-4 lg:p-6 border border-gray-100 hover:shadow-md transition-shadow w-full h-full flex flex-col"
               >
-                <div className="flex justify-between items-start mb-3 lg:mb-4">
-                  <h3 className="font-bold text-sm lg:text-base text-gray-800">
+                <div className="flex justify-between items-start mb-2 sm:mb-3 lg:mb-4 flex-1">
+                  <h3 className="font-bold text-xs sm:text-sm lg:text-base text-gray-800 line-clamp-2">
                     {topic.title}
                   </h3>
                   <span
-                    className={`text-xs px-2 py-1 rounded-full font-medium flex items-center gap-1 ${statusColor}`}
+                    className={`text-xs px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full font-medium flex items-center gap-1 ${statusColor} flex-shrink-0`}
                   >
                     {topic.icon} {topic.status}
                   </span>
                 </div>
 
-                <div className="text-xs text-gray-500 mb-2">
-                  Department: {topic.department} | College: {topic.college}
+                <div className="text-xs text-gray-500 mb-1 sm:mb-2 lg:mb-4 flex-shrink-0">
+                  <span className="block sm:inline">Dept: {topic.department}</span>
+                  <span className="hidden sm:inline mx-1">|</span>
+                  <span className="block sm:inline">College: {topic.college}</span>
                 </div>
 
-                <div className="relative mb-3 lg:mb-4">
-                  <div className="w-full bg-gray-200 rounded-full h-3 lg:h-4">
+                <div className="relative mb-2 sm:mb-3 lg:mb-4 flex-1">
+                  <div className="w-full bg-gray-200 rounded-full h-2 sm:h-3 lg:h-4">
                     <div
-                      className={`h-3 lg:h-4 rounded-full relative transition-all duration-300 ${progressColor}`}
+                      className={`h-2 sm:h-3 lg:h-4 rounded-full relative transition-all duration-300 ${progressColor}`}
                       style={{ width: `${topic.progress}%` }}
                     >
                       {topic.progress > 0 && (
                         <span
-                          className={`absolute right-0 top-1/2 -translate-y-1/2 -translate-x-1/2 text-xs font-bold ${textColor}`}
+                          className={`absolute right-0 top-1/2 -translate-y-1/2 -translate-x-1/2 text-[10px] sm:text-xs font-bold ${textColor} whitespace-nowrap`}
                         >
                           {topic.progress}%
                         </span>
@@ -252,7 +256,7 @@ const StudentHome = () => {
                   </div>
                 </div>
 
-                <p className="text-xs lg:text-sm text-gray-600 text-left">
+                <p className="text-xs lg:text-sm text-gray-600 text-left mt-auto">
                   Progress: {topic.progress}% | Score: {topic.score}/100
                 </p>
               </Link>

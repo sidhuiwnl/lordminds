@@ -43,7 +43,7 @@ const SuperAdminAccessCreation = () => {
     { id: "student", label: "Student Access" },
     { id: "teacher", label: "Teacher Access" },
     { id: "admin", label: "Administrator Access" },
-    { id: "topic", label: "Topic Creation" }
+    { id: "topic", label: "Topic Assign" }
   ];
 
   const fetchColleges = async () => {

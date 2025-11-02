@@ -18,18 +18,34 @@ import SuperAdminHomePage from "./pages/SuperAdminPages/SuperAdminHomePage";
 import SuperAdminReportsPage from "./pages/SuperAdminPages/SuperAdminReportsPage";
 import SuperAdminUploadPage from "./pages/SuperAdminPages/SuperAdminUploadPage";
 import SuperAdminAccessCreationPage from "./pages/SuperAdminPages/SuperAdminAccessCreationPage";
-
+import SuperAdminProfilePage from "./pages/SuperAdminPages/SuperadminProfilePage";
 
 import AdminHomePage from "./pages/Administrator/AdminHomePage";
 import AdminReportsPage from "./pages/Administrator/AdminReportsPage";
 import AdminUploadPage from "./pages/Administrator/AdminUploadPage";
 import AdminAccessCreationPage from "./pages/Administrator/AdminAccessCreationPage";
+import AdminProfilePage from "./pages/Administrator/AdminProfilePage";
 
 
 import ProtectedRoute from "./components/ProctecdRoute";
 import ProfilePage from "./pages/StudentPages/ProfilePage";
 import SubtopicsPage from "./pages/StudentPages/SubTopicsPage";
 import TopicsPage from "./pages/StudentPages/Topics";
+
+
+
+import AdministratorHomePage from "./pages/AdministratorPages/AdministratorHome";
+import AdministratorAccessCreationPage from "./pages/AdministratorPages/AdministratorAccessCreationPage";
+import AdministratorReportPage from "./pages/AdministratorPages/AdministratorReportPage";
+import AdministratorProfilePage from "./pages/AdministratorPages/AdministratorProfilePage";
+
+
+import TeacherHomePage from "./pages/TeacherPages/TeacherHomePage";
+import TeacherAssignmentMarkPage from "./pages/TeacherPages/TeacherAssignmentMarkPage";
+import TeacherCurrentMarkPage from "./pages/TeacherPages/TeacherCurrentMarksPage";
+import TeacherDurationPage from "./pages/TeacherPages/TeacherDurationPage";
+import TeacherOverallResultPage from "./pages/TeacherPages/TeacherOverallResultPage";
+import TeacherProfilePage from "./pages/TeacherPages/TeacherProfilePage";
 
 const App = () => {
   return (
@@ -54,11 +70,12 @@ const App = () => {
         </Route>
 
         
-        <Route element={<ProtectedRoute allowedRoles={["administrator"]} />}>
+        <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
           <Route path="/admin/adminhome" element={<AdminHomePage />} />
           <Route path="/admin/reports" element={<AdminReportsPage />} />
           <Route path="/admin/uploads" element={<AdminUploadPage />} />
           <Route path="/admin/access-creation" element={<AdminAccessCreationPage />} />
+          <Route path="/admin/profilepage" element={<AdminProfilePage />} />
         </Route>
 
        
@@ -67,6 +84,24 @@ const App = () => {
           <Route path="/superadmin/reports" element={<SuperAdminReportsPage />} />
           <Route path="/superadmin/uploads" element={<SuperAdminUploadPage />} />
           <Route path="/superadmin/access-creation" element={<SuperAdminAccessCreationPage />} />
+          <Route path="/superadmin/profilepage" element={<SuperAdminProfilePage />} />
+        </Route>
+
+
+        <Route element={<ProtectedRoute allowedRoles={["administrator"]} />}>
+          <Route path="/administrator/administratorhome" element={<AdministratorHomePage />} />
+          <Route path="/administrator/administratoraccess" element={<AdministratorAccessCreationPage />} />
+          <Route path="/administrator/administratorreports" element={<AdministratorReportPage />} />
+          <Route path="/administrator/profilepage" element={<AdministratorProfilePage />} />
+        </Route>
+
+        <Route element={<ProtectedRoute allowedRoles={["teacher"]} />}>
+          <Route path="/teacher/teacherhome" element={<TeacherHomePage />} />
+          <Route path="/teacher/currentmarks" element={<TeacherCurrentMarkPage />} />
+          <Route path="/teacher/assignmentmarks" element={<TeacherAssignmentMarkPage />} />
+          <Route path="/teacher/totalduration" element={<TeacherDurationPage />} />
+          <Route path="/teacher/overallresult" element={<TeacherOverallResultPage />} />
+          <Route path="/teacher/profilepage" element={<TeacherProfilePage />} />
         </Route>
 
         

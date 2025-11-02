@@ -9,10 +9,15 @@ from io import BytesIO
 from datetime import datetime
 from voice.voice_analyzer import VoiceAnalyzer
 import shutil
-
+import os
 
 router = APIRouter()
 analyzer = VoiceAnalyzer()
+
+
+UPLOAD_DIR = "uploads/profile_images"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 
 
 @router.post("/analyze-voice")
@@ -262,14 +267,17 @@ async def login(username: str = Form(...), password: str = Form(...)):
 
 @router.get("/{user_id}")
 async def get_user(user_id: int):
-    """Fetch user details by user_id"""
+    """Fetch user details by user_id (excluding password_hash)"""
     try:
         with get_db() as conn:
-            with conn.cursor() as cursor:
+            with conn.cursor() as cursor:  
                 cursor.execute("""
-                    SELECT * from users u
-                    WHERE u.user_id = %s
+                    SELECT 
+                        user_id, username, full_name, created_at, updated_at, profile_image, college_id, department_id
+                    FROM users 
+                    WHERE user_id = %s
                 """, (user_id,))
+                
                 user = cursor.fetchone()
                 if not user:
                     raise HTTPException(status_code=404, detail=f"User with ID {user_id} not found")
@@ -341,34 +349,90 @@ async def get_assignments_by_department(college_id: int, department_id: int):
 
 
 
+# @router.get("/colleges/{college_id}/departments/{department_id}/topics")
+# async def get_topics_by_college_and_department(college_id: int, department_id: int):
+#     """
+#     Fetch all active topics for a given department in a specific college.
+#     Includes department and topic details.
+#     """
+#     try:
+#         with get_db() as conn:
+#             with conn.cursor() as cursor:
+#                 cursor.execute("""
+#                   SELECT 
+#                     t.topic_id,
+#                     t.topic_name,
+#                     t.total_sub_topics,
+#                     d.department_name,
+#                     c.name AS college_name
+#                 FROM topics t
+#                 INNER JOIN departments d ON t.department_id = d.department_id
+#                 INNER JOIN college_departments cd ON d.department_id = cd.department_id
+#                 INNER JOIN colleges c ON cd.college_id = c.college_id
+#                 WHERE d.department_id = %s
+#                 AND c.college_id = %s
+#                 AND t.is_active = 1
+#                 """, (department_id, college_id))
+
+#                 topics = cursor.fetchall()
+
+               
+#                 return {
+#                     "status": "success",
+#                     "count": len(topics),
+#                     "data": topics
+#                 }
+
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=500, 
+#             detail=f"Error fetching topics for department {department_id} in college {college_id}: {str(e)}"
+#         )
+
+
+
 @router.get("/colleges/{college_id}/departments/{department_id}/topics")
-async def get_topics_by_college_and_department(college_id: int, department_id: int):
+async def get_topics_with_progress(college_id: int, department_id: int):
     """
-    Fetch all active topics for a given department in a specific college.
-    Includes department and topic details.
+    Fetch all active topics for a given department in a specific college,
+    including average progress and average score for each topic.
     """
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
-                cursor.execute("""
-                  SELECT 
-                    t.topic_id,
-                    t.topic_name,
-                    t.total_sub_topics,
-                    d.department_name,
-                    c.name AS college_name
-                FROM topics t
-                INNER JOIN departments d ON t.department_id = d.department_id
-                INNER JOIN college_departments cd ON d.department_id = cd.department_id
-                INNER JOIN colleges c ON cd.college_id = c.college_id
-                WHERE d.department_id = %s
-                AND c.college_id = %s
-                AND t.is_active = 1
-                """, (department_id, college_id))
+                query = """
+                    SELECT 
+                        t.topic_id,
+                        t.topic_name,
+                        t.total_sub_topics,
+                        d.department_name,
+                        c.name AS college_name,
+                        ROUND(AVG(stp.progress_percent), 2) AS avg_progress_percent,
+                        ROUND(AVG(stp.average_score), 2) AS avg_score
+                    FROM topics t
+                    INNER JOIN departments d 
+                        ON t.department_id = d.department_id
+                    INNER JOIN college_departments cd 
+                        ON d.department_id = cd.department_id
+                    INNER JOIN colleges c 
+                        ON cd.college_id = c.college_id
+                    LEFT JOIN student_topic_progress stp 
+                        ON t.topic_id = stp.topic_id
+                    WHERE d.department_id = %s
+                        AND c.college_id = %s
+                        AND t.is_active = 1
+                    GROUP BY 
+                        t.topic_id, 
+                        t.topic_name, 
+                        t.total_sub_topics,
+                        d.department_name,
+                        c.name
+                    ORDER BY t.topic_name ASC
+                """
 
+                cursor.execute(query, (department_id, college_id))
                 topics = cursor.fetchall()
 
-               
                 return {
                     "status": "success",
                     "count": len(topics),
@@ -377,10 +441,14 @@ async def get_topics_by_college_and_department(college_id: int, department_id: i
 
     except Exception as e:
         raise HTTPException(
-            status_code=500, 
-            detail=f"Error fetching topics for department {department_id} in college {college_id}: {str(e)}"
+            status_code=500,
+            detail=f"Error fetching topics with progress for department {department_id} in college {college_id}: {str(e)}"
         )
-    
+
+
+
+
+
 @router.get("/{topic_id}/subtopics")
 async def get_subtopics_by_topic(topic_id: int):
     """Fetch all active subtopics for a given topic"""
@@ -751,5 +819,52 @@ async def get_overall_report(user_id: int):
 
                 return {"status": "success", "data": row}
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+
+
+
+@router.put("/{user_id}/add-image")
+async def add_profile_image(user_id: int, file: UploadFile = File(...)):
+    """Upload profile image for a specific user (like multer)"""
+    try:
+        # ✅ 1. Validate file extension
+        allowed_extensions = {"jpg", "jpeg", "png", "webp"}
+        file_ext = file.filename.split(".")[-1].lower()
+        if file_ext not in allowed_extensions:
+            raise HTTPException(status_code=400, detail="Invalid file type")
+
+        # ✅ 2. Create unique filename
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        filename = f"user_{user_id}_{timestamp}.{file_ext}"
+        file_path = os.path.join(UPLOAD_DIR, filename)
+
+        # ✅ 3. Save file
+        with open(file_path, "wb") as f:
+            f.write(await file.read())
+
+        # ✅ 4. Update database with relative path
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    UPDATE users
+                    SET profile_image = %s
+                    WHERE user_id = %s
+                """, (f"profile_images/{filename}", user_id))
+                conn.commit()
+
+        # ✅ 5. Return full URL for frontend
+        file_url = f"/uploads/profile_images/{filename}"
+
+        return {
+            "status": "success",
+            "message": "Profile image uploaded successfully",
+            "file_url": file_url
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

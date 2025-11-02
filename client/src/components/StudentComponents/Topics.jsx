@@ -7,7 +7,7 @@ const Topics = () => {
   useEffect(() => {
     async function fetchTopics() {
       try {
-        // 🧩 Get user from localStorage
+        
         const storedUser = localStorage.getItem("user");
         const user = storedUser ? JSON.parse(storedUser) : null;
         const userId = user?.user_id;
@@ -18,7 +18,7 @@ const Topics = () => {
           return;
         }
 
-        // 🧩 Fetch topics for the user
+        
         const response = await fetch(
           `${import.meta.env.VITE_BACKEND_API_URL}/topics/${userId}/subtopics`
         );
@@ -29,13 +29,13 @@ const Topics = () => {
 
         const data = await response.json();
 
-        // Extract only the topic-level info
+        
         const topicList =
           data.data?.map((topic) => ({
             topic_id: topic.topic_id,
             topic_name: topic.topic_name,
             subtopics_count: topic.sub_topics?.length || 0,
-            progress: Math.floor(Math.random() * 100), // mock topic progress
+            
           })) || [];
 
         setTopics(topicList);
@@ -85,16 +85,6 @@ const Topics = () => {
             </div>
 
             <div className="mt-auto">
-              <p className="text-sm font-semibold text-gray-700 mb-1">
-                Progress
-              </p>
-              <div className="w-full bg-gray-200 rounded-full h-[10px] relative overflow-hidden mb-3">
-                <div
-                  className="bg-blue-500 h-[10px] rounded-full transition-all duration-500"
-                  style={{ width: `${topic.progress}%` }}
-                ></div>
-              </div>
-
               <a
                 href={`/student/${topic.topic_id}/subtopics`}
                 className="bg-yellow-400 text-gray-900 px-4 py-2 rounded-md text-sm font-medium hover:bg-yellow-500 transition-colors block text-center"

@@ -1,9 +1,11 @@
-import React, { useEffect, useState, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useState, useRef } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import RecordRTC from "recordrtc";
+import { ToastContainer,toast } from "react-toastify";
 
 const Assessments = () => {
   const { subtopic } = useParams();
+  const navigate = useNavigate();
   const [questions, setQuestions] = useState([]);
   const [heading, setHeading] = useState("");
   const [currentStep, setCurrentStep] = useState(1);
@@ -13,12 +15,20 @@ const Assessments = () => {
   const [analysisResult, setAnalysisResult] = useState(null);
   const [feedback, setFeedback] = useState("");
   const [answers, setAnswers] = useState({});
+  const [sessionId, setSessionId] = useState(null);
+  const [sessionEnded, setSessionEnded] = useState(false);
   const recorderRef = useRef(null);
 
   const totalSteps = questions.length;
   const API_URL = import.meta.env.VITE_BACKEND_API_URL;
 
-  // Fetch questions and subtopic details
+  // 🧠 Get logged-in user from localStorage
+  const user = JSON.parse(localStorage.getItem("user"));
+  const userId = user?.user_id;
+
+  // ===============================
+  // 🚀 Fetch questions + subtopic
+  // ===============================
   useEffect(() => {
     const fetchQuestions = async () => {
       try {
@@ -56,45 +66,98 @@ const Assessments = () => {
       fetchQuestions();
       fetchSubTopicDetails();
     }
-  }, [subtopic]);
+  }, [subtopic, API_URL]);
 
   const currentQuestion = questions[currentStep - 1];
 
-  // Handle MCQ selection
-  const handleOptionChange = (option) => {
-    setAnswers({ ...answers, [currentQuestion.question_id]: option });
+  // ===============================
+  // 🕒 Handle Session Start / End
+  // ===============================
+  useEffect(() => {
+    if (!userId || sessionEnded) return;
+
+    let isMounted = true;
+
+    const startSession = async () => {
+      try {
+        const res = await fetch(`${API_URL}/tests/start/${userId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id : parseInt(userId) }), // Include subtopic if backend supports
+        });
+        const data = await res.json();
+        if (data.status === "success" && isMounted) {
+          setSessionId(data.session_id);
+          console.log("✅ Session started:", data.session_id);
+        }
+      } catch (err) {
+        console.error("Error starting session:", err);
+      }
+    };
+
+    startSession();
+
+    // NO CLEANUP HERE: We don't auto-end on unmount/reload. Only end on explicit submit.
+    // If user reloads, a new session starts, and old one remains open (end_time NULL).
+    // Backend can handle stale sessions later if needed (e.g., via cron job).
+  }, [userId, subtopic, API_URL]);  // Removed sessionId/sessionEnded from deps to avoid re-runs
+
+  const endSession = async () => {
+    if (!sessionId || sessionEnded) return;
+    try {
+      await fetch(`${API_URL}/tests/end/${sessionId}`, {
+        method: "PUT",
+      });
+      console.log("✅ Session ended:", sessionId);
+      setSessionEnded(true);
+    } catch (err) {
+      console.error("Error ending session:", err);
+    }
   };
 
-  // 🎤 Start recording
+  // ===============================
+  // 🎤 Audio Recording
+  // ===============================
   const startRecording = async () => {
     setAnalysisResult(null);
     setFeedback("");
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-    const recorder = new RecordRTC(stream, {
-      type: "audio",
-      mimeType: "audio/wav",
-      recorderType: RecordRTC.StereoAudioRecorder,
-      numberOfAudioChannels: 1,
-      desiredSampRate: 16000,
-    });
+      const recorder = new RecordRTC(stream, {
+        type: "audio",
+        mimeType: "audio/wav",
+        recorderType: RecordRTC.StereoAudioRecorder,
+        numberOfAudioChannels: 1,
+        desiredSampRate: 16000,
+      });
 
-    recorder.startRecording();
-    recorderRef.current = recorder;
-    setRecording(true);
+      recorder.startRecording();
+      recorderRef.current = recorder;
+      setRecording(true);
+    } catch (err) {
+      console.error("Error starting recording:", err);
+      setFeedback("⚠️ Microphone access denied. Please allow and try again.");
+    }
   };
 
-  // ⏹ Stop recording
   const stopRecording = async () => {
     if (!recorderRef.current) return;
-    await recorderRef.current.stopRecording(() => {
-      const blob = recorderRef.current.getBlob();
-      setAnswers({ ...answers, [`audio-${currentQuestion.question_id}`]: blob });
-      setRecording(false);
-    });
+    try {
+      await recorderRef.current.stopRecording(() => {
+        const blob = recorderRef.current.getBlob();
+        setAnswers({ ...answers, [`audio-${currentQuestion.question_id}`]: blob });
+        setRecording(false);
+        // Stop the stream to release microphone
+        recorderRef.current.getDataURL((dataURL) => {
+          // Optional: Handle dataURL if needed
+        });
+      });
+    } catch (err) {
+      console.error("Error stopping recording:", err);
+    }
   };
 
-  // 🚀 Send to backend for analysis
   const sendAudioForAnalysis = async () => {
     const audioBlob = answers[`audio-${currentQuestion.question_id}`];
     if (!audioBlob) return;
@@ -111,7 +174,6 @@ const Assessments = () => {
       const result = await res.json();
       setAnalysisResult(result);
 
-      // ✅ Compare with correct answer
       const expectedAnswer =
         currentQuestion?.question_data?.correct_answer?.toString().toLowerCase() || "";
       const transcript = result?.transcription?.toLowerCase() || "";
@@ -130,7 +192,13 @@ const Assessments = () => {
     }
   };
 
-  // Navigation
+  // ===============================
+  // 🧭 Navigation
+  // ===============================
+  const handleOptionChange = (option) => {
+    setAnswers({ ...answers, [currentQuestion.question_id]: option });
+  };
+
   const handlePrevious = () => {
     if (currentStep > 1) setCurrentStep(currentStep - 1);
     setAnalysisResult(null);
@@ -143,7 +211,87 @@ const Assessments = () => {
     setFeedback("");
   };
 
-  // Loading and error states
+  // ===============================
+  // 🏁 Submit Test (End Session) - UPDATED
+  // ===============================
+  const calculateScore = () => {
+    let marksObtained = 0;
+    
+    questions.forEach(question => {
+      const userAnswer = answers[question.question_id];
+      const correctAnswer = question.question_data?.correct_answer;
+      
+      // For text/MCQ questions - each correct answer = 1 mark
+      if (userAnswer && correctAnswer !== undefined) {
+        if (userAnswer === correctAnswer) {
+          marksObtained += 1;
+        }
+      }
+      
+      // For audio questions - each correct answer = 1 mark
+      const audioAnswer = answers[`audio-${question.question_id}`];
+      if (audioAnswer && analysisResult?.transcription) {
+        const expectedAnswer = question.question_data?.correct_answer?.toString().toLowerCase() || "";
+        const transcript = analysisResult.transcription.toLowerCase();
+        if (transcript.includes(expectedAnswer) && expectedAnswer !== "") {
+          marksObtained += 1;
+        }
+      }
+    });
+    
+    return {
+      marks_obtained: marksObtained,
+      max_marks: questions.length,
+      percentage: (marksObtained / questions.length) * 100
+    };
+  };
+
+  const handleSubmitTest = async () => {
+    if (!sessionId) {
+      toast("Session not started. Please refresh and try again.");
+      return;
+    }
+    
+    try {
+      // 1. Calculate score (each question = 1 mark)
+      const score = calculateScore();
+      
+      // 2. Store marks in database
+      const marksResponse = await fetch(`${API_URL}/student/store-marks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          student_id: parseInt(userId),
+          sub_topic_id: parseInt(subtopic), // assuming subtopic is the ID
+          marks_obtained: score.marks_obtained,
+          max_marks: score.max_marks
+        })
+      });
+      
+      const marksData = await marksResponse.json();
+      
+      if (marksData.status === "success") {
+        // 3. End session
+        await endSession();
+        
+        // 4. Show success message with marks
+        toast.success(`✅ Test Completed! You scored ${score.marks_obtained}/${score.max_marks}`);
+        
+        // 5. Navigate to home
+        navigate("/student/studenthome");
+      } else {
+        throw new Error("Failed to store marks");
+      }
+      
+    } catch (err) {
+      console.error("Error submitting test:", err);
+      toast.error("Error completing test. Please try again.");
+    }
+  };
+
+  // ===============================
+  // ⚙️ UI States
+  // ===============================
   if (loading)
     return (
       <div className="flex justify-center items-center h-screen text-gray-600">
@@ -165,13 +313,16 @@ const Assessments = () => {
       </div>
     );
 
+  // ===============================
+  // 🖥️ Main Render
+  // ===============================
   return (
     <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
+      <ToastContainer/>
       <div className="space-y-4 lg:space-y-6 mx-0 lg:mx-4">
         <div className="bg-white rounded-2xl shadow-sm p-4 lg:p-6 border-t-4 border-r-4 border-[#1b65a6] rounded-bl-lg rounded-tr-lg">
           <h2 className="font-bold text-lg lg:text-xl text-gray-800 mb-4">{heading}</h2>
 
-          {/* Question */}
           <p className="text-sm font-medium text-gray-700 mb-4">
             {currentStep}. {currentQuestion.question_text}
           </p>
@@ -234,9 +385,6 @@ const Assessments = () => {
             )}
           </div>
 
-          
-
-          
           {feedback && (
             <p
               className={`mt-2 text-base font-semibold ${
@@ -251,7 +399,7 @@ const Assessments = () => {
             </p>
           )}
 
-          {/* 🔘 Question Navigation */}
+          {/* Navigation + Submit */}
           <div className="flex items-center justify-center gap-2 mt-6">
             <button
               onClick={handlePrevious}
@@ -295,6 +443,19 @@ const Assessments = () => {
               ›
             </button>
           </div>
+
+          {/* ✅ Submit Button (Only at Last Question) */}
+          {currentStep === totalSteps && (
+            <div className="flex justify-center mt-8">
+              <button
+                onClick={handleSubmitTest}
+                disabled={sessionEnded}
+                className="px-6 py-2 bg-yellow-400 text-gray-900 rounded-lg hover:bg-yellow-300 transition disabled:opacity-50"
+              >
+                {sessionEnded ? "Submitting..." : "Submit Test"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

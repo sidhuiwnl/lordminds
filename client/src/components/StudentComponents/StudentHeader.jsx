@@ -2,36 +2,66 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const StudentHeader = ({ onMenuToggle }) => {
-  const [userId, setUserId] = useState("");
+  const [user, setUser] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      try {
-        const parsedUser = JSON.parse(storedUser);
-        setUserId(parsedUser.username || "");
-      } catch (err) {
-        console.error("Invalid user object in localStorage:", err);
+    const fetchUser = async () => {
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          if (parsedUser?.user_id) {
+            const res = await fetch(
+              `${import.meta.env.VITE_BACKEND_API_URL}/users/${parsedUser.user_id}`
+            );
+            const data = await res.json();
+            if (data.status === "success") {
+              setUser(data.data);
+            } else {
+              console.warn("User fetch failed:", data.message);
+              setUser(parsedUser); // fallback to stored user
+            }
+          }
+        } catch (err) {
+          console.error("Error fetching user:", err);
+        }
       }
-    }
+    };
+    fetchUser();
   }, []);
 
-  function handleLogout() {
+  const handleLogout = () => {
     localStorage.removeItem("user");
     window.location.href = "/";
-  }
+  };
 
-  function handleProfileClick() {
+  const handleProfileClick = () => {
     navigate("/student/profilepage");
-  }
+  };
+
+  const getProfileImage = () => {
+    if (!user) {
+      return "/assets/studentpic.png"; // Default fallback if no user
+    }
+
+    if (user?.profile_image) {
+      // Add base URL if image path is relative
+      return `${import.meta.env.VITE_BACKEND_API_URL}/uploads/${user.profile_image}`.replace(
+        /([^:]\/)\/+/g,
+        "$1"
+      );
+    }
+    // fallback: generate initials avatar
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(
+      user?.full_name || user?.username || "User"
+    )}&background=1b64a5&color=fff`;
+  };
 
   return (
     <div
       className="relative px-4 lg:px-8 py-4 lg:py-3.5 bg-cover bg-center flex flex-col"
-      style={{
-        backgroundImage: "url('/assets/headerbg.png')",
-      }}
+      style={{ backgroundImage: "url('/assets/headerbg.png')" }}
     >
       {/* Mobile Hamburger Menu */}
       <button
@@ -55,14 +85,12 @@ const StudentHeader = ({ onMenuToggle }) => {
       </button>
 
       {/* Breadcrumb */}
-      <div className="text-white text-xs font-light mb-2">
-        Pages &gt; Lessons
-      </div>
+      <div className="text-white text-xs font-light mb-2">Pages &gt; Lessons</div>
 
       {/* Headings */}
       <div className="mb-4">
         <h1 className="text-white text-xl lg:text-2xl font-semibold">
-          Welcome {userId ? userId : "Aboard"}
+          Welcome {user?.full_name || user?.username || "Student"}
         </h1>
         <p className="text-white text-sm font-light">
           Continue Your Language Learning Journey
@@ -89,12 +117,12 @@ const StudentHeader = ({ onMenuToggle }) => {
           <span className="absolute top-0 right-0 lg:top-1 lg:right-2 h-2 w-2 rounded-full bg-red-600" />
         </button>
 
-        {/* User avatar */}
+        {/* Dynamic User Avatar */}
         <img
-          src="/assets/studentpic.png"
+          src={getProfileImage()}
           alt="User"
           onClick={handleProfileClick}
-          className="w-8 h-8 rounded-full object-cover flex-shrink-0 cursor-pointer hover:scale-105 transition-transform"
+          className="w-8 h-8 rounded-full object-cover flex-shrink-0 cursor-pointer hover:scale-105 transition-transform border-2 border-white"
         />
 
         {/* Logout */}
@@ -122,13 +150,13 @@ const StudentHeader = ({ onMenuToggle }) => {
       </div>
 
       {/* Search bar */}
-      <div className="w-full lg:absolute lg:top-20 lg:right-8 lg:w-[260px] mt-4 lg:mt-0">
+      {/* <div className="w-full lg:absolute lg:top-20 lg:right-8 lg:w-[260px] mt-4 lg:mt-0">
         <input
           type="text"
           placeholder="Search"
           className="w-full bg-white rounded-lg px-3 lg:px-4 py-1.5 lg:py-2 text-gray-700 shadow focus:outline-none text-sm"
         />
-      </div>
+      </div> */}
     </div>
   );
 };

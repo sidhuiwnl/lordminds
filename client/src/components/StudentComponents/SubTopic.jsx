@@ -81,7 +81,7 @@ const SubtopicsComponent = () => {
                 <h3 className="font-bold text-base lg:text-lg text-gray-800">
                   {sub.sub_topic_name}
                 </h3>
-                <p className="text-xs text-gray-500">
+                <p className="text-ls text-gray-500 mt-5 font-bold">
                   Topic: {sub.topic_name}
                 </p>
               </div>
@@ -94,12 +94,6 @@ const SubtopicsComponent = () => {
                 Start
               </a>
             </div>
-
-            <p className="text-xs lg:text-sm text-gray-600 font-semibold mb-3 lg:mb-4">
-              The Present Tense is used to express actions that are happening
-              now, habits, general truths, or ongoing situations. It has four
-              main forms in English.
-            </p>
 
             <div className="mt-2">
               <p className="text-xs font-semibold text-gray-700 mb-1">

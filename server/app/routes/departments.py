@@ -73,3 +73,6 @@ async def get_department_topics(department_id: int):
                 }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching topics: {str(e)}")
+    
+
+    
