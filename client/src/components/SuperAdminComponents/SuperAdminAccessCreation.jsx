@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Select from 'react-select';
+import { ToastContainer, toast } from 'react-toastify';
 
 const SuperAdminAccessCreation = () => {
   const [selectedAccessType, setSelectedAccessType] = useState("college-onboarding");
@@ -16,6 +17,7 @@ const SuperAdminAccessCreation = () => {
     selectedTopics: [],
   });
   const [selectedFile, setSelectedFile] = useState(null);
+  const [fileName, setFileName] = useState('');
   const [message, setMessage] = useState({ type: "", text: "" });
   const [loading, setLoading] = useState(false);
   const [colleges, setColleges] = useState([]);
@@ -186,6 +188,7 @@ const SuperAdminAccessCreation = () => {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     setSelectedFile(file);
+    setFileName(file ? file.name : '');
   };
 
   const clearMessage = () => {
@@ -249,10 +252,35 @@ const SuperAdminAccessCreation = () => {
         form.append("file", selectedFile);
         form.append("role", "student");
         const res = await fetch(`${API_BASE}/users/bulk`, { method: "POST", body: form });
+        if(res.ok){
+          
+        }
         const result = await res.json();
         setMessage({ type: res.ok ? "success" : "error", text: res.ok ? result.message : result.detail || "Bulk creation failed" });
         if (res.ok) {
           setSelectedFile(null);
+          setFileName('');
+          await fetchStudents();
+        }
+      } else if (selectedAccessType === "student") {
+        // Single student creation
+        const payload = {
+          role: "student",
+          college_name: formData.college,
+          full_name: formData.name,
+          department_name: formData.department,
+          username: formData.username,
+          password: formData.password,
+        };
+        const res = await fetch(`${API_BASE}/users`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const result = await res.json();
+        setMessage({ type: res.ok ? "success" : "error", text: res.ok ? result.message : result.detail || "User creation failed" });
+        if (res.ok) {
+          setFormData(prev => ({ ...prev, name: "", department: "", username: "", password: "", college: "" }));
           await fetchStudents();
         }
       }
@@ -279,16 +307,15 @@ const SuperAdminAccessCreation = () => {
       }
 
       else {
-        // Single user creation: student/teacher/admin
-        const roleMap = { student: "student", teacher: "teacher", admin: "administrator" };
+        // Single user creation: teacher/admin
+        const roleMap = { teacher: "teacher", admin: "administrator" };
         const payload = {
           role: roleMap[selectedAccessType],
           college_name: formData.college,
           username: formData.username,
           password: formData.password,
         };
-        if (selectedAccessType === "student") payload.full_name = formData.name;
-        if (["student", "teacher"].includes(selectedAccessType)) payload.department_name = formData.department;
+        if (["teacher"].includes(selectedAccessType)) payload.department_name = formData.department;
 
         const res = await fetch(`${API_BASE}/users`, {
           method: "POST",
@@ -301,7 +328,7 @@ const SuperAdminAccessCreation = () => {
           setFormData({
             collegeName: "", collegeAddress: "", selectedDepartments: [], name: "", department: "", username: "", password: "", college: "", selectedTopics: []
           });
-          const fetchFunc = selectedAccessType === 'student' ? fetchStudents : selectedAccessType === 'teacher' ? fetchTeachers : fetchAdmins;
+          const fetchFunc = selectedAccessType === 'teacher' ? fetchTeachers : fetchAdmins;
           await fetchFunc();
         }
       }
@@ -331,6 +358,7 @@ const SuperAdminAccessCreation = () => {
       return (
         <>
           <div className="flex flex-col lg:flex-row items-start gap-4">
+          <ToastContainer/>
             <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">College Name</label>
             <input 
               type="text" 
@@ -890,6 +918,14 @@ const SuperAdminAccessCreation = () => {
                     Upload Excel
                   </button>
                 </div>
+                {fileName && (
+                  <div className="mt-2 text-sm text-green-600 flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Selected: {fileName}
+                  </div>
+                )}
               </div>
               )}
             </div>
