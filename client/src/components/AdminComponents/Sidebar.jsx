@@ -1,9 +1,24 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 
 const AdminSidebar = ({ isOpen, onClose, isMobile = false }) => {
   const [activeMenu, setActiveMenu] = useState("home");
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.pathname === "/admin/adminhome") {
+      setActiveMenu("home");
+    } else if (location.pathname === "/admin/reports") {
+      setActiveMenu("reports");
+    } else if (location.pathname === "/admin/uploads") {
+      setActiveMenu("upload");
+    } else if (location.pathname === "/admin/access-creation") {
+      setActiveMenu("access-creation");
+    } else {
+      setActiveMenu("home");
+    }
+  }, [location.pathname]);
 
   const handleMenuClick = (menuName, path) => {
     setActiveMenu(menuName);

@@ -8,6 +8,9 @@ const AdministratorHome = () => {
     departments: false,
     topics: false,
   });
+  const [searchInput, setSearchInput] = useState("");
+  const [filteredDepartments, setFilteredDepartments] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const [adminDetails, setAdminDetails] = useState(null);
   const [storedUser, setStoredUser] = useState(() => {
@@ -26,7 +29,9 @@ const AdministratorHome = () => {
         const data = await res.json();
         if (data.status === "success") {
           setAdminDetails(data.data.user);
-          setDepartments(data.data.departments || []);
+          const depts = data.data.departments || [];
+          setDepartments(depts);
+          setFilteredDepartments(depts);
         }
       } catch (error) {
         console.error("Error fetching administrator details:", error);
@@ -63,6 +68,57 @@ const AdministratorHome = () => {
     fetchTopics();
   }, [selectedDepartment]);
 
+  // Handle search input change
+  const handleSearchChange = (e) => {
+    const query = e.target.value;
+    setSearchInput(query);
+    
+    if (query === "") {
+      setFilteredDepartments(departments);
+    } else {
+      const filtered = departments.filter((dept) =>
+        dept.department_name.toLowerCase().includes(query.toLowerCase())
+      );
+      setFilteredDepartments(filtered);
+    }
+  };
+
+  // Handle department selection
+  const handleDepartmentSelect = (dept) => {
+    setSelectedDepartment(dept.department_id);
+    setSearchInput(dept.department_name);
+    setShowDropdown(false);
+    setFilteredDepartments(departments);
+  };
+
+  // Clear search and reset when input is focused
+  const handleInputFocus = () => {
+    setShowDropdown(true);
+    if (selectedDepartment) {
+      setSearchInput("");
+      setFilteredDepartments(departments);
+    }
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.department-dropdown')) {
+        setShowDropdown(false);
+        // Restore selected department name if user clicks away without selecting
+        if (selectedDepartment) {
+          const selectedDeptName = departments.find(d => d.department_id === selectedDepartment)?.department_name || "";
+          setSearchInput(selectedDeptName);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [selectedDepartment, departments]);
+
   return (
     <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
       {/* Header */}
@@ -85,25 +141,45 @@ const AdministratorHome = () => {
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Select Department
         </label>
-        <select
-          value={selectedDepartment}
-          onChange={(e) => setSelectedDepartment(e.target.value)}
-          disabled={loading.departments || departments.length === 0}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white w-full sm:w-1/2 disabled:bg-gray-100"
-        >
-          <option value="">
-            {loading.departments
-              ? "Loading departments..."
-              : departments.length
-              ? "Select Department"
-              : "No departments found"}
-          </option>
-          {departments.map((dept) => (
-            <option key={dept.department_id} value={dept.department_id}>
-              {dept.department_name}
-            </option>
-          ))}
-        </select>
+        <div className="relative department-dropdown w-full sm:w-1/2">
+          <input
+            type="text"
+            placeholder={loading.departments ? "Loading departments..." : "Search departments..."}
+            value={searchInput}
+            onChange={handleSearchChange}
+            onFocus={handleInputFocus}
+            disabled={loading.departments || departments.length === 0}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+          />
+
+          {/* Dropdown results */}
+          {showDropdown && (
+            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+              {filteredDepartments.length > 0 ? (
+                filteredDepartments.map((dept) => (
+                  <div
+                    key={dept.department_id}
+                    onClick={() => handleDepartmentSelect(dept)}
+                    className={`p-3 cursor-pointer hover:bg-blue-50 border-b border-gray-100 last:border-b-0 ${
+                      selectedDepartment === dept.department_id ? "bg-blue-50" : ""
+                    }`}
+                  >
+                    <span className="text-sm font-medium text-gray-700">
+                      {dept.department_name}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="p-3 text-gray-500 text-sm text-center">
+                  No departments found.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        {departments.length === 0 && !loading.departments && (
+          <p className="text-red-500 text-xs mt-1">No departments available</p>
+        )}
       </div>
 
       {/* Topics Section */}

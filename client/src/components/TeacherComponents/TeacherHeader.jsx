@@ -144,13 +144,13 @@ const TeacherHeader = ({ onMenuToggle }) => {
       </div>
 
       {/* Search bar */}
-      <div className="w-full lg:absolute lg:top-20 lg:right-8 lg:w-[260px] mt-4 lg:mt-0">
+      {/* <div className="w-full lg:absolute lg:top-20 lg:right-8 lg:w-[260px] mt-4 lg:mt-0">
         <input
           type="text"
           placeholder="Search"
           className="w-full bg-white rounded-lg px-3 lg:px-4 py-1.5 lg:py-2 text-gray-700 shadow focus:outline-none text-sm"
         />
-      </div>
+      </div> */}
     </div>
   );
 };

@@ -235,33 +235,52 @@ async def bulk_create_users(file: UploadFile = File(...), role: str = Form(...))
 
 @router.post("/login")
 async def login(username: str = Form(...), password: str = Form(...)):
-    """Authenticate user and return basic info"""
+    """Authenticate user, update last login, and return basic info"""
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
+                # Fetch user with role
                 cursor.execute("""
-                    SELECT u.user_id, u.username, u.password_hash, r.name
+                    SELECT 
+                        u.user_id, 
+                        u.username, 
+                        u.password_hash, 
+                        r.name AS role, 
+                        u.last_login
                     FROM users u
                     JOIN roles r ON u.role_id = r.role_id
                     WHERE u.username = %s
                 """, (username,))
+
                 user = cursor.fetchone()
+
+                # Validate username and password
                 if not user or not bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
                     raise HTTPException(status_code=401, detail="Invalid username or password")
 
+                # ✅ Update last_login timestamp
+                cursor.execute(
+                    "UPDATE users SET last_login = %s WHERE user_id = %s",
+                    (datetime.now(), user['user_id'])
+                )
+                conn.commit()
+
+                # Return response
                 return {
                     "status": "success",
                     "message": "Login successful",
                     "data": {
                         "user_id": user['user_id'],
                         "username": user['username'],
-                        "role": user['name']
+                        "role": user['role'],
+                        "last_login": datetime.now().strftime("%d/%m/%y - %I:%M %p")
                     }
                 }
 
     except HTTPException:
         raise
     except Exception as e:
+        print("❌ Error during login:", e)
         raise HTTPException(status_code=500, detail=f"Error during login: {str(e)}")
 
 
@@ -768,47 +787,46 @@ async def get_total_duration(user_id: int):
 @router.get("/overallreport/{user_id}")
 async def get_overall_report(user_id: int):
     """
-    Overall report: aggregated marks and total hours for a single student.
+    Overall report: aggregated marks, total hours, and last login for a single student.
     """
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT
-                      u.user_id,
-                      u.username AS student_name,
-                      u.full_name,         
+                        u.user_id,
+                        u.username AS student_name,
+                        u.full_name,
+                        DATE_FORMAT(u.last_login, '%%d/%%m/%%y - %%l:%%i %%p') AS last_login,
+                        DATE_FORMAT(u.last_logout, '%%d/%%m/%%y - %%l:%%i %%p') AS last_logout,
 
-                      COALESCE(st.total_subtopic_marks, 0)             AS total_subtopic_marks,
-                      
-
-                      COALESCE(am.total_assignment_marks, 0)           AS total_assignment_marks,
-                      
-                      COALESCE(us.total_hours, 0)                      AS total_hours
+                        COALESCE(st.total_subtopic_marks, 0) AS total_subtopic_marks,
+                        COALESCE(am.total_assignment_marks, 0) AS total_assignment_marks,
+                        COALESCE(us.total_hours, 0) AS total_hours
 
                     FROM users u
 
                     LEFT JOIN (
-                      SELECT student_id,
-                             SUM(marks_obtained) AS total_subtopic_marks,
-                             SUM(max_marks) AS total_subtopic_max_marks
-                      FROM sub_topic_marks
-                      GROUP BY student_id
+                        SELECT student_id,
+                               SUM(marks_obtained) AS total_subtopic_marks,
+                               SUM(max_marks) AS total_subtopic_max_marks
+                        FROM sub_topic_marks
+                        GROUP BY student_id
                     ) st ON st.student_id = u.user_id
 
                     LEFT JOIN (
-                      SELECT student_id,
-                             SUM(marks_obtained) AS total_assignment_marks,
-                             SUM(max_marks) AS total_assignment_max_marks
-                      FROM assignment_marks
-                      GROUP BY student_id
+                        SELECT student_id,
+                               SUM(marks_obtained) AS total_assignment_marks,
+                               SUM(max_marks) AS total_assignment_max_marks
+                        FROM assignment_marks
+                        GROUP BY student_id
                     ) am ON am.student_id = u.user_id
 
                     LEFT JOIN (
-                      SELECT user_id,
-                             ROUND(SUM(duration_seconds) / 3600, 2) AS total_hours
-                      FROM user_sessions
-                      GROUP BY user_id
+                        SELECT user_id,
+                               ROUND(SUM(duration_seconds) / 3600, 2) AS total_hours
+                        FROM user_sessions
+                        GROUP BY user_id
                     ) us ON us.user_id = u.user_id
 
                     WHERE u.user_id = %s;
@@ -818,11 +836,23 @@ async def get_overall_report(user_id: int):
                 if not row:
                     raise HTTPException(status_code=404, detail=f"No user found with id {user_id}")
 
-                return {"status": "success", "data": row}
+                return {
+                    "status": "success",
+                    "data": {
+                        "user_id": row["user_id"],
+                        "student_name": row["student_name"],
+                        "full_name": row["full_name"],
+                        "last_login": row["last_login"] or "Never logged in",
+                        "last_logout": row["last_logout"] or "Still logged in",
+                        "total_subtopic_marks": row["total_subtopic_marks"],
+                        "total_assignment_marks": row["total_assignment_marks"],
+                        "total_hours": row["total_hours"]
+                    }
+                }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    
+        raise HTTPException(status_code=500, detail=f"Error fetching overall report: {str(e)}")
+
 
 
 

@@ -648,7 +648,7 @@ const SuperAdminAccessCreation = () => {
   };
 
   return (
-    <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
+    <div className="p-4 lg:p-6 mt-30 min-h-screen">
       <div className="space-y-4 lg:space-y-6 mx-0 lg:mx-4">
         {/* Radio Tabs - Centered */}
         <div className="flex justify-center gap-2 lg:gap-4 mb-6 overflow-x-auto pb-2">

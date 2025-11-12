@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import AdminHeader from "../../components/AdminComponents/AdminHeader";
 import AdminSidebar from "../../components/AdminComponents/Sidebar";
-import SuperAdminHome from "../../components/SuperAdminComponents/SuperAdminHome";
+import AdminHome from "../../components/AdminComponents/AdminHome";
 
 const SuperAdminHomePage = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -34,7 +34,7 @@ const SuperAdminHomePage = () => {
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
-          <SuperAdminHome />
+          <AdminHome />
         </main>
       </div>
     </div>

@@ -21,6 +21,9 @@ const TeacherDuration = () => {
     data: false,
     departments: false,
   });
+  const [searchInput, setSearchInput] = useState("");
+  const [filteredDepartments, setFilteredDepartments] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const [storedUser] = useState(() => {
     const user = localStorage.getItem("user");
@@ -45,6 +48,7 @@ const TeacherDuration = () => {
           const deptData = await deptRes.json();
           if (deptData.status === "success") {
             setDepartments(deptData.data);
+            setFilteredDepartments(deptData.data);
           }
         }
       } catch (error) {
@@ -84,40 +88,107 @@ const TeacherDuration = () => {
     fetchTotalDuration();
   }, [selectedDepartment]);
 
+  // Handle search input change
+  const handleSearchChange = (e) => {
+    const query = e.target.value;
+    setSearchInput(query);
+    
+    if (query === "") {
+      setFilteredDepartments(departments);
+    } else {
+      const filtered = departments.filter((dept) =>
+        dept.department_name.toLowerCase().includes(query.toLowerCase())
+      );
+      setFilteredDepartments(filtered);
+    }
+  };
+
+  // Handle department selection
+  const handleDepartmentSelect = (dept) => {
+    setSelectedDepartment(dept.department_id);
+    setSearchInput(dept.department_name);
+    setShowDropdown(false);
+    setFilteredDepartments(departments);
+  };
+
+  // Clear search and reset when input is focused
+  const handleInputFocus = () => {
+    setShowDropdown(true);
+    if (selectedDepartment) {
+      setSearchInput("");
+      setFilteredDepartments(departments);
+    }
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.department-dropdown')) {
+        setShowDropdown(false);
+        // Restore selected department name if user clicks away without selecting
+        if (selectedDepartment) {
+          const selectedDeptName = departments.find(d => d.department_id === selectedDepartment)?.department_name || "";
+          setSearchInput(selectedDeptName);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [selectedDepartment, departments]);
+
   const getBarColor = (hours) => {
-    if (hours < 2) return "#ef4444"; // red
-    if (hours < 5) return "#f59e0b"; // yellow
-    if (hours < 10) return "#3b82f6"; // blue
-    if (hours < 15) return "#10b981"; // green
-    return "#059669"; // darker green for >15
+    if (hours < 2) return "rgba(239, 68, 68, 0.8)"; // 🔴 red
+    if (hours < 4) return "rgba(249, 115, 22, 0.8)"; // 🟠 orange
+    if (hours < 6) return "rgba(234, 179, 8, 0.8)";  // 🟡 yellow
+    if (hours < 10) return "rgba(59, 130, 246, 0.8)"; // 🔵 blue
+    return "rgba(34, 197, 94, 0.8)"; // 🟢 green
   };
 
   // Filters section
   const renderFilters = () => (
-    <div className="mb-6 p-4 bg-white rounded-lg shadow-sm border border-gray-200">
+    <div className="mb-6 p-4 bg-white rounded-lg mt-30 shadow-sm border border-gray-200">
       <div className="flex-1">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Select Department
         </label>
-        <select
-          value={selectedDepartment}
-          onChange={(e) => setSelectedDepartment(e.target.value)}
-          disabled={loading.departments || departments.length === 0}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
-        >
-          <option value="">
-            {loading.departments
-              ? "Loading departments..."
-              : departments.length
-              ? "Select Department"
-              : "No departments found"}
-          </option>
-          {departments.map((dept) => (
-            <option key={dept.department_id} value={dept.department_id}>
-              {dept.department_name || dept.name}
-            </option>
-          ))}
-        </select>
+        <div className="relative department-dropdown">
+          <input
+            type="text"
+            placeholder={loading.departments ? "Loading departments..." : "Search departments..."}
+            value={searchInput}
+            onChange={handleSearchChange}
+            onFocus={handleInputFocus}
+            disabled={loading.departments || departments.length === 0}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
+          />
+
+          {/* Dropdown results */}
+          {showDropdown && (
+            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+              {filteredDepartments.length > 0 ? (
+                filteredDepartments.map((dept) => (
+                  <div
+                    key={dept.department_id}
+                    onClick={() => handleDepartmentSelect(dept)}
+                    className={`p-2 cursor-pointer hover:bg-blue-100 text-sm ${
+                      selectedDepartment === dept.department_id ? "bg-blue-50" : ""
+                    }`}
+                  >
+                    {dept.department_name}
+                  </div>
+                ))
+              ) : (
+                <div className="p-2 text-gray-500 text-sm">No departments found.</div>
+              )}
+            </div>
+          )}
+        </div>
+        {departments.length === 0 && !loading.departments && (
+          <p className="text-red-500 text-xs mt-1">No departments available</p>
+        )}
       </div>
     </div>
   );
@@ -148,7 +219,7 @@ const TeacherDuration = () => {
         <div className="relative h-96">
           <Bar
             data={{
-              labels: durationData.map((d, i) => `${i + 1}. ${d.student_name}`),
+              labels: durationData.map((d, i) => `${i + 1}. ${d.student_name} - ${d.full_name}`),
               datasets: [
                 {
                   label: "Total Hours",
@@ -186,23 +257,27 @@ const TeacherDuration = () => {
             }}
           />
         </div>
-        {/* Custom Legend */}
-        <div className="flex justify-around mt-4 pt-4 border-t border-gray-200">
+        {/* Updated Custom Legend to match new color ranges */}
+        <div className="flex flex-wrap justify-center gap-4 mt-4 pt-4 border-t border-gray-200">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-red-500 rounded"></div>
+            <div className="w-4 h-4 bg-red-500 rounded" style={{backgroundColor: "rgba(239, 68, 68, 0.8)"}}></div>
             <span className="text-xs text-gray-600">Less than 2 hours</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-yellow-500 rounded"></div>
-            <span className="text-xs text-gray-600">Less than 5 hours</span>
+            <div className="w-4 h-4 rounded" style={{backgroundColor: "rgba(249, 115, 22, 0.8)"}}></div>
+            <span className="text-xs text-gray-600">Less than 4 hours</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-blue-500 rounded"></div>
+            <div className="w-4 h-4 rounded" style={{backgroundColor: "rgba(234, 179, 8, 0.8)"}}></div>
+            <span className="text-xs text-gray-600">Less than 6 hours</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-blue-500 rounded" style={{backgroundColor: "rgba(59, 130, 246, 0.8)"}}></div>
             <span className="text-xs text-gray-600">Less than 10 hours</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-green-500 rounded"></div>
-            <span className="text-xs text-gray-600">Less than 15 hours</span>
+            <div className="w-4 h-4 bg-green-500 rounded" style={{backgroundColor: "rgba(34, 197, 94, 0.8)"}}></div>
+            <span className="text-xs text-gray-600">10+ hours</span>
           </div>
         </div>
       </div>

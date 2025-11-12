@@ -109,7 +109,7 @@ const OverallResult = () => {
                     {data.total_hours} hrs
                   </td>
                   <td className="border border-gray-200 px-2 lg:px-4 py-2 text-xs lg:text-base text-gray-700 font-medium">
-                    27/09/25 - 9:45 AM
+                    {data.last_login} 
                   </td>
                 </tr>
               </tbody>

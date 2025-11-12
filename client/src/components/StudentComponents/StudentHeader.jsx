@@ -37,7 +37,7 @@ const StudentHeader = ({ onMenuToggle }) => {
     if (storedUser) {
       const parsedUser = JSON.parse(storedUser);
 
-      // ✅ Call backend to update last logout timestamp
+      
       await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/users/logout/${parsedUser.user_id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -51,6 +51,7 @@ const StudentHeader = ({ onMenuToggle }) => {
     window.location.href = "/";
   }
 };
+
 
   const handleProfileClick = () => {
     navigate("/student/profilepage");

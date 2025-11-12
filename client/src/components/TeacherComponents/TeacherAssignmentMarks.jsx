@@ -72,7 +72,7 @@ const TeacherAssignmentMarks = () => {
 
   // Filters section
   const renderFilters = () => (
-    <div className="mb-6 p-4 bg-white rounded-lg shadow-sm border border-gray-200">
+    <div className="mb-6 p-4 bg-white rounded-lg mt-30 shadow-sm border border-gray-200">
       <div className="flex-1">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Select Department
@@ -136,7 +136,7 @@ const TeacherAssignmentMarks = () => {
               {assignmentMarksData.map((student, index) => (
                 <tr key={index} className="hover:bg-gray-50 text-sm">
                   <td className="px-4 py-3 font-medium text-gray-900 border border-gray-400">
-                    {index + 1}. {student.student_name}
+                    {index + 1}. {student.student_name} - {student.full_name}
                   </td>
                   <td className="px-4 py-3 border border-gray-400 text-gray-700">
                     {student.total_marks_obtained}

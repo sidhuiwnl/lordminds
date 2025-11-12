@@ -237,6 +237,7 @@ async def get_assignment_marks(department_id: int = None):
                     SELECT 
                         u.user_id,
                         u.username AS student_name,
+                        u.full_name,
                         d.department_name,
                         SUM(am.marks_obtained) AS total_marks_obtained,
                         SUM(am.max_marks) AS total_max_marks
@@ -258,9 +259,12 @@ async def get_assignment_marks(department_id: int = None):
                 cursor.execute(query, tuple(params))
                 data = cursor.fetchall()
 
+                
+
                 result = [
                     {
                         "student_name": row["student_name"],
+                        "full_name": row["full_name"],
                         "department_name": row["department_name"],
                         "total_marks_obtained": row["total_marks_obtained"],
                         "total_max_marks": row["total_max_marks"],
@@ -297,6 +301,7 @@ async def get_topic_average_marks(department_id: int = None):
                 query = """
                     SELECT 
                         u.username AS student_name,
+                        u.full_name,
                         d.department_name AS department_name,
                         t.topic_name AS topic_name,
                         ROUND(SUM(stm.marks_obtained) / SUM(stm.max_marks) * 100, 2) AS average_percentage,
@@ -329,6 +334,7 @@ async def get_topic_average_marks(department_id: int = None):
                     if name not in student_data:
                         student_data[name] = {
                             "student_name": name,
+                            "full_name": row["full_name"],
                             "department_name": row["department_name"],
                             "topics": []
                         }
@@ -366,6 +372,7 @@ async def get_total_session_duration(department_id: int = None):
                     SELECT 
                         u.user_id,
                         u.username AS student_name,
+                        u.full_name,
                         d.department_name,
                         COALESCE(SUM(us.duration_seconds), 0) AS total_duration_seconds
                     FROM user_sessions us
@@ -392,6 +399,7 @@ async def get_total_session_duration(department_id: int = None):
                     total_hours = round(total_seconds / 3600, 2)
                     result.append({
                         "student_name": row["student_name"],
+                        "full_name": row["full_name"],
                         "department_name": row["department_name"],
                         "total_duration_hours": total_hours
                     })
@@ -412,22 +420,24 @@ async def get_total_session_duration(department_id: int = None):
 @router.get("/overall-report/{department_id}")
 async def get_overall_report(department_id: int = None):
     """
-    Fetch overall report combining assignment marks, topic averages, and session durations,
-    optionally filtered by department.
+    Fetch overall report combining assignment marks, topic averages,
+    session durations, and last login — optionally filtered by department.
     """
     try:
         with get_db() as conn:
-            with conn.cursor() as cursor:
+            with conn.cursor() as cursor:  # ✅ use dictionary=True
                 params = []
 
                 # -------------------------------
-                # 1️⃣ Fetch assignment marks
+                # 1️⃣ Fetch assignment marks (including last_login)
                 # -------------------------------
                 assignment_query = """
                     SELECT 
                         u.user_id,
                         u.username AS student_name,
+                        u.full_name,
                         d.department_name,
+                        u.last_login,  -- ✅ Added
                         SUM(am.marks_obtained) AS total_assignment_marks,
                         SUM(am.max_marks) AS total_assignment_max
                     FROM assignment_marks am
@@ -439,7 +449,7 @@ async def get_overall_report(department_id: int = None):
                     assignment_query += " WHERE u.department_id = %s"
                     params.append(department_id)
 
-                assignment_query += " GROUP BY u.user_id, u.username, d.department_name"
+                assignment_query += " GROUP BY u.user_id, u.username, d.department_name, u.last_login"
                 cursor.execute(assignment_query, tuple(params))
                 assignment_data = cursor.fetchall()
 
@@ -459,10 +469,12 @@ async def get_overall_report(department_id: int = None):
 
                 topic_query += " GROUP BY u.user_id"
                 cursor.execute(topic_query, (department_id,) if department_id else ())
-                topic_data = {row["user_id"]: row["topic_average_percentage"] for row in cursor.fetchall()}
+                topic_data = {
+                    row["user_id"]: row["topic_average_percentage"] for row in cursor.fetchall()
+                }
 
                 # -------------------------------
-                # 3️⃣ Fetch session durations
+                # 3️⃣ Fetch total session durations
                 # -------------------------------
                 session_query = """
                     SELECT 
@@ -477,7 +489,9 @@ async def get_overall_report(department_id: int = None):
 
                 session_query += " GROUP BY u.user_id"
                 cursor.execute(session_query, (department_id,) if department_id else ())
-                session_data = {row["user_id"]: row["total_duration_seconds"] for row in cursor.fetchall()}
+                session_data = {
+                    row["user_id"]: row["total_duration_seconds"] for row in cursor.fetchall()
+                }
 
                 # -------------------------------
                 # 4️⃣ Combine all data
@@ -489,20 +503,28 @@ async def get_overall_report(department_id: int = None):
                     max_marks = row["total_assignment_max"] or 0
                     percentage = round((total_marks / max_marks) * 100, 2) if max_marks > 0 else 0
 
-                    # Get topic avg and duration
                     topic_avg = topic_data.get(user_id, 0)
                     total_seconds = int(session_data.get(user_id, 0))
                     total_hours = round(total_seconds / 3600, 2)
 
+                    # ✅ Format last login from users table
+                    last_login = (
+                        row["last_login"].strftime("%d/%m/%y - %I:%M %p")
+                        if row["last_login"]
+                        else "No Login"
+                    )
+
                     overall_report.append({
                         "student_name": row["student_name"],
+                        "full_name": row["full_name"],
                         "department_name": row["department_name"],
                         "assignment_percentage": percentage,
                         "topic_average_percentage": topic_avg,
-                        "total_session_hours": total_hours
+                        "total_session_hours": total_hours,
+                        "last_login": last_login  # ✅ included
                     })
 
-                # Sort by performance (optional)
+                # Sort by performance
                 overall_report.sort(key=lambda x: x["assignment_percentage"], reverse=True)
 
                 return {

@@ -570,7 +570,7 @@ const SuperAdminUpload = () => {
   );
 
   return (
-    <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
+    <div className="p-4 lg:p-6 mt-30 min-h-screen">
       {/* Radio Tabs - Centered */}
       <ToastContainer />
       <div className="flex justify-center gap-2 lg:gap-4 mb-6 overflow-x-auto pb-2">

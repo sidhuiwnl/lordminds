@@ -693,7 +693,7 @@ const SuperAdminReports = () => {
   return (
     <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
       {/* Tabs */}
-      <div className="flex justify-center gap-2 lg:gap-4 mb-6 overflow-x-auto pb-2">
+      <div className="flex justify-center mt-30 gap-2 lg:gap-4 mb-6 overflow-x-auto pb-2">
         {tabs.map((tab) => (
           <div
             key={tab.id}

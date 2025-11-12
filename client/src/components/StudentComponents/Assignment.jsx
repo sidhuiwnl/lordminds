@@ -1,41 +1,45 @@
-import React, { useEffect, useState, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useState, useRef } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import RecordRTC from "recordrtc";
+import { ToastContainer, toast } from "react-toastify";
 
 const Assignments = () => {
   const { assignment } = useParams();
+  const navigate = useNavigate();
   const [questions, setQuestions] = useState([]);
+  const [heading, setHeading] = useState("");
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [recording, setRecording] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState(null);
-
-  console.log(questions)
-
-  const recorderRef = useRef(null);
-
-  // Store answers per question
+  const [analysisResults, setAnalysisResults] = useState({});
+  const [feedback, setFeedback] = useState("");
   const [answers, setAnswers] = useState({});
-  const totalSteps = questions.length;
+  const recorderRef = useRef(null);
+  const [sessionId, setSessionId] = useState(null);
+ const [sessionEnded, setSessionEnded] = useState(false);
 
-  // Fetch assignment questions
+
+  const totalSteps = questions.length;
+  const API_URL = import.meta.env.VITE_BACKEND_API_URL;
+  const user = JSON.parse(localStorage.getItem("user"));
+  const userId = user?.user_id;
+
+  // ✅ Fetch Assignment Questions
   useEffect(() => {
     const fetchQuestions = async () => {
       try {
         setLoading(true);
-        const res = await fetch(
-          `${import.meta.env.VITE_BACKEND_API_URL}/assignments/get/${assignment}/questions`
-        );
+        const res = await fetch(`${API_URL}/assignments/get/${assignment}/questions`);
         const data = await res.json();
 
-        console.log(data)
-
-        // Assuming backend returns an array directly
         if (Array.isArray(data)) {
           const parsed = data.map((q) => ({
             ...q,
-            question_data: q.question_data || "{}",
+            question_data:
+              typeof q.question_data === "string"
+                ? JSON.parse(q.question_data || "{}")
+                : q.question_data || {},
           }));
           setQuestions(parsed);
         } else {
@@ -49,203 +53,366 @@ const Assignments = () => {
     };
 
     fetchQuestions();
-  }, [assignment]);
+  }, [assignment, API_URL]);
 
   const currentQuestion = questions[currentStep - 1];
 
-  // MCQ option selection handler
-  const handleOptionChange = (option) => {
-    setAnswers({ ...answers, [currentQuestion.question_id]: option });
+
+  useEffect(() => {
+  if (!userId || sessionEnded) return;
+
+  const startSession = async () => {
+    try {
+      const res = await fetch(`${API_URL}/tests/start/${userId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: parseInt(userId) }),
+      });
+      const data = await res.json();
+      if (data.status === "success") {
+        setSessionId(data.session_id);
+        console.log("✅ Assignment session started:", data.session_id);
+      }
+    } catch (err) {
+      console.error("Error starting session:", err);
+    }
   };
 
-  // Audio recording
+  startSession();
+}, [userId]);
+
+
+const endSession = async () => {
+  if (!sessionId || sessionEnded) return;
+  try {
+    await fetch(`${API_URL}/tests/end/${sessionId}`, { method: "PUT" });
+    console.log("✅ Assignment session ended:", sessionId);
+    setSessionEnded(true);
+  } catch (err) {
+    console.error("Error ending session:", err);
+  }
+};
+
+  // 🎤 Start Recording
   const startRecording = async () => {
-    setAnalysisResult(null);
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    setFeedback("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new RecordRTC(stream, {
+        type: "audio",
+        mimeType: "audio/wav",
+        recorderType: RecordRTC.StereoAudioRecorder,
+        numberOfAudioChannels: 1,
+        desiredSampRate: 16000,
+      });
 
-    const recorder = new RecordRTC(stream, {
-      type: "audio",
-      mimeType: "audio/wav",
-      recorderType: RecordRTC.StereoAudioRecorder,
-      numberOfAudioChannels: 1,
-      desiredSampRate: 16000,
-    });
-
-    recorder.startRecording();
-    recorderRef.current = recorder;
-    setRecording(true);
+      recorder.startRecording();
+      recorderRef.current = recorder;
+      setRecording(true);
+    } catch (err) {
+      console.error("Error starting recording:", err);
+      setFeedback("⚠️ Please allow microphone access.");
+    }
   };
 
+  // 🎤 Stop Recording → Auto Analyze
   const stopRecording = async () => {
     if (!recorderRef.current) return;
+    try {
+      await recorderRef.current.stopRecording(async () => {
+        const blob = recorderRef.current.getBlob();
+        setRecording(false);
+        setAnswers((prev) => ({ ...prev, [`audio-${currentQuestion.question_id}`]: blob }));
 
-    await recorderRef.current.stopRecording(() => {
-      const blob = recorderRef.current.getBlob();
-      setAnswers({ ...answers, [`audio-${currentQuestion.question_id}`]: blob });
-      setRecording(false);
-    });
+        // 🗣️ Announce analyzing
+        if (window.speechSynthesis) {
+          const utter = new SpeechSynthesisUtterance("Analyzing your answer");
+          utter.lang = "en-US";
+          utter.rate = 1;
+          speechSynthesis.speak(utter);
+        }
+
+        await sendAudioForAnalysis(blob);
+      });
+    } catch (err) {
+      console.error("Error stopping recording:", err);
+    }
   };
 
-  const sendAudioForAnalysis = async () => {
-    const audioBlob = answers[`audio-${currentQuestion.question_id}`];
-    if (!audioBlob) return;
-
+  // 🧠 Analyze Audio
+  const sendAudioForAnalysis = async (audioBlob) => {
     const formData = new FormData();
     formData.append("file", audioBlob, "response.wav");
 
     try {
-      const res = await fetch(
-        `${import.meta.env.VITE_BACKEND_API_URL}/users/analyze-voice`,
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
+      const res = await fetch(`${API_URL}/users/analyze-voice`, {
+        method: "POST",
+        body: formData,
+      });
+
       const result = await res.json();
-      setAnalysisResult(result);
+      const qid = currentQuestion.question_id;
+      setAnalysisResults((prev) => ({ ...prev, [qid]: result }));
+
+      const expectedAnswer =
+        currentQuestion?.question_data?.correct_answer?.toString().toLowerCase() || "";
+      const transcript = result?.transcription?.toLowerCase() || "";
+
+      if (transcript === "could not understand the audio.") {
+        setFeedback("⚠️ Could not understand your answer. Try again.");
+        speechSynthesis.speak(
+          new SpeechSynthesisUtterance("Could not understand your answer, please try again.")
+        );
+        return;
+      }
+
+      // ✅ Check correctness only from voice
+      if (expectedAnswer && transcript.includes(expectedAnswer)) {
+        setFeedback("✅ Correct Answer!");
+        setAnalysisResults((prev) => ({
+          ...prev,
+          [qid]: { ...result, correctness: "correct" },
+        }));
+        // Mark this question as completed
+        setAnswers((prev) => ({ ...prev, [`completed-${qid}`]: true }));
+        speechSynthesis.speak(new SpeechSynthesisUtterance("Correct answer"));
+        setTimeout(() => handleNext(), 1500);
+      } else {
+        setFeedback("❌ Incorrect Answer.");
+        setAnalysisResults((prev) => ({
+          ...prev,
+          [qid]: { ...result, correctness: "wrong" },
+        }));
+        speechSynthesis.speak(new SpeechSynthesisUtterance("Wrong answer"));
+      }
     } catch (err) {
-      console.error("Error sending audio:", err);
-      setAnalysisResult({ error: "Failed to analyze audio" });
+      console.error("Error analyzing audio:", err);
+      setFeedback("⚠️ Error analyzing audio.");
+      speechSynthesis.speak(new SpeechSynthesisUtterance("Error analyzing your answer."));
+    }
+  };
+
+  // 🗣 Speak only option text (no correctness)
+  const handleOptionChange = (option) => {
+    setAnswers({ ...answers, [currentQuestion.question_id]: option });
+    if ("speechSynthesis" in window) {
+      speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(option);
+      utterance.lang = "en-US";
+      utterance.rate = 0.9;
+      speechSynthesis.speak(utterance);
     }
   };
 
   const handlePrevious = () => {
     if (currentStep > 1) setCurrentStep(currentStep - 1);
-    setAnalysisResult(null);
+    setFeedback("");
   };
 
   const handleNext = () => {
     if (currentStep < totalSteps) setCurrentStep(currentStep + 1);
-    setAnalysisResult(null);
+    setFeedback("");
   };
 
+  // 🧮 Calculate Score
+  const calculateScore = () => {
+    let marksObtained = 0;
+    questions.forEach((q) => {
+      const analysis = analysisResults[q.question_id];
+      if (analysis?.correctness === "correct") marksObtained++;
+    });
+    return { marks_obtained: marksObtained, max_marks: questions.length };
+  };
+
+  // 🧾 Submit Results
+  const handleSubmit = async () => {
+    const score = calculateScore();
+    try {
+      const res = await fetch(`${API_URL}/student/store-assignment-marks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          student_id: parseInt(userId),
+          assignment_id: parseInt(assignment),
+          marks_obtained: score.marks_obtained,
+          max_marks: score.max_marks,
+        }),
+      });
+      const data = await res.json();
+      if (data.status === "success") {
+        await endSession();
+        toast.success(
+          `✅ Assignment Completed! You scored ${score.marks_obtained}/${score.max_marks}`
+        );
+        navigate("/student/studenthome");
+      }
+    } catch (err) {
+      console.error("Error submitting assignment:", err);
+      toast.error("Error submitting assignment. Try again.");
+    }
+  };
+
+  // Check if all questions are completed
+  const allCompleted = questions.every((q) => answers[`completed-${q.question_id}`]);
+
+  // 🧭 UI Rendering
   if (loading)
-    return (
-      <div className="flex justify-center items-center h-screen text-gray-600">
-        Loading questions...
-      </div>
-    );
-
+    return <div className="flex justify-center items-center h-screen text-gray-600">Loading questions...</div>;
   if (error)
-    return (
-      <div className="flex justify-center items-center h-screen text-red-500">
-        Error: {error}
-      </div>
-    );
-
+    return <div className="flex justify-center items-center h-screen text-red-500">Error: {error}</div>;
   if (questions.length === 0)
-    return (
-      <div className="flex justify-center items-center h-screen text-gray-600">
-        No questions found for this assignment.
-      </div>
-    );
+    return <div className="flex justify-center items-center h-screen text-gray-600">No questions found.</div>;
 
   return (
     <div className="p-4 lg:p-6 bg-gray-50 mt-30 min-h-screen">
-      <div className="space-y-4 lg:space-y-6 mx-0 lg:mx-4">
-        <div className="bg-white rounded-2xl shadow-sm p-4 lg:p-6 border-t-4 border-r-4 border-[#1b65a6] rounded-bl-lg rounded-tr-lg">
-          <p className="text-xs lg:text-sm font-medium text-gray-700 mb-3 lg:mb-4">
-            {currentStep}. {currentQuestion.question_text}
-          </p>
+      <ToastContainer />
+      <div className="bg-white rounded-2xl shadow-sm p-4 lg:p-6 border-t-4 border-r-4 border-[#1b65a6]">
+        <h2 className="font-bold text-lg lg:text-xl text-gray-800 mb-4">{heading || "Assignment"}</h2>
 
-          {/* Options */}
-          <div className="space-y-3 mb-4 lg:mb-6">
-            {currentQuestion.question_data?.options?.map((option, index) => {
-              const optionLetter = String.fromCharCode(65 + index); // A, B, C, D...
-              const isSelected = answers[currentQuestion.question_id] === option;
+        <p className="text-sm font-medium text-gray-700 mb-4">
+          {currentStep}. {currentQuestion.question_text}
+        </p>
 
-              return (
-                <label
-                  key={index}
-                  className="flex items-center space-x-3 cursor-pointer p-3 lg:p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center justify-center w-5 h-5 rounded-full border-2 border-gray-400 flex-shrink-0">
-                    {isSelected && (
-                      <div className="w-3 h-3 rounded-full bg-[#1b65a6]"></div>
-                    )}
-                  </div>
-                  <input
-                    type="radio"
-                    name={`answer-${currentQuestion.question_id}`}
-                    value={option}
-                    checked={isSelected}
-                    onChange={() => handleOptionChange(option)}
-                    className="sr-only"
-                  />
-                  <span className="text-sm lg:text-base text-gray-700">
-                    <span className="font-medium">{optionLetter} :</span> {option}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-
-          {/* Audio Controls */}
-          <div className="flex items-center space-x-2 lg:space-x-3 mb-4 lg:mb-6">
-            {!recording ? (
-              <button
-                onClick={startRecording}
-                className="px-4 py-2 bg-[#1b65a6] text-white rounded-full hover:bg-blue-700"
+        {/* MCQ Options */}
+        <div className="space-y-3 mb-6">
+          {currentQuestion.question_data?.options?.map((option, index) => {
+            const optionLetter = String.fromCharCode(65 + index);
+            const isSelected = answers[currentQuestion.question_id] === option;
+            return (
+              <label
+                key={index}
+                className={`flex items-center space-x-3 cursor-pointer p-3 border rounded-lg transition-colors ${
+                  isSelected ? "bg-yellow-100 border-yellow-400" : "hover:bg-gray-50"
+                }`}
               >
-                Start Recording
-              </button>
-            ) : (
-              <button
-                onClick={stopRecording}
-                className="px-4 py-2 bg-red-500 text-white rounded-full hover:bg-red-600"
-              >
-                Stop Recording
-              </button>
-            )}
-
-            {answers[`audio-${currentQuestion.question_id}`] && (
-              <button
-                onClick={sendAudioForAnalysis}
-                className="px-4 py-2 bg-green-500 text-white rounded-full hover:bg-green-600"
-              >
-                Analyze Answer
-              </button>
-            )}
-          </div>
-
-          {/* Display Analysis */}
-          {analysisResult && (
-            <div className="bg-gray-100 p-3 rounded-lg mb-4">
-              <p>
-                <strong>Transcription:</strong> {analysisResult.transcription}
-              </p>
-              <p>
-                <strong>Clarity:</strong> {analysisResult.clarity}
-              </p>
-              <p>
-                <strong>Sentiment:</strong> {analysisResult.sentiment}
-              </p>
-              {analysisResult.correctness && (
-                <p>
-                  <strong>Correctness:</strong> {analysisResult.correctness}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Navigation */}
-          <div className="flex items-center justify-between gap-3 sm:gap-0">
-            <button
-              onClick={handlePrevious}
-              disabled={currentStep === 1}
-              className="w-full sm:w-auto px-4 py-2 text-xs lg:text-sm font-medium text-[#1b65a6] border border-[#1b65a6] rounded-full hover:bg-[#1b65a6] hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              &lt;&lt; Previous
-            </button>
-            <button
-              onClick={handleNext}
-              disabled={currentStep === totalSteps}
-              className="w-full sm:w-auto px-4 lg:px-6 py-2 bg-yellow-400 text-gray-900 text-xs lg:text-sm font-medium rounded-full hover:bg-yellow-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Next &gt;&gt;
-            </button>
-          </div>
+                <input
+                  type="radio"
+                  name={`answer-${currentQuestion.question_id}`}
+                  value={option}
+                  checked={isSelected}
+                  onChange={() => handleOptionChange(option)}
+                  className="hidden"
+                />
+                <span className="text-sm text-gray-700">
+                  <strong>{optionLetter}:</strong> {option.toString()}
+                </span>
+              </label>
+            );
+          })}
         </div>
+
+        {/* 🎤 Audio Controls */}
+        <div className="flex items-center gap-3 mb-6">
+          {!recording ? (
+            <button
+              onClick={startRecording}
+              className="px-4 py-2 bg-[#1b65a6] text-white rounded-full hover:bg-blue-700 transition"
+            >
+              Start Recording
+            </button>
+          ) : (
+            <button
+              onClick={stopRecording}
+              className="px-4 py-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition"
+            >
+              Stop Recording
+            </button>
+          )}
+        </div>
+
+        {feedback && (
+          <p
+            className={`mt-2 text-base font-semibold ${
+              feedback.includes("✅")
+                ? "text-green-600"
+                : feedback.includes("❌")
+                ? "text-red-600"
+                : "text-yellow-600"
+            }`}
+          >
+            {feedback}
+          </p>
+        )}
+
+        {/* Navigation */}
+        <div className="flex items-center justify-center gap-2 mt-6">
+          <button
+            onClick={handlePrevious}
+            disabled={currentStep === 1}
+            className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center disabled:opacity-30 hover:bg-gray-800 transition"
+          >
+            ‹
+          </button>
+
+          {questions.map((q, i) => {
+            const qNum = i + 1;
+            const qId = q.question_id;
+            const isActive = currentStep === qNum;
+            const correctness = analysisResults[qId]?.correctness;
+            const color =
+              correctness === "correct"
+                ? "bg-green-400"
+                : correctness === "wrong"
+                ? "bg-red-400"
+                : answers[qId]
+                ? "bg-orange-400"
+                : "bg-gray-300";
+
+            // 🔒 Lock future questions until previous one completed
+            const isUnlocked =
+              qNum === currentStep ||
+              answers[`completed-${questions[qNum - 2]?.question_id}`] ||
+              qNum < currentStep;
+
+            return (
+              <button
+                key={qNum}
+                disabled={!isUnlocked}
+                onClick={() => {
+                  if (isUnlocked) {
+                    setCurrentStep(qNum);
+                    setFeedback("");
+                  }
+                }}
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${
+                  isUnlocked
+                    ? `${color} hover:opacity-90`
+                    : "bg-gray-200 cursor-not-allowed opacity-60"
+                } ${isActive ? "ring-2 ring-yellow-400" : ""}`}
+              >
+                {qNum}
+              </button>
+            );
+          })}
+
+          <button
+            onClick={handleNext}
+            disabled={
+              currentStep === totalSteps ||
+              !answers[`completed-${currentQuestion.question_id}`]
+            }
+            className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center disabled:opacity-30 hover:bg-gray-800 transition"
+          >
+            ›
+          </button>
+        </div>
+
+        {/* ✅ Submit Button */}
+        {currentStep === totalSteps && (
+          <div className="flex justify-center mt-8">
+            <button
+              onClick={handleSubmit}
+              disabled={!allCompleted}
+              className={`px-6 py-2 rounded-lg transition ${
+                allCompleted
+                  ? "bg-yellow-400 text-gray-900 hover:bg-yellow-300"
+                  : "bg-gray-300 text-gray-500 cursor-not-allowed"
+              }`}
+            >
+              {allCompleted ? "Submit Assignment" : "Answer all questions to submit"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

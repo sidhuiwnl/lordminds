@@ -11,6 +11,13 @@ export default function TeacherHome() {
     const [loadingTopics, setLoadingTopics] = useState(false);
     const [loadingStudents, setLoadingStudents] = useState(false);
     const [userId, setUserId] = useState(null);
+    const [filteredDepartments, setFilteredDepartments] = useState([]);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const [searchInput, setSearchInput] = useState("");
+
+    useEffect(() => {
+        setFilteredDepartments(departments);
+    }, [departments]);
 
     // 1️⃣ Get user ID from localStorage
     useEffect(() => {
@@ -105,6 +112,58 @@ export default function TeacherHome() {
         fetchStudentAverages();
     }, [selectedTopic]);
 
+    // Handle search input change
+    const handleSearchChange = (e) => {
+        const query = e.target.value;
+        setSearchInput(query);
+        
+        if (query === "") {
+            setFilteredDepartments(departments);
+        } else {
+            const filtered = departments.filter((dept) =>
+                dept.department_name.toLowerCase().includes(query.toLowerCase())
+            );
+            setFilteredDepartments(filtered);
+        }
+    };
+
+    // Handle department selection
+    const handleDepartmentSelect = (dept) => {
+        setSelectedDept(dept.department_id);
+        setSearchInput(dept.department_name); // Set input to selected department name
+        setShowDropdown(false);
+        setTopicStudents([]);
+        setFilteredDepartments(departments);
+    };
+
+    // Clear search and reset when input is focused
+    const handleInputFocus = () => {
+        setShowDropdown(true);
+        if (selectedDept) {
+            setSearchInput("");
+            setFilteredDepartments(departments);
+        }
+    };
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (!event.target.closest('.department-dropdown')) {
+                setShowDropdown(false);
+                // Restore selected department name if user clicks away without selecting
+                if (selectedDept) {
+                    const selectedDeptName = departments.find(d => d.department_id === selectedDept)?.department_name || "";
+                    setSearchInput(selectedDeptName);
+                }
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [selectedDept, departments]);
+
     const getStatusInfo = (progress) => {
         if (progress === 100)
             return { text: "Completed", color: "bg-green-500", textColor: "text-green-700" };
@@ -117,22 +176,37 @@ export default function TeacherHome() {
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col md:flex-col p-6 gap-6">
             {/* Department Filter */}
-            <select
-                className="border border-gray-300 rounded-lg p-2 w-full bg-white focus:ring-2 focus:ring-blue-500"
-                value={selectedDept}
-                onChange={(e) => {
-                    setSelectedDept(e.target.value);
-                    setSelectedTopic(null); // reset topic
-                    setTopicStudents([]);
-                }}
-            >
-                <option value="">Select Departments</option>
-                {departments.map((dept) => (
-                    <option key={dept.department_id} value={dept.department_id}>
-                        {dept.department_name}
-                    </option>
-                ))}
-            </select>
+            <div className="relative w-full mb-4 department-dropdown">
+                <input
+                    type="text"
+                    placeholder="Search departments..."
+                    value={searchInput}
+                    onChange={handleSearchChange}
+                    onFocus={handleInputFocus}
+                    className="w-full border border-gray-300 rounded-lg p-2 bg-white focus:ring-2 focus:ring-blue-500"
+                />
+
+                {/* Dropdown results */}
+                {showDropdown && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {filteredDepartments.length > 0 ? (
+                            filteredDepartments.map((dept) => (
+                                <div
+                                    key={dept.department_id}
+                                    onClick={() => handleDepartmentSelect(dept)}
+                                    className={`p-2 cursor-pointer hover:bg-blue-100 ${
+                                        selectedDept === dept.department_id ? "bg-blue-50" : ""
+                                    }`}
+                                >
+                                    {dept.department_name}
+                                </div>
+                            ))
+                        ) : (
+                            <div className="p-2 text-gray-500 text-sm">No departments found.</div>
+                        )}
+                    </div>
+                )}
+            </div>
 
             {/* Topic Cards */}
             <h1 className="font-bold text-3xl">Topics</h1>
@@ -193,7 +267,6 @@ export default function TeacherHome() {
                 )}
             </main>
 
-           
             {selectedTopic && (
                 <div className="mt-30 w-full bg-gray-50 flex justify-center">
                     <div className="overflow-x-auto w-full">

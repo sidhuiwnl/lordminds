@@ -9,6 +9,9 @@ const TeacherCurrentMarks = () => {
     data: false,
     departments: false,
   });
+  const [searchInput, setSearchInput] = useState("");
+  const [filteredDepartments, setFilteredDepartments] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const [storedUser] = useState(() => {
     const user = localStorage.getItem("user");
@@ -33,6 +36,7 @@ const TeacherCurrentMarks = () => {
           const deptData = await deptRes.json();
           if (deptData.status === "success") {
             setDepartments(deptData.data);
+            setFilteredDepartments(deptData.data);
           }
         }
       } catch (error) {
@@ -70,6 +74,57 @@ const TeacherCurrentMarks = () => {
     fetchTopicAverages();
   }, [selectedDepartment]);
 
+  // Handle search input change
+  const handleSearchChange = (e) => {
+    const query = e.target.value;
+    setSearchInput(query);
+    
+    if (query === "") {
+      setFilteredDepartments(departments);
+    } else {
+      const filtered = departments.filter((dept) =>
+        dept.department_name.toLowerCase().includes(query.toLowerCase())
+      );
+      setFilteredDepartments(filtered);
+    }
+  };
+
+  // Handle department selection
+  const handleDepartmentSelect = (dept) => {
+    setSelectedDepartment(dept.department_id);
+    setSearchInput(dept.department_name);
+    setShowDropdown(false);
+    setFilteredDepartments(departments);
+  };
+
+  // Clear search and reset when input is focused
+  const handleInputFocus = () => {
+    setShowDropdown(true);
+    if (selectedDepartment) {
+      setSearchInput("");
+      setFilteredDepartments(departments);
+    }
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.department-dropdown')) {
+        setShowDropdown(false);
+        // Restore selected department name if user clicks away without selecting
+        if (selectedDepartment) {
+          const selectedDeptName = departments.find(d => d.department_id === selectedDepartment)?.department_name || "";
+          setSearchInput(selectedDeptName);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [selectedDepartment, departments]);
+
   const getColor = (percent) => {
     if (percent >= 90) return "text-green-600 font-semibold";
     if (percent >= 75) return "text-blue-600 font-semibold";
@@ -79,30 +134,46 @@ const TeacherCurrentMarks = () => {
 
   // Filters section
   const renderFilters = () => (
-    <div className="mb-6 p-4 bg-white rounded-lg shadow-sm border border-gray-200">
+    <div className="mb-6 p-4 bg-white rounded-lg mt-30 shadow-sm border border-gray-200">
       <div className="flex-1">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Select Department
         </label>
-        <select
-          value={selectedDepartment}
-          onChange={(e) => setSelectedDepartment(e.target.value)}
-          disabled={loading.departments || departments.length === 0}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
-        >
-          <option value="">
-            {loading.departments
-              ? "Loading departments..."
-              : departments.length
-              ? "Select Department"
-              : "No departments found"}
-          </option>
-          {departments.map((dept) => (
-            <option key={dept.department_id} value={dept.department_id}>
-              {dept.department_name || dept.name}
-            </option>
-          ))}
-        </select>
+        <div className="relative department-dropdown">
+          <input
+            type="text"
+            placeholder={loading.departments ? "Loading departments..." : "Search departments..."}
+            value={searchInput}
+            onChange={handleSearchChange}
+            onFocus={handleInputFocus}
+            disabled={loading.departments || departments.length === 0}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
+          />
+
+          {/* Dropdown results */}
+          {showDropdown && (
+            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+              {filteredDepartments.length > 0 ? (
+                filteredDepartments.map((dept) => (
+                  <div
+                    key={dept.department_id}
+                    onClick={() => handleDepartmentSelect(dept)}
+                    className={`p-2 cursor-pointer hover:bg-blue-100 text-sm ${
+                      selectedDepartment === dept.department_id ? "bg-blue-50" : ""
+                    }`}
+                  >
+                    {dept.department_name}
+                  </div>
+                ))
+              ) : (
+                <div className="p-2 text-gray-500 text-sm">No departments found.</div>
+              )}
+            </div>
+          )}
+        </div>
+        {departments.length === 0 && !loading.departments && (
+          <p className="text-red-500 text-xs mt-1">No departments available</p>
+        )}
       </div>
     </div>
   );
@@ -173,27 +244,24 @@ const TeacherCurrentMarks = () => {
                 return rankedData.map((student, index) => (
                   <tr key={index} className="hover:bg-gray-50 text-sm">
                     <td className="px-4 py-3 font-medium text-gray-900 border border-gray-400">
-                      {index + 1}. {student.student_name}
+                      {index + 1}. {student.student_name} - {student.full_name}
                     </td>
                     {allTopics.map((topic, i) => {
                       const t = student.topics.find(
                         (tp) => tp.topic_name === topic
                       );
+                      const percentage = t ? t.average_percentage : 0;
                       return (
                         <td
                           key={i}
-                          className={`px-4 py-3 border border-gray-400 ${
-                            t ? (t.average_percentage) : "text-gray-400"
-                          }`}
+                          className={`px-4 py-3 border border-gray-400 ${getColor(percentage)}`}
                         >
-                          {t ? `${t.average_percentage.toFixed(0)}` : "-"}
+                          {t ? `${percentage.toFixed(0)}` : "-"}
                         </td>
                       );
                     })}
                     <td
-                      className={`px-4 py-3 border border-gray-400 ${
-                        (student.average)
-                      }`}
+                      className={`px-4 py-3 border border-gray-400 ${getColor(student.average)}`}
                     >
                       {student.average.toFixed(0)}
                     </td>

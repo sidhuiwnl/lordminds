@@ -81,6 +81,33 @@ async def store_marks(marks_data: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error storing marks: {str(e)}")
     
+    
+@router.post("/store-assignment-marks")
+async def store_assignment_marks(marks_data: dict):
+    """
+    Store marks obtained by student in assignment_marks table.
+    """
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO assignment_marks 
+                    (student_id, assignment_id, marks_obtained, max_marks, graded_at)
+                    VALUES (%s, %s, %s, %s, NOW())
+                """, (
+                    marks_data["student_id"],
+                    marks_data["assignment_id"],
+                    marks_data["marks_obtained"],
+                    marks_data["max_marks"]
+                ))
+                conn.commit()
+                
+        return {"status": "success", "message": "Assignment marks stored successfully"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error storing assignment marks: {str(e)}")
+
+    
 
 
 @router.put("/update/{user_id}")
