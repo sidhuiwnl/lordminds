@@ -139,13 +139,13 @@ const SuperAdminHeader = ({ onMenuToggle }) => {
       </div>
 
       {/* Search Bar */}
-      <div className="w-full sm:absolute sm:top-20 sm:right-8 sm:w-[260px] mt-4 sm:mt-0 max-w-[calc(100%-2rem)] sm:max-w-none">
+      {/* <div className="w-full sm:absolute sm:top-20 sm:right-8 sm:w-[260px] mt-4 sm:mt-0 max-w-[calc(100%-2rem)] sm:max-w-none">
         <input
           type="text"
           placeholder="Search"
           className="w-full bg-white rounded-lg px-3 sm:px-4 py-1.5 sm:py-2 text-gray-700 shadow focus:outline-none text-sm"
         />
-      </div>
+      </div> */}
     </div>
   );
 };

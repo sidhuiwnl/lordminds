@@ -9,7 +9,7 @@ from config.database import get_db
 
 router = APIRouter()
 
-# ✅ Directory setup
+
 UPLOAD_DIR = "uploads/assignments"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 

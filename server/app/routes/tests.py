@@ -1,4 +1,5 @@
 import os
+import traceback
 import uuid
 import json
 import aiofiles
@@ -312,3 +313,408 @@ async def end_session(session_id: int):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error ending session: {str(e)}")    
+    
+
+
+
+@router.put("/update-file/{assignment_id}")
+async def update_assignment_file(assignment_id: int, file: UploadFile = File(...)):
+    """
+    Update an existing assignment's question file.
+    - Deletes the old file from disk
+    - Deletes existing questions
+    - Parses the new Excel file and re-inserts questions
+    """
+    # ✅ Step 1: Validate file type
+    if not file.filename.endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Only Excel (.xlsx/.xls) files are allowed.")
+
+    try:
+        # ✅ Step 2: Get assignment info (to remove old file)
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "SELECT file_path, file_name FROM assignments WHERE assignment_id = %s",
+                    (assignment_id,)
+                )
+                assignment = cursor.fetchone()
+
+                if not assignment:
+                    raise HTTPException(status_code=404, detail="Assignment not found.")
+
+                old_file_path = assignment.get("file_path")
+
+                # ✅ Step 3: Delete old file (if exists)
+                if old_file_path and os.path.exists(old_file_path):
+                    os.remove(old_file_path)
+
+        # ✅ Step 4: Save new file
+        unique_id = str(uuid.uuid4())
+        file_extension = os.path.splitext(file.filename)[1]
+        saved_filename = f"{unique_id}{file_extension}"
+        save_folder = os.path.join(UPLOAD_DIR, "assignment")
+        os.makedirs(save_folder, exist_ok=True)
+        new_file_path = os.path.join(save_folder, saved_filename)
+
+        async with aiofiles.open(new_file_path, "wb") as out_file:
+            while chunk := await file.read(1024 * 1024):
+                await out_file.write(chunk)
+
+        # ✅ Step 5: Parse Excel
+        df = pd.read_excel(new_file_path)
+        if df.empty:
+            raise HTTPException(status_code=400, detail="Uploaded Excel file is empty or invalid.")
+
+        # ✅ Step 6: Remove existing questions for this assignment
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "DELETE FROM questions WHERE test_scope='assignment' AND reference_id=%s",
+                    (assignment_id,)
+                )
+                conn.commit()
+
+        # ✅ Step 7: Re-insert questions
+        question_rows = []
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                for index, row in df.iterrows():
+                    q_type = str(row["Question_Type"]).strip().lower()
+
+                    cursor.execute(
+                        "SELECT question_type_id FROM question_type WHERE question_type=%s",
+                        (q_type,)
+                    )
+                    q_type_row = cursor.fetchone()
+                    if not q_type_row:
+                        raise HTTPException(status_code=400, detail=f"Invalid question type: {q_type}")
+                    q_type_id = q_type_row["question_type_id"]
+
+                    qd = {}
+                    if q_type == "mcq":
+                        qd = {
+                            "options": [
+                                row.get("Option_A"),
+                                row.get("Option_B"),
+                                row.get("Option_C"),
+                                row.get("Option_D")
+                            ],
+                            "correct_answer": row.get("Correct_Answer"),
+                        }
+                    elif q_type == "fill_blank":
+                        qd = {
+                            "sentence": row.get("Question_Text"),
+                            "correct_answers": [
+                                x.strip() for x in str(row.get("Correct_Answer", "")).split(",")
+                            ],
+                        }
+                    elif q_type == "match":
+                        qd = {
+                            "column_a": str(row.get("Option_A", "")).split(";"),
+                            "column_b": str(row.get("Option_B", "")).split(";"),
+                            "correct_pairs": dict(
+                                pair.split("-") for pair in str(row.get("Correct_Answer", "")).split(",") if "-" in pair
+                            ),
+                        }
+                    elif q_type == "own_response":
+                        qd = {"expected_keywords": str(row.get("Extra_Data", "")).split(",")}
+                    elif q_type == "true_false":
+                        qd = {
+                            "statement": row.get("Question_Text"),
+                            "correct_answer": str(row.get("Correct_Answer")).lower() in ["true", "1"],
+                        }
+                    elif q_type == "one_word":
+                        qd = {
+                            "definition": row.get("Question_Text"),
+                            "correct_answer": row.get("Correct_Answer"),
+                        }
+
+                    question_rows.append(
+                        (
+                            "assignment",
+                            assignment_id,
+                            q_type_id,
+                            row.get("Question_Text"),
+                            json.dumps(qd),
+                            row.get("Marks", 1),
+                            row.get("Order_No", index + 1),
+                        )
+                    )
+
+                cursor.executemany(
+                    """
+                    INSERT INTO questions
+                    (test_scope, reference_id, question_type_id, question_text, question_data, marks, order_no, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                    """,
+                    question_rows,
+                )
+
+                # ✅ Step 8: Update file info in assignments table
+                cursor.execute(
+                    """
+                    UPDATE assignments
+                    SET file_name=%s, file_path=%s, updated_at=NOW()
+                    WHERE assignment_id=%s
+                    """,
+                    (file.filename, new_file_path, assignment_id),
+                )
+                conn.commit()
+
+        return {
+            "status": "success",
+            "message": f"Assignment file updated successfully with {len(question_rows)} new questions.",
+            "assignment_id": assignment_id,
+            "file_info": {
+                "original_name": file.filename,
+                "saved_as": saved_filename,
+                "path": new_file_path,
+            },
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("Error updating assignment file:", e)
+        raise HTTPException(status_code=500, detail=f"Error updating assignment file: {str(e)}")
+
+    
+
+
+@router.delete("/delete/{assignment_id}")
+async def delete_assignment(assignment_id: int):
+    """
+    Delete an assignment completely:
+    - Removes from DB
+    - Deletes related questions
+    - Deletes uploaded file from disk (if exists)
+    """
+    try:
+        with get_db() as conn:
+            with conn.cursor(dictionary=True) as cursor:
+                # ✅ Step 1: Get assignment info (to delete file)
+                cursor.execute(
+                    "SELECT file_path, file_name FROM assignments WHERE assignment_id = %s",
+                    (assignment_id,)
+                )
+                assignment = cursor.fetchone()
+
+                if not assignment:
+                    raise HTTPException(status_code=404, detail="Assignment not found")
+
+                file_path = assignment.get("file_path")
+                file_name = assignment.get("file_name")
+
+                # ✅ Step 2: Delete related questions first
+                cursor.execute(
+                    "DELETE FROM questions WHERE test_scope = 'assignment' AND reference_id = %s",
+                    (assignment_id,)
+                )
+                questions_deleted = cursor.rowcount
+
+                # ✅ Step 3: Delete assignment record
+                cursor.execute(
+                    "DELETE FROM assignments WHERE assignment_id = %s",
+                    (assignment_id,)
+                )
+                conn.commit()
+
+        # ✅ Step 4: Delete file (after DB commit)
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception as file_err:
+                print(f"⚠️ Warning: Could not delete file {file_path}: {file_err}")
+
+        elif file_path:
+            # Optional: handle relative path case
+            alt_path = os.path.join("uploads/tests/assignment", os.path.basename(file_path))
+            if os.path.exists(alt_path):
+                try:
+                    os.remove(alt_path)
+                except Exception as file_err:
+                    print(f"⚠️ Warning: Could not delete alternate file {alt_path}: {file_err}")
+
+        return {
+            "status": "success",
+            "message": (
+                f"Assignment ID {assignment_id} deleted successfully! "
+                f"Removed {questions_deleted} related questions."
+            ),
+            "deleted_questions": questions_deleted,
+            "deleted_file": file_name or None,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("❌ Error deleting assignment:", e)
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+
+
+
+@router.put("/update-file/subtopic/{sub_topic_id}")
+async def update_subtopic_file(sub_topic_id: int, file: UploadFile = File(...)):
+    """
+    Update an existing subtopic's question file.
+    - Deletes old file from disk
+    - Deletes existing questions for that subtopic
+    - Parses new Excel file and re-inserts questions
+    """
+    # ✅ Step 1: Validate file type
+    if not file.filename.endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Only Excel (.xlsx/.xls) files are allowed.")
+
+    try:
+        # ✅ Step 2: Get subtopic info (for deleting old file)
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "SELECT test_file, file_name FROM sub_topics WHERE sub_topic_id = %s",
+                    (sub_topic_id,)
+                )
+                sub_topic = cursor.fetchone()
+
+                if not sub_topic:
+                    raise HTTPException(status_code=404, detail="Subtopic not found.")
+
+                old_file_path = sub_topic.get("test_file")
+
+                # ✅ Step 3: Delete old file if exists
+                if old_file_path and os.path.exists(old_file_path):
+                    os.remove(old_file_path)
+
+        # ✅ Step 4: Save new file
+        unique_id = str(uuid.uuid4())
+        file_extension = os.path.splitext(file.filename)[1]
+        saved_filename = f"{unique_id}{file_extension}"
+        save_folder = os.path.join(UPLOAD_DIR, "sub_topic")
+        os.makedirs(save_folder, exist_ok=True)
+        new_file_path = os.path.join(save_folder, saved_filename)
+
+        async with aiofiles.open(new_file_path, "wb") as out_file:
+            while chunk := await file.read(1024 * 1024):  # 1MB chunks
+                await out_file.write(chunk)
+
+        # ✅ Step 5: Parse Excel for new questions
+        df = pd.read_excel(new_file_path)
+        if df.empty:
+            raise HTTPException(status_code=400, detail="Uploaded Excel file is empty or invalid.")
+
+        # ✅ Step 6: Delete existing questions linked to this subtopic
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "DELETE FROM questions WHERE test_scope='sub_topic' AND reference_id=%s",
+                    (sub_topic_id,),
+                )
+                conn.commit()
+
+        # ✅ Step 7: Insert parsed questions
+        question_rows = []
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                for index, row in df.iterrows():
+                    q_type = str(row["Question_Type"]).strip().lower()
+
+                    cursor.execute(
+                        "SELECT question_type_id FROM question_type WHERE question_type=%s",
+                        (q_type,)
+                    )
+                    q_type_row = cursor.fetchone()
+                    if not q_type_row:
+                        raise HTTPException(status_code=400, detail=f"Invalid question type: {q_type}")
+                    q_type_id = q_type_row["question_type_id"]
+
+                    # Build question_data JSON structure
+                    qd = {}
+                    if q_type == "mcq":
+                        qd = {
+                            "options": [
+                                row.get("Option_A"),
+                                row.get("Option_B"),
+                                row.get("Option_C"),
+                                row.get("Option_D")
+                            ],
+                            "correct_answer": row.get("Correct_Answer"),
+                        }
+                    elif q_type == "fill_blank":
+                        qd = {
+                            "sentence": row.get("Question_Text"),
+                            "correct_answers": [
+                                x.strip() for x in str(row.get("Correct_Answer", "")).split(",")
+                            ],
+                        }
+                    elif q_type == "match":
+                        qd = {
+                            "column_a": str(row.get("Option_A", "")).split(";"),
+                            "column_b": str(row.get("Option_B", "")).split(";"),
+                            "correct_pairs": dict(
+                                pair.split("-") for pair in str(row.get("Correct_Answer", "")).split(",") if "-" in pair
+                            ),
+                        }
+                    elif q_type == "own_response":
+                        qd = {"expected_keywords": str(row.get("Extra_Data", "")).split(",")}
+                    elif q_type == "true_false":
+                        qd = {
+                            "statement": row.get("Question_Text"),
+                            "correct_answer": str(row.get("Correct_Answer")).lower() in ["true", "1"],
+                        }
+                    elif q_type == "one_word":
+                        qd = {
+                            "definition": row.get("Question_Text"),
+                            "correct_answer": row.get("Correct_Answer"),
+                        }
+
+                    question_rows.append(
+                        (
+                            "sub_topic",
+                            sub_topic_id,
+                            q_type_id,
+                            row.get("Question_Text"),
+                            json.dumps(qd),
+                            row.get("Marks", 1),
+                            row.get("Order_No", index + 1),
+                        )
+                    )
+
+                # Bulk insert all questions
+                cursor.executemany(
+                    """
+                    INSERT INTO questions
+                    (test_scope, reference_id, question_type_id, question_text, question_data, marks, order_no, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                    """,
+                    question_rows,
+                )
+
+                # ✅ Step 8: Update file info in sub_topics
+                cursor.execute(
+                    """
+                    UPDATE sub_topics
+                    SET file_name=%s, test_file=%s, updated_at=NOW()
+                    WHERE sub_topic_id=%s
+                    """,
+                    (file.filename, new_file_path, sub_topic_id),
+                )
+                conn.commit()
+
+        return {
+            "status": "success",
+            "message": f"Subtopic file updated successfully with {len(question_rows)} new questions.",
+            "sub_topic_id": sub_topic_id,
+            "file_info": {
+                "original_name": file.filename,
+                "saved_as": saved_filename,
+                "path": new_file_path,
+            },
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("❌ Error updating subtopic file:", e)
+        raise HTTPException(status_code=500, detail=f"Error updating subtopic file: {str(e)}")

@@ -31,10 +31,26 @@ const StudentHeader = ({ onMenuToggle }) => {
     fetchUser();
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+  try {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+
+      // ✅ Call backend to update last logout timestamp
+      await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/users/logout/${parsedUser.user_id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  } catch (err) {
+    console.error("Error during logout:", err);
+  } finally {
+    // ✅ Remove user data locally
     localStorage.removeItem("user");
     window.location.href = "/";
-  };
+  }
+};
 
   const handleProfileClick = () => {
     navigate("/student/profilepage");

@@ -777,6 +777,7 @@ async def get_overall_report(user_id: int):
                     SELECT
                       u.user_id,
                       u.username AS student_name,
+                      u.full_name,         
 
                       COALESCE(st.total_subtopic_marks, 0)             AS total_subtopic_marks,
                       
@@ -871,3 +872,34 @@ async def add_profile_image(user_id: int, file: UploadFile = File(...)):
 
 
 
+@router.put("/logout/{user_id}")
+async def user_logout(user_id: int):
+    """
+    Update the user's last logout time when they log out.
+    """
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "SELECT user_id FROM users WHERE user_id = %s", (user_id,)
+                )
+                user = cursor.fetchone()
+                if not user:
+                    raise HTTPException(status_code=404, detail="User not found")
+
+                # ✅ Update last_logout time
+                cursor.execute(
+                    "UPDATE users SET last_logout = %s WHERE user_id = %s",
+                    (datetime.now(), user_id),
+                )
+                conn.commit()
+
+        return {
+            "status": "success",
+            "message": f"User {user_id} logged out successfully",
+            "last_logout": datetime.now().strftime("%d/%m/%y - %I:%M %p"),
+        }
+
+    except Exception as e:
+        print("❌ Logout error:", e)
+        raise HTTPException(status_code=500, detail=f"Error logging out: {str(e)}")

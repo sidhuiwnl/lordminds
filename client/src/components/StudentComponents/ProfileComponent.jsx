@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 const ProfileComponent = () => {
   const [user, setUser] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -70,6 +72,10 @@ const ProfileComponent = () => {
     }
   };
 
+  const handleGoBack = () => {
+    navigate(-1); // Go back to previous page
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
@@ -98,8 +104,31 @@ const ProfileComponent = () => {
   };
 
   return (
-    <div className="flex justify-center items-center min-h-screen bg-gray-50 px-4">
+    <div className="flex justify-center items-center min-h-screen bg-gray-50 px-4 py-8">
       <div className="bg-white w-full max-w-md rounded-2xl shadow-lg p-8 transition-all">
+        {/* Go Back Button */}
+        <div className="mb-6">
+          <button
+            onClick={handleGoBack}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors text-sm font-medium"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              />
+            </svg>
+            Go Back
+          </button>
+        </div>
+
         {/* Profile Image */}
         <div className="flex flex-col items-center relative">
           <div className="relative">

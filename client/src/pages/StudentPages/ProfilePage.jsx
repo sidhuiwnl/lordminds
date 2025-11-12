@@ -35,7 +35,7 @@ const ProfilePage = () => {
       {/* Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <StudentHeader onMenuToggle={toggleMobileMenu} />
+        {/* <StudentHeader onMenuToggle={toggleMobileMenu} /> */}
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto">

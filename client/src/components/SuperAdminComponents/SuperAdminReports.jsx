@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -12,6 +12,97 @@ import { Bar } from "react-chartjs-2";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
+const SearchableSelect = ({ label, value, onChange, options, searchValue, onSearchChange, disabled, placeholder, selectedDisplayName, showDropdown, setShowDropdown, allOptionLabel, refProp }) => {
+  const inputRef = useRef(null);
+
+  return (
+    <div className="flex-1" ref={refProp}>
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="text"
+          placeholder={placeholder}
+          value={searchValue || (value ? selectedDisplayName : '')}
+          onChange={(e) => {
+            onSearchChange(e.target.value);
+            setShowDropdown(true);
+          }}
+          onFocus={() => {
+            setShowDropdown(true);
+            if (inputRef.current && value && !searchValue) {
+              inputRef.current.select();
+            }
+          }}
+          className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
+          disabled={disabled}
+        />
+        <div
+          className={`absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto ${
+            showDropdown ? "block" : "hidden"
+          }`}
+        >
+          {allOptionLabel && (
+            <div
+              key="all"
+              className="px-3 py-2 cursor-pointer hover:bg-gray-100 text-sm border-b border-gray-200"
+              onClick={() => {
+                onChange("");
+                onSearchChange("");
+                setShowDropdown(false);
+              }}
+            >
+              {allOptionLabel}
+            </div>
+          )}
+          {options.map((option) => {
+            const displayName = option.name || option.college_name || option.department_name;
+            const optionValue = option.id || option.college_id || option.department_id;
+            return (
+              <div
+                key={option.id || optionValue}
+                className="px-3 py-2 cursor-pointer hover:bg-gray-100 text-sm"
+                onClick={() => {
+                  onChange(optionValue);
+                  onSearchChange(displayName);
+                  setShowDropdown(false);
+                }}
+              >
+                {displayName}
+              </div>
+            );
+          })}
+          {options.length === 0 && !allOptionLabel && (
+            <div className="px-3 py-2 text-gray-500 text-sm">No options found</div>
+          )}
+        </div>
+        {value && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange("");
+              onSearchChange("");
+              setShowDropdown(true);
+              if (inputRef.current) {
+                inputRef.current.focus();
+                inputRef.current.select();
+              }
+            }}
+            className="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer hover:text-gray-600"
+          >
+            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const SuperAdminReports = () => {
   const [selectedTab, setSelectedTab] = useState("current");
   const [assignmentMarksData, setAssignmentMarksData] = useState([]);
@@ -22,6 +113,12 @@ const SuperAdminReports = () => {
   const [departments, setDepartments] = useState([]);
   const [selectedCollege, setSelectedCollege] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState("");
+  const [collegeSearch, setCollegeSearch] = useState("");
+  const [departmentSearch, setDepartmentSearch] = useState("");
+  const [showCollegeDropdown, setShowCollegeDropdown] = useState(false);
+  const [showDepartmentDropdown, setShowDepartmentDropdown] = useState(false);
+  const collegeRef = useRef(null);
+  const departmentRef = useRef(null);
   const [loading, setLoading] = useState({
     data: false,
     colleges: false,
@@ -53,7 +150,6 @@ const SuperAdminReports = () => {
     }
   };
 
-
   const fetchDepartments = async () => {
     if (!selectedCollege) {
       setDepartments([]);
@@ -76,7 +172,6 @@ const SuperAdminReports = () => {
     }
   };
 
-
   const fetchAssignmentMarks = async () => {
     if (!selectedDepartment) {
       setAssignmentMarksData([]);
@@ -96,7 +191,6 @@ const SuperAdminReports = () => {
       setLoading((p) => ({ ...p, data: false }));
     }
   };
-
 
   const fetchTopicAverages = async () => {
     if (!selectedDepartment) {
@@ -175,6 +269,51 @@ const SuperAdminReports = () => {
   }, [selectedCollege]);
 
   useEffect(() => {
+    setDepartmentSearch("");
+    setShowDepartmentDropdown(false);
+  }, [selectedCollege]);
+
+  useEffect(() => {
+    const currentCollege = colleges.find((c) => c.college_id === selectedCollege);
+    if (
+      collegeSearch &&
+      (!currentCollege ||
+        (!currentCollege.name?.toLowerCase().includes(collegeSearch.toLowerCase()) &&
+          !currentCollege.college_name?.toLowerCase().includes(collegeSearch.toLowerCase())))
+    ) {
+      setSelectedCollege("");
+      setSelectedDepartment("");
+    }
+  }, [collegeSearch, colleges, selectedCollege]);
+
+  useEffect(() => {
+    const currentDept = departments.find((d) => d.department_id === selectedDepartment);
+    if (
+      departmentSearch &&
+      (!currentDept ||
+        (!currentDept.name?.toLowerCase().includes(departmentSearch.toLowerCase()) &&
+          !currentDept.department_name?.toLowerCase().includes(departmentSearch.toLowerCase())))
+    ) {
+      setSelectedDepartment("");
+    }
+  }, [departmentSearch, departments, selectedDepartment]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (collegeRef.current && !collegeRef.current.contains(event.target)) {
+        setShowCollegeDropdown(false);
+      }
+      if (departmentRef.current && !departmentRef.current.contains(event.target)) {
+        setShowDepartmentDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
     if (selectedTab === "assignment") {
       fetchAssignmentMarks();
     } else if (selectedTab === "current") {
@@ -186,7 +325,6 @@ const SuperAdminReports = () => {
     }
   }, [selectedTab, selectedCollege, selectedDepartment]);
 
-  
   const getColor = (percent) => {
     if (percent >= 90) return "text-green-600 font-semibold";
     if (percent >= 75) return "text-blue-600 font-semibold";
@@ -202,48 +340,58 @@ const SuperAdminReports = () => {
     return "#059669"; // darker green for >15
   };
 
-  
+  const filteredColleges = colleges.filter(
+    (college) =>
+      college.name?.toLowerCase().includes(collegeSearch.toLowerCase()) ||
+      college.college_name?.toLowerCase().includes(collegeSearch.toLowerCase())
+  );
+
+  const filteredDepartments = departments.filter(
+    (dept) =>
+      dept.name?.toLowerCase().includes(departmentSearch.toLowerCase()) ||
+      dept.department_name?.toLowerCase().includes(departmentSearch.toLowerCase())
+  );
+
+  const selectedCollegeName = colleges.find((c) => c.college_id === selectedCollege)?.name || colleges.find((c) => c.college_id === selectedCollege)?.college_name || "";
+
+  const selectedDepartmentName = departments.find((d) => d.department_id === selectedDepartment)?.name || departments.find((d) => d.department_id === selectedDepartment)?.department_name || "";
+
   const renderFilters = () => (
     <div className="flex flex-col sm:flex-row gap-4 mb-6 p-4 bg-white rounded-lg shadow-sm border border-gray-200">
-      <div className="flex-1">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Select College
-        </label>
-        <select
-          value={selectedCollege}
-          onChange={(e) => {
-            setSelectedCollege(e.target.value);
-            setSelectedDepartment("");
-          }}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
-          disabled={loading.colleges}
-        >
-          <option value="">All Colleges</option>
-          {colleges.map((college) => (
-            <option key={college.id} value={college.college_id}>
-              {college.name || college.college_name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="flex-1">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Select Department
-        </label>
-        <select
-          value={selectedDepartment}
-          onChange={(e) => setSelectedDepartment(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
-          disabled={!selectedCollege || loading.departments}
-        >
-          <option value="">All Departments</option>
-          {departments.map((dept) => (
-            <option key={dept.id} value={dept.department_id}>
-              {dept.name || dept.department_name}
-            </option>
-          ))}
-        </select>
-      </div>
+      <SearchableSelect
+        label="Select College"
+        value={selectedCollege}
+        onChange={(val) => {
+          setSelectedCollege(val);
+          setSelectedDepartment("");
+          setCollegeSearch("");
+        }}
+        options={filteredColleges}
+        searchValue={collegeSearch}
+        onSearchChange={setCollegeSearch}
+        disabled={loading.colleges}
+        placeholder="Search colleges..."
+        selectedDisplayName={selectedCollegeName}
+        showDropdown={showCollegeDropdown}
+        setShowDropdown={setShowCollegeDropdown}
+        allOptionLabel="All Colleges"
+        refProp={collegeRef}
+      />
+      <SearchableSelect
+        label="Select Department"
+        value={selectedDepartment}
+        onChange={(val) => setSelectedDepartment(val)}
+        options={filteredDepartments}
+        searchValue={departmentSearch}
+        onSearchChange={setDepartmentSearch}
+        disabled={!selectedCollege || loading.departments}
+        placeholder="Search departments..."
+        selectedDisplayName={selectedDepartmentName}
+        showDropdown={showDepartmentDropdown}
+        setShowDropdown={setShowDepartmentDropdown}
+        allOptionLabel="All Departments"
+        refProp={departmentRef}
+      />
     </div>
   );
 
@@ -319,7 +467,7 @@ const SuperAdminReports = () => {
                             <td
                               key={i}
                               className={`px-4 py-3 border border-gray-400 ${
-                                t ? (t.average_percentage) : "text-gray-400"
+                                t ? getColor(t.average_percentage) : "text-gray-400"
                               }`}
                             >
                               {t ? `${t.average_percentage.toFixed(0)}` : "-"}
@@ -328,7 +476,7 @@ const SuperAdminReports = () => {
                         })}
                         <td
                           className={`px-4 py-3 border border-gray-400 ${
-                            (student.average)
+                            getColor(student.average)
                           }`}
                         >
                           {student.average.toFixed(0)}
@@ -494,7 +642,6 @@ const SuperAdminReports = () => {
             <div className="bg-white rounded-lg shadow overflow-hidden min-w-[1000px]">
               <div className="flex justify-between items-center p-4 border-b border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-900">Overall Reports</h2>
-                
               </div>
               <table className="w-full border-collapse">
                 <thead>
@@ -512,10 +659,10 @@ const SuperAdminReports = () => {
                       <td className="px-4 py-3 font-medium text-gray-900 border border-gray-400">
                         {index + 1}. {student.student_name}
                       </td>
-                      <td className={`px-4 py-3 border border-gray-400 ${(student.topic_average_percentage)}`}>
+                      <td className={`px-4 py-3 border border-gray-400 ${getColor(student.topic_average_percentage)}`}>
                         {student.topic_average_percentage}
                       </td>
-                      <td className={`px-4 py-3 border border-gray-400 ${(student.assignment_percentage)}`}>
+                      <td className={`px-4 py-3 border border-gray-400 ${getColor(student.assignment_percentage)}`}>
                         {student.assignment_percentage}
                       </td>
                       <td className="px-4 py-3 border border-gray-400 text-gray-700">

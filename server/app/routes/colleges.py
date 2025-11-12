@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Form, HTTPException
 from  config.database import get_db
 from pydantic import BaseModel,field_validator
-from typing import List
+from typing import List, Optional
 from datetime import datetime
+
 
 router = APIRouter()
 
@@ -154,4 +155,139 @@ async def get_college_departments(college_id: int):
         raise HTTPException(status_code=500, detail=f"Error fetching departments for college {college_id}: {str(e)}")
 
     
-        
+@router.get("/get-all-with-department")
+async def get_colleges():
+    """Fetch all colleges with their departments (via college_departments table)"""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                # Fetch all colleges
+                cursor.execute("SELECT * FROM colleges ORDER BY name")
+                colleges = cursor.fetchall()
+
+                # Fetch all college-department relationships
+                cursor.execute("""
+                    SELECT 
+                        cd.college_id,
+                        d.department_id AS department_id,
+                        d.department_name
+                    FROM college_departments cd
+                    JOIN departments d ON cd.department_id = d.department_id
+                    ORDER BY d.department_name
+                """)
+                college_departments = cursor.fetchall()
+
+                # Group departments by college_id
+                dept_map = {}
+                for row in college_departments:
+                    college_id = row["college_id"]
+                    if college_id not in dept_map:
+                        dept_map[college_id] = []
+                    dept_map[college_id].append({
+                        "department_id": row["department_id"],
+                        "name": row["department_name"]
+                    })
+
+                # Attach departments to each college
+                for college in colleges:
+                    college_id = college["college_id"]
+                    college["departments"] = dept_map.get(college_id, [])
+
+                return {
+                    "status": "success",
+                    "count": len(colleges),
+                    "data": colleges
+                }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching colleges: {str(e)}")
+    
+
+
+
+@router.put("/update/{college_id}")
+async def update_college(
+    college_id: int,
+    name: Optional[str] = Form(None),
+    location: Optional[str] = Form(None),
+    department_ids: Optional[str] = Form(None)  # e.g. "1,2,3"
+):
+    """
+    Update college name/location and optionally add new departments (without removing existing ones).
+    """
+    try:
+        with get_db() as conn:
+            with conn.cursor(dictionary=True) as cursor:
+                # --- 1️⃣ Update basic info ---
+                fields = []
+                values = []
+                if name:
+                    fields.append("name = %s")
+                    values.append(name)
+                if location:
+                    fields.append("location = %s")
+                    values.append(location)
+
+                if fields:
+                    values.append(college_id)
+                    query = f"UPDATE colleges SET {', '.join(fields)} WHERE id = %s"
+                    cursor.execute(query, values)
+                    conn.commit()
+
+                # --- 2️⃣ Add new departments (no overwrite) ---
+                if department_ids:
+                    dept_list = [int(d.strip()) for d in department_ids.split(",") if d.strip().isdigit()]
+
+                    for dept_id in dept_list:
+                        # Only add if not already exists
+                        cursor.execute("""
+                            SELECT 1 FROM college_departments
+                            WHERE college_id = %s AND department_id = %s
+                        """, (college_id, dept_id))
+                        existing = cursor.fetchone()
+
+                        if not existing:
+                            cursor.execute("""
+                                INSERT INTO college_departments (college_id, department_id)
+                                VALUES (%s, %s)
+                            """, (college_id, dept_id))
+                    conn.commit()
+
+                # --- 3️⃣ Fetch updated college ---
+                cursor.execute("SELECT * FROM colleges WHERE id = %s", (college_id,))
+                updated_college = cursor.fetchone()
+
+                if not updated_college:
+                    raise HTTPException(status_code=404, detail="College not found")
+
+                return {
+                    "status": "success",
+                    "message": "College updated successfully",
+                    "updated_college": updated_college
+                }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating college: {str(e)}")
+  
+    
+
+    
+@router.delete("/delete/{college_id}")
+async def delete_college(college_id: int):
+    """Delete a college and its department mappings"""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                # Delete relationships first (to maintain referential integrity)
+                cursor.execute("DELETE FROM college_departments WHERE college_id = %s", (college_id,))
+                # Delete the college itself
+                cursor.execute("DELETE FROM colleges WHERE college_id = %s", (college_id,))
+                conn.commit()
+
+                if cursor.rowcount == 0:
+                    raise HTTPException(status_code=404, detail="College not found")
+
+                return {"status": "success", "message": "College deleted successfully"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting college: {str(e)}")    

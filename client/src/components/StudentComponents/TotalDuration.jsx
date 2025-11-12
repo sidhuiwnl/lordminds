@@ -65,10 +65,11 @@ const TotalDuration = () => {
 
   // 🎨 Set bar color based on hours spent
   const getBarColor = (hours) => {
-    if (hours < 2) return "rgba(239, 68, 68, 0.8)"; // red
-    if (hours < 5) return "rgba(234, 179, 8, 0.8)"; // yellow
-    if (hours < 10) return "rgba(59, 130, 246, 0.8)"; // blue
-    return "rgba(34, 197, 94, 0.8)"; // green
+    if (hours < 2) return "rgba(239, 68, 68, 0.8)"; // 🔴 red
+    if (hours < 4) return "rgba(249, 115, 22, 0.8)"; // 🟠 orange
+    if (hours < 6) return "rgba(234, 179, 8, 0.8)";  // 🟡 yellow
+    if (hours < 10) return "rgba(59, 130, 246, 0.8)"; // 🔵 blue
+    return "rgba(34, 197, 94, 0.8)"; // 🟢 green
   };
 
   const options = {
@@ -106,7 +107,7 @@ const TotalDuration = () => {
   }
 
   return (
-    <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
+    <div className="p-4 lg:p-6 bg-gray-50 mt-30 min-h-screen">
       <div className="space-y-4 lg:space-y-6 mx-0 lg:mx-4">
         <div className="bg-white rounded-2xl shadow-sm p-4 lg:p-6 border-t-4 border-r-4 border-[#1b65a6]">
           <h2 className="font-bold text-lg lg:text-xl text-gray-800 mb-4">
@@ -128,7 +129,8 @@ const TotalDuration = () => {
             {/* Legend */}
             <div className="flex flex-wrap justify-center gap-4 mt-4">
               <LegendItem color="bg-red-500" text="Less than 2 hours" />
-              <LegendItem color="bg-yellow-500" text="Less than 5 hours" />
+              <LegendItem color="bg-orange-500" text="Less than 4 hours" />
+              <LegendItem color="bg-yellow-400" text="Less than 6 hours" />
               <LegendItem color="bg-blue-500" text="Less than 10 hours" />
               <LegendItem color="bg-green-500" text="More than 10 hours" />
             </div>

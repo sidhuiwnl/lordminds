@@ -60,6 +60,8 @@ const OverallResult = () => {
   }
 
   
+
+  
   if (error) {
     return (
       <div className="p-6 text-center text-red-600">{error}</div>
@@ -75,7 +77,7 @@ const OverallResult = () => {
 
   // ✅ Render result table
   return (
-    <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
+    <div className="p-4 lg:p-6 bg-gray-50 mt-30 min-h-screen">
       <div className="space-y-4 lg:space-y-6 mx-0 lg:mx-4">
         <div className="bg-white rounded-2xl shadow-sm p-4 lg:p-6 border-t-4 border-r-4 border-[#1b65a6] rounded-bl-lg rounded-tr-lg">
           <h2 className="font-bold text-lg lg:text-xl text-gray-800 mb-4 lg:mb-6">
@@ -95,7 +97,7 @@ const OverallResult = () => {
               <tbody>
                 <tr className="border-b border-gray-200">
                   <td className="border border-gray-200 px-2 lg:px-4 py-2 text-xs lg:text-base text-gray-700 font-medium">
-                    {data.student_name}
+                    {data.student_name} - {data.full_name}
                   </td>
                   <td className="border border-gray-200 px-2 lg:px-4 py-2 text-xs lg:text-base text-gray-700 font-medium">
                     {data.total_subtopic_marks}

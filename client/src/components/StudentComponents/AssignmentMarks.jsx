@@ -47,7 +47,7 @@ const AssignmentMarks = () => {
   };
 
   return (
-    <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
+    <div className="p-4 lg:p-6 bg-gray-50 mt-30 min-h-screen">
       <div className="bg-white rounded-2xl shadow-sm p-4 lg:p-6 border-t-4 border-r-4 border-[#1b65a6]">
         <h2 className="font-bold text-lg lg:text-xl text-gray-800 mb-6">
           Assignment Marks

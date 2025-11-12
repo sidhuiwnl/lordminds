@@ -1,4 +1,6 @@
 from datetime import datetime
+from typing import Optional
+import bcrypt
 from fastapi import APIRouter, HTTPException, Form, File, UploadFile
 from config.database import get_db
 
@@ -141,3 +143,101 @@ async def get_student_average_for_topic(topic_id: int):
     except Exception as e:
         print("🔥 SQL Error in get_student_average_for_topic:", type(e), e)
         return {"status": "error", "message": str(e)}
+
+
+
+@router.put("/update/{user_id}")
+async def update_teacher(
+    user_id: int,
+    username: Optional[str] = Form(None),
+    password: Optional[str] = Form(None),
+):
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                # Verify user is a teacher
+                cursor.execute(
+                    "SELECT * FROM users WHERE user_id = %s AND role_id = 4", (user_id,)
+                )
+                teacher = cursor.fetchone()
+                if not teacher:
+                    raise HTTPException(status_code=404, detail="Teacher not found")
+
+                updates = []
+                values = []
+
+                if username:
+                    updates.append("username = %s")
+                    values.append(username)
+
+                if password:
+                    hashed_pw = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
+                    updates.append("password_hash = %s")
+                    values.append(hashed_pw.decode("utf-8"))
+
+                if not updates:
+                    return {"status": "fail", "detail": "No fields to update"}
+
+                values.append(user_id)
+                query = f"""
+                    UPDATE users
+                    SET {', '.join(updates)}, updated_at = NOW()
+                    WHERE user_id = %s AND role_id = 4
+                """
+                cursor.execute(query, values)
+                conn.commit()
+
+                # Fetch updated data
+                cursor.execute(
+                    "SELECT user_id, username, full_name, college_id, department_id, created_at FROM users WHERE user_id = %s",
+                    (user_id,),
+                )
+                updated_teacher = cursor.fetchone()
+
+        return {
+            "status": "success",
+            "message": "Teacher updated successfully",
+            "teacher": updated_teacher,
+        }
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating teacher: {str(e)}")
+    
+
+@router.delete("/delete/{user_id}")
+async def delete_teacher(user_id: int):
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                # Check if teacher exists
+                cursor.execute(
+                    "SELECT full_name FROM users WHERE user_id = %s AND role_id = 4",
+                    (user_id,),
+                )
+                teacher = cursor.fetchone()
+
+                if not teacher:
+                    raise HTTPException(status_code=404, detail="Teacher not found")
+
+                try:
+                    cursor.execute("DELETE FROM users WHERE user_id = %s AND role_id = 4", (user_id,))
+                    conn.commit()
+                except Exception as e:
+                    if "1451" in str(e):
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Cannot delete teacher because related records exist.",
+                        )
+                    raise
+
+        return {
+            "status": "success",
+            "message": f"Teacher '{teacher['full_name']}' deleted successfully",
+        }
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting teacher: {str(e)}")    

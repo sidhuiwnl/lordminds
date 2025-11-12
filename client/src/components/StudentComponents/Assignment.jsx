@@ -141,7 +141,7 @@ const Assignments = () => {
     );
 
   return (
-    <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
+    <div className="p-4 lg:p-6 bg-gray-50 mt-30 min-h-screen">
       <div className="space-y-4 lg:space-y-6 mx-0 lg:mx-4">
         <div className="bg-white rounded-2xl shadow-sm p-4 lg:p-6 border-t-4 border-r-4 border-[#1b65a6] rounded-bl-lg rounded-tr-lg">
           <p className="text-xs lg:text-sm font-medium text-gray-700 mb-3 lg:mb-4">

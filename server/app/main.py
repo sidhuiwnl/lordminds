@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from config.database import get_db
 from fastapi.middleware.cors import CORSMiddleware
-from routes import assignments, overviews,users,tests,colleges,topics,questions,departments,administrator,teacher,students
+from routes import assignments, overviews,users,tests,colleges,topics,questions,departments,administrator,teacher,students,superadmin
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(
@@ -33,7 +33,7 @@ app.include_router(departments.router, prefix="/departments", tags=["Departments
 app.include_router(administrator.router, prefix="/administrator", tags=["Administrator"])
 app.include_router(teacher.router, prefix="/teacher", tags=["Teacher"])
 app.include_router(students.router, prefix="/student", tags=["Student"])
-
+app.include_router(superadmin.router, prefix="/superadmin", tags=["Superadmin"])
 
 
 @app.get("/")

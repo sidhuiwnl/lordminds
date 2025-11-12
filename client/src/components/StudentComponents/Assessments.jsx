@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import RecordRTC from "recordrtc";
-import { ToastContainer,toast } from "react-toastify";
+import { ToastContainer, toast } from "react-toastify";
 
 const Assessments = () => {
   const { subtopic } = useParams();
@@ -13,6 +13,7 @@ const Assessments = () => {
   const [error, setError] = useState(null);
   const [recording, setRecording] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
+  const [analysisResults, setAnalysisResults] = useState({});
   const [feedback, setFeedback] = useState("");
   const [answers, setAnswers] = useState({});
   const [sessionId, setSessionId] = useState(null);
@@ -22,13 +23,10 @@ const Assessments = () => {
   const totalSteps = questions.length;
   const API_URL = import.meta.env.VITE_BACKEND_API_URL;
 
-  // 🧠 Get logged-in user from localStorage
   const user = JSON.parse(localStorage.getItem("user"));
   const userId = user?.user_id;
 
-  // ===============================
-  // 🚀 Fetch questions + subtopic
-  // ===============================
+  // 🧭 Fetch Questions and Subtopic Details
   useEffect(() => {
     const fetchQuestions = async () => {
       try {
@@ -70,12 +68,9 @@ const Assessments = () => {
 
   const currentQuestion = questions[currentStep - 1];
 
-  // ===============================
-  // 🕒 Handle Session Start / End
-  // ===============================
+  // 🕒 Start Session
   useEffect(() => {
     if (!userId || sessionEnded) return;
-
     let isMounted = true;
 
     const startSession = async () => {
@@ -83,7 +78,7 @@ const Assessments = () => {
         const res = await fetch(`${API_URL}/tests/start/${userId}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id : parseInt(userId) }), // Include subtopic if backend supports
+          body: JSON.stringify({ user_id: parseInt(userId) }),
         });
         const data = await res.json();
         if (data.status === "success" && isMounted) {
@@ -96,18 +91,12 @@ const Assessments = () => {
     };
 
     startSession();
-
-    // NO CLEANUP HERE: We don't auto-end on unmount/reload. Only end on explicit submit.
-    // If user reloads, a new session starts, and old one remains open (end_time NULL).
-    // Backend can handle stale sessions later if needed (e.g., via cron job).
-  }, [userId, subtopic, API_URL]);  // Removed sessionId/sessionEnded from deps to avoid re-runs
+  }, [userId, subtopic, API_URL]);
 
   const endSession = async () => {
     if (!sessionId || sessionEnded) return;
     try {
-      await fetch(`${API_URL}/tests/end/${sessionId}`, {
-        method: "PUT",
-      });
+      await fetch(`${API_URL}/tests/end/${sessionId}`, { method: "PUT" });
       console.log("✅ Session ended:", sessionId);
       setSessionEnded(true);
     } catch (err) {
@@ -115,9 +104,7 @@ const Assessments = () => {
     }
   };
 
-  // ===============================
   // 🎤 Audio Recording
-  // ===============================
   const startRecording = async () => {
     setAnalysisResult(null);
     setFeedback("");
@@ -144,14 +131,13 @@ const Assessments = () => {
   const stopRecording = async () => {
     if (!recorderRef.current) return;
     try {
-      await recorderRef.current.stopRecording(() => {
+      await recorderRef.current.stopRecording(async () => {
         const blob = recorderRef.current.getBlob();
-        setAnswers({ ...answers, [`audio-${currentQuestion.question_id}`]: blob });
+        setAnswers((prev) => ({ ...prev, [`audio-${currentQuestion.question_id}`]: blob }));
         setRecording(false);
-        // Stop the stream to release microphone
-        recorderRef.current.getDataURL((dataURL) => {
-          // Optional: Handle dataURL if needed
-        });
+
+        // Automatically analyze after stopping recording
+        await sendAudioForAnalysis();
       });
     } catch (err) {
       console.error("Error stopping recording:", err);
@@ -173,6 +159,7 @@ const Assessments = () => {
 
       const result = await res.json();
       setAnalysisResult(result);
+      setAnalysisResults((prev) => ({ ...prev, [currentQuestion.question_id]: result }));
 
       const expectedAnswer =
         currentQuestion?.question_data?.correct_answer?.toString().toLowerCase() || "";
@@ -182,22 +169,56 @@ const Assessments = () => {
         setFeedback("⚠️ Could not understand your answer. Try again.");
       } else if (expectedAnswer && transcript.includes(expectedAnswer)) {
         setFeedback("✅ Correct Answer!");
+        // Auto move to next if correct
+        if (currentStep < totalSteps) {
+          setTimeout(() => handleNext(), 1500); // Delay for user to see feedback
+        }
       } else {
         setFeedback("❌ Incorrect Answer.");
       }
     } catch (err) {
       console.error("Error analyzing audio:", err);
-      setAnalysisResult({ error: "Failed to analyze audio" });
       setFeedback("⚠️ Error analyzing audio. Try again.");
     }
   };
 
-  // ===============================
-  // 🧭 Navigation
-  // ===============================
+  // 🧠 Speak Option Aloud When Selected
   const handleOptionChange = (option) => {
     setAnswers({ ...answers, [currentQuestion.question_id]: option });
+
+    if ("speechSynthesis" in window) {
+      speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance();
+      const optionIndex = currentQuestion.question_data?.options?.indexOf(option);
+      const optionLetter = optionIndex >= 0 ? String.fromCharCode(65 + optionIndex) : "";
+
+      utterance.text = `${option}`;
+      utterance.lang = "en-US";
+      utterance.rate = 0.9;
+      utterance.pitch = 1.1;
+
+      const voices = speechSynthesis.getVoices();
+      const englishVoice = voices.find(
+        (v) => v.lang.startsWith("en") && v.name.toLowerCase().includes("female")
+      );
+      if (englishVoice) utterance.voice = englishVoice;
+
+      speechSynthesis.speak(utterance);
+    }
   };
+
+  // 🗣 Automatically speak question on navigation
+  useEffect(() => {
+    if (currentQuestion?.question_text && "speechSynthesis" in window) {
+      speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(currentQuestion.question_text);
+      utterance.lang = "en-US";
+      utterance.rate = 0.9;
+      utterance.pitch = 1;
+      speechSynthesis.speak(utterance);
+    }
+  }, [currentStep]);
 
   const handlePrevious = () => {
     if (currentStep > 1) setCurrentStep(currentStep - 1);
@@ -211,38 +232,33 @@ const Assessments = () => {
     setFeedback("");
   };
 
-  // ===============================
-  // 🏁 Submit Test (End Session) - UPDATED
-  // ===============================
   const calculateScore = () => {
     let marksObtained = 0;
-    
-    questions.forEach(question => {
+
+    questions.forEach((question) => {
       const userAnswer = answers[question.question_id];
       const correctAnswer = question.question_data?.correct_answer;
-      
-      // For text/MCQ questions - each correct answer = 1 mark
+
       if (userAnswer && correctAnswer !== undefined) {
-        if (userAnswer === correctAnswer) {
-          marksObtained += 1;
-        }
+        if (userAnswer === correctAnswer) marksObtained += 1;
       }
-      
-      // For audio questions - each correct answer = 1 mark
+
       const audioAnswer = answers[`audio-${question.question_id}`];
-      if (audioAnswer && analysisResult?.transcription) {
-        const expectedAnswer = question.question_data?.correct_answer?.toString().toLowerCase() || "";
-        const transcript = analysisResult.transcription.toLowerCase();
+      const qAnalysis = analysisResults[question.question_id];
+      if (audioAnswer && qAnalysis?.transcription) {
+        const expectedAnswer =
+          question.question_data?.correct_answer?.toString().toLowerCase() || "";
+        const transcript = qAnalysis.transcription.toLowerCase();
         if (transcript.includes(expectedAnswer) && expectedAnswer !== "") {
           marksObtained += 1;
         }
       }
     });
-    
+
     return {
       marks_obtained: marksObtained,
       max_marks: questions.length,
-      percentage: (marksObtained / questions.length) * 100
+      percentage: (marksObtained / questions.length) * 100,
     };
   };
 
@@ -251,47 +267,38 @@ const Assessments = () => {
       toast("Session not started. Please refresh and try again.");
       return;
     }
-    
+
     try {
-      // 1. Calculate score (each question = 1 mark)
       const score = calculateScore();
-      
-      // 2. Store marks in database
       const marksResponse = await fetch(`${API_URL}/student/store-marks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           student_id: parseInt(userId),
-          sub_topic_id: parseInt(subtopic), // assuming subtopic is the ID
+          sub_topic_id: parseInt(subtopic),
           marks_obtained: score.marks_obtained,
-          max_marks: score.max_marks
-        })
+          max_marks: score.max_marks,
+        }),
       });
-      
+
       const marksData = await marksResponse.json();
-      
+
       if (marksData.status === "success") {
-        // 3. End session
         await endSession();
-        
-        // 4. Show success message with marks
-        toast.success(`✅ Test Completed! You scored ${score.marks_obtained}/${score.max_marks}`);
-        
-        // 5. Navigate to home
+        toast.success(
+          `✅ Test Completed! You scored ${score.marks_obtained}/${score.max_marks}`
+        );
         navigate("/student/studenthome");
       } else {
         throw new Error("Failed to store marks");
       }
-      
     } catch (err) {
       console.error("Error submitting test:", err);
       toast.error("Error completing test. Please try again.");
     }
   };
 
-  // ===============================
   // ⚙️ UI States
-  // ===============================
   if (loading)
     return (
       <div className="flex justify-center items-center h-screen text-gray-600">
@@ -313,15 +320,15 @@ const Assessments = () => {
       </div>
     );
 
-  // ===============================
   // 🖥️ Main Render
-  // ===============================
   return (
     <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
-      <ToastContainer/>
+      <ToastContainer />
       <div className="space-y-4 lg:space-y-6 mx-0 lg:mx-4">
-        <div className="bg-white rounded-2xl shadow-sm p-4 lg:p-6 border-t-4 border-r-4 border-[#1b65a6] rounded-bl-lg rounded-tr-lg">
-          <h2 className="font-bold text-lg lg:text-xl text-gray-800 mb-4">{heading}</h2>
+        <div className="bg-white rounded-2xl shadow-sm p-4 lg:p-6 border-t-4 border-r-4 border-[#1b65a6]">
+          <h2 className="font-bold text-lg lg:text-xl text-gray-800 mb-4">
+            {heading}
+          </h2>
 
           <p className="text-sm font-medium text-gray-700 mb-4">
             {currentStep}. {currentQuestion.question_text}
@@ -337,7 +344,9 @@ const Assessments = () => {
                 <label
                   key={index}
                   className={`flex items-center space-x-3 cursor-pointer p-3 border rounded-lg transition-colors ${
-                    isSelected ? "bg-yellow-100 border-yellow-400" : "hover:bg-gray-50"
+                    isSelected
+                      ? "bg-yellow-100 border-yellow-400"
+                      : "hover:bg-gray-50"
                   }`}
                 >
                   <input
@@ -349,8 +358,7 @@ const Assessments = () => {
                     className="hidden"
                   />
                   <span className="text-sm text-gray-700">
-                    <strong>{optionLetter}:</strong>{" "}
-                    {typeof option === "boolean" ? option.toString() : option}
+                    <strong>{optionLetter}:</strong> {option.toString()}
                   </span>
                 </label>
               );
@@ -374,15 +382,6 @@ const Assessments = () => {
                 Stop Recording
               </button>
             )}
-
-            {answers[`audio-${currentQuestion.question_id}`] && (
-              <button
-                onClick={sendAudioForAnalysis}
-                className="px-4 py-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition"
-              >
-                Analyze Answer
-              </button>
-            )}
           </div>
 
           {feedback && (
@@ -399,7 +398,7 @@ const Assessments = () => {
             </p>
           )}
 
-          {/* Navigation + Submit */}
+          {/* Navigation */}
           <div className="flex items-center justify-center gap-2 mt-6">
             <button
               onClick={handlePrevious}
@@ -409,10 +408,26 @@ const Assessments = () => {
               ‹
             </button>
 
-            {questions.map((_, index) => {
+            {questions.map((question, index) => {
               const qNum = index + 1;
+              const qId = question.question_id;
               const isActive = currentStep === qNum;
-              const isAnswered = answers[questions[index].question_id];
+              const isAnswered = answers[qId] !== undefined || answers[`audio-${qId}`] !== undefined;
+              const qAnalysis = analysisResults[qId];
+              const correctAnswer = question.question_data?.correct_answer;
+              let isCompleted = false;
+
+              // Check for MCQ completion
+              if (answers[qId] !== undefined && correctAnswer !== undefined) {
+                isCompleted = answers[qId] === correctAnswer;
+              }
+
+              // Check for audio completion
+              if (answers[`audio-${qId}`] && qAnalysis?.transcription) {
+                const expectedAnswer = correctAnswer?.toString().toLowerCase() || "";
+                const transcript = qAnalysis.transcription.toLowerCase();
+                isCompleted = transcript.includes(expectedAnswer) && expectedAnswer !== "";
+              }
 
               return (
                 <button
@@ -425,8 +440,10 @@ const Assessments = () => {
                   className={`w-8 h-8 rounded-full flex items-center justify-center text-sm transition-all ${
                     isActive
                       ? "bg-yellow-400 text-gray-900"
-                      : isAnswered
+                      : isCompleted
                       ? "bg-green-400 text-gray-900"
+                      : isAnswered
+                      ? "bg-orange-400 text-gray-900"
                       : "bg-gray-300 text-gray-600 hover:bg-gray-400"
                   }`}
                 >
@@ -444,7 +461,7 @@ const Assessments = () => {
             </button>
           </div>
 
-          {/* ✅ Submit Button (Only at Last Question) */}
+          {/* ✅ Submit Button */}
           {currentStep === totalSteps && (
             <div className="flex justify-center mt-8">
               <button

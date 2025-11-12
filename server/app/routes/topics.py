@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List
 from fastapi import APIRouter, Form, HTTPException
 from pydantic import BaseModel
@@ -140,17 +141,95 @@ class AssignTopicsRequest(BaseModel):
     department_name: str
     topics: List[str]  # List of topic names
 
+# @router.post("/assign-topics")
+# async def assign_topics_to_college_department(payload: AssignTopicsRequest):
+#     """
+#     Assign topics to a given college and department by updating department_id on each topic.
+#     Uses college_departments junction for college-dept resolution.
+#     """
+#     skipped_topics = []
+#     assigned_count = 0
+#     try:
+#         with get_db() as conn:
+#             with conn.cursor() as cursor:  # DictCursor built-in
+#                 # 1️⃣ Get college ID
+#                 cursor.execute(
+#                     "SELECT college_id FROM colleges WHERE name = %s",
+#                     (payload.college_name,)
+#                 )
+#                 college = cursor.fetchone()
+#                 if not college:
+#                     raise HTTPException(status_code=404, detail="College not found")
+#                 college_id = college['college_id']
+
+#                 # 2️⃣ Get department ID via JOIN on college_departments
+#                 cursor.execute(
+#                     """
+#                     SELECT d.department_id 
+#                     FROM departments d
+#                     JOIN college_departments cd ON cd.department_id = d.department_id
+#                     WHERE d.department_name = %s AND cd.college_id = %s AND d.is_active = 1
+#                     """,
+#                     (payload.department_name, college_id)
+#                 )
+#                 department = cursor.fetchone()
+#                 if not department:
+#                     raise HTTPException(status_code=404, detail=f"Department '{payload.department_name}' not found for college '{payload.college_name}'")
+#                 department_id = department['department_id']
+
+#                 # 3️⃣ Assign topics to the department
+#                 for topic_name in payload.topics:
+#                     cursor.execute(
+#                         "SELECT topic_id FROM topics WHERE topic_name = %s",
+#                         (topic_name,)
+#                     )
+#                     topic = cursor.fetchone()
+#                     if not topic:
+#                         skipped_topics.append(topic_name)
+#                         continue
+#                     topic_id = topic['topic_id']
+
+#                     # Update (will only affect if changed)
+#                     cursor.execute(
+#                         """
+#                         UPDATE topics 
+#                         SET department_id = %s, updated_at = CURRENT_TIMESTAMP
+#                         WHERE topic_id = %s
+#                         """,
+#                         (department_id, topic_id)
+#                     )
+#                     if cursor.rowcount > 0:
+#                         assigned_count += 1
+
+#                 conn.commit()  # Explicit commit if autocommit=False
+
+#                 # Informative response (no error on 0)
+#                 message = f"Successfully assigned {assigned_count} out of {len(payload.topics)} topics to department ID {department_id}"
+#                 if skipped_topics:
+#                     message += f". Skipped non-existent: {', '.join(skipped_topics)}"
+#                 return {"status": "success", "message": message, "assigned_count": assigned_count}
+
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         # Log full error for debugging (add logger if needed)
+#         print(f"Unexpected error in assign_topics: {str(e)}")  # Or use logging
+#         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+
+
+
 @router.post("/assign-topics")
 async def assign_topics_to_college_department(payload: AssignTopicsRequest):
     """
-    Assign topics to a given college and department by updating department_id on each topic.
-    Uses college_departments junction for college-dept resolution.
+    Assign topics to a given department (via department_topic_map).
+    Does NOT modify the main topics table.
     """
     skipped_topics = []
     assigned_count = 0
     try:
         with get_db() as conn:
-            with conn.cursor() as cursor:  # DictCursor built-in
+            with conn.cursor() as cursor:
                 # 1️⃣ Get college ID
                 cursor.execute(
                     "SELECT college_id FROM colleges WHERE name = %s",
@@ -159,24 +238,21 @@ async def assign_topics_to_college_department(payload: AssignTopicsRequest):
                 college = cursor.fetchone()
                 if not college:
                     raise HTTPException(status_code=404, detail="College not found")
-                college_id = college['college_id']
+                college_id = college["college_id"]
 
-                # 2️⃣ Get department ID via JOIN on college_departments
-                cursor.execute(
-                    """
+                # 2️⃣ Get department ID
+                cursor.execute("""
                     SELECT d.department_id 
                     FROM departments d
                     JOIN college_departments cd ON cd.department_id = d.department_id
                     WHERE d.department_name = %s AND cd.college_id = %s AND d.is_active = 1
-                    """,
-                    (payload.department_name, college_id)
-                )
+                """, (payload.department_name, college_id))
                 department = cursor.fetchone()
                 if not department:
                     raise HTTPException(status_code=404, detail=f"Department '{payload.department_name}' not found for college '{payload.college_name}'")
-                department_id = department['department_id']
+                department_id = department["department_id"]
 
-                # 3️⃣ Assign topics to the department
+                # 3️⃣ Assign topics using mapping table
                 for topic_name in payload.topics:
                     cursor.execute(
                         "SELECT topic_id FROM topics WHERE topic_name = %s",
@@ -186,35 +262,39 @@ async def assign_topics_to_college_department(payload: AssignTopicsRequest):
                     if not topic:
                         skipped_topics.append(topic_name)
                         continue
-                    topic_id = topic['topic_id']
+                    topic_id = topic["topic_id"]
 
-                    # Update (will only affect if changed)
+                    # Avoid duplicates
                     cursor.execute(
-                        """
-                        UPDATE topics 
-                        SET department_id = %s, updated_at = CURRENT_TIMESTAMP
-                        WHERE topic_id = %s
-                        """,
+                        "SELECT 1 FROM department_topic_map WHERE department_id = %s AND topic_id = %s",
                         (department_id, topic_id)
                     )
-                    if cursor.rowcount > 0:
-                        assigned_count += 1
+                    if cursor.fetchone():
+                        skipped_topics.append(topic_name)
+                        continue
 
-                conn.commit()  # Explicit commit if autocommit=False
+                    # Insert new mapping
+                    cursor.execute(
+                        "INSERT INTO department_topic_map (department_id, topic_id, created_at) VALUES (%s, %s, NOW())",
+                        (department_id, topic_id)
+                    )
+                    assigned_count += 1
 
-                # Informative response (no error on 0)
-                message = f"Successfully assigned {assigned_count} out of {len(payload.topics)} topics to department ID {department_id}"
+                conn.commit()
+
+                message = f"Assigned {assigned_count} topic(s) to {payload.department_name}"
                 if skipped_topics:
-                    message += f". Skipped non-existent: {', '.join(skipped_topics)}"
+                    message += f". Skipped existing or missing: {', '.join(skipped_topics)}"
+
                 return {"status": "success", "message": message, "assigned_count": assigned_count}
 
     except HTTPException:
         raise
     except Exception as e:
-        # Log full error for debugging (add logger if needed)
-        print(f"Unexpected error in assign_topics: {str(e)}")  # Or use logging
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
     
+
+
 
 # @router.get("/{user_id}/subtopics")
 # async def get_user_subtopics(user_id: int):
@@ -275,6 +355,8 @@ async def assign_topics_to_college_department(payload: AssignTopicsRequest):
 #         raise HTTPException(status_code=500, detail=f"Error fetching subtopics for user: {str(e)}")   
 # 
 #  
+
+
 
 @router.get("/{user_id}/subtopics")
 async def get_user_subtopics(user_id: int):
@@ -384,6 +466,8 @@ async def get_user_subtopics(user_id: int):
 
 
 
+
+
 class TopicCreate(BaseModel):
     topic_name: str
 
@@ -449,3 +533,150 @@ async def get_overall_report(college_id: int, department_id: int):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+
+
+
+@router.get("/topic-with-department")
+async def get_all_topics():
+    """Fetch all active topics with associated department and college (via department_topic_map)"""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                query = """
+                    SELECT 
+                        t.topic_id,
+                        t.topic_name,
+                        t.topic_number,
+                        d.department_id,
+                        d.department_name,
+                        c.college_id,
+                        c.name AS college_name,
+                        dtm.created_at AS assigned_at
+                    FROM department_topic_map dtm
+                    JOIN topics t ON dtm.topic_id = t.topic_id
+                    JOIN departments d ON dtm.department_id = d.department_id
+                    JOIN college_departments cd ON cd.department_id = d.department_id
+                    JOIN colleges c ON cd.college_id = c.college_id
+                    WHERE t.is_active = TRUE
+                    ORDER BY c.name, d.department_name, t.topic_number
+                """
+                cursor.execute(query)
+                topics = cursor.fetchall()
+
+                return {
+                    "status": "success",
+                    "count": len(topics),
+                    "data": topics
+                }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching topics: {str(e)}")
+    
+
+
+@router.put("/update/{topic_id}")
+async def update_topic_assignment(topic_id: int, topic_name: str = Form(...)):
+    """
+    Update a topic assignment for a department — only change topic reference,
+    ensuring no duplicate topic is assigned to the same department.
+    """
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                # 1️⃣ Get current mapping info
+                cursor.execute("""
+                    SELECT m.map_id, m.department_id, t.topic_name
+                    FROM department_topic_map m
+                    JOIN topics t ON m.topic_id = t.topic_id
+                    WHERE t.topic_id = %s
+                """, (topic_id,))
+                current = cursor.fetchone()
+
+                if not current:
+                    raise HTTPException(status_code=404, detail="Mapping not found for given topic")
+
+                department_id = current["department_id"]
+
+                # 2️⃣ Find the new topic_id by topic_name
+                cursor.execute("SELECT topic_id FROM topics WHERE topic_name = %s", (topic_name,))
+                new_topic = cursor.fetchone()
+                if not new_topic:
+                    raise HTTPException(status_code=404, detail="New topic not found")
+
+                new_topic_id = new_topic["topic_id"]
+
+                # 3️⃣ Check if this topic is already assigned to same department
+                cursor.execute("""
+                    SELECT * FROM department_topic_map
+                    WHERE department_id = %s AND topic_id = %s
+                """, (department_id, new_topic_id))
+                existing = cursor.fetchone()
+
+                if existing:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="This topic is already assigned to the same department."
+                    )
+
+                # 4️⃣ Update mapping to point to the new topic
+                cursor.execute("""
+                    UPDATE department_topic_map
+                    SET topic_id = %s, created_at = %s
+                    WHERE department_id = %s AND topic_id = %s
+                """, (new_topic_id, datetime.now(), department_id, topic_id))
+
+                conn.commit()
+
+                return {
+                    "status": "success",
+                    "message": f"Topic assignment updated successfully to '{topic_name}'"
+                }
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print("Error updating topic assignment:", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+    
+    
+    
+@router.delete("/delete/{topic_id}")
+async def delete_topic(topic_id: int):
+    """Delete a topic by ID."""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                # Check if topic exists
+                cursor.execute("SELECT * FROM topics WHERE topic_id = %s", (topic_id,))
+                topic = cursor.fetchone()
+                if not topic:
+                    raise HTTPException(status_code=404, detail="Topic not found")
+
+                # Optional: Check if assigned to any department (prevent accidental deletion)
+                cursor.execute(
+                    """
+                    SELECT * FROM department_topic_map 
+                    WHERE topic_id = %s
+                    """,
+                    (topic_id,)
+                )
+                assigned = cursor.fetchone()
+                if assigned:
+                    raise HTTPException(status_code=400, detail="Cannot delete topic — it is assigned to a department")
+
+                # Delete topic
+                cursor.execute("DELETE FROM topics WHERE topic_id = %s", (topic_id,))
+                conn.commit()
+
+                return {
+                    "status": "success",
+                    "message": f"Topic '{topic['topic_name']}' deleted successfully"
+                }
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print("Error deleting topic:", e)
+        raise HTTPException(status_code=500, detail="Internal server error")

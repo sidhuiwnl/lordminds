@@ -1,4 +1,6 @@
 from datetime import datetime
+from typing import Optional
+import bcrypt
 from fastapi import APIRouter, HTTPException, Form, File, UploadFile
 from config.database import get_db
 
@@ -78,3 +80,108 @@ async def store_marks(marks_data: dict):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error storing marks: {str(e)}")
+    
+
+
+@router.put("/update/{user_id}")
+async def update_student(
+    user_id: int,
+    full_name: Optional[str] = Form(None),
+    username: Optional[str] = Form(None),
+    password: Optional[str] = Form(None),
+):
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                # Verify the user is a student
+                cursor.execute(
+                    "SELECT * FROM users WHERE user_id = %s AND role_id = 5", (user_id,)
+                )
+                user = cursor.fetchone()
+                if not user:
+                    raise HTTPException(status_code=404, detail="Student not found")
+
+                updates = []
+                values = []
+
+                if full_name:
+                    updates.append("full_name = %s")
+                    values.append(full_name)
+
+                if username:
+                    updates.append("username = %s")
+                    values.append(username)
+
+                if password:
+                    # Hash password before storing
+                    hashed_pw = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
+                    updates.append("password_hash = %s")
+                    values.append(hashed_pw.decode("utf-8"))
+
+                if not updates:
+                    return {"status": "fail", "detail": "No fields to update"}
+
+                values.append(user_id)
+
+                query = f"""
+                    UPDATE users
+                    SET {', '.join(updates)}, updated_at = NOW()
+                    WHERE user_id = %s AND role_id = 5
+                """
+                cursor.execute(query, values)
+                conn.commit()
+
+                # Fetch updated data
+                cursor.execute(
+                    "SELECT user_id, username, full_name, college_id, department_id, created_at FROM users WHERE user_id = %s",
+                    (user_id,),
+                )
+                updated_user = cursor.fetchone()
+
+        return {
+            "status": "success",
+            "message": "Student updated successfully",
+            "student": updated_user,
+        }
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating student: {str(e)}")    
+
+
+@router.delete("/delete/{user_id}")
+async def delete_student(user_id: int):
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                # Verify user exists and is a student
+                cursor.execute(
+                    "SELECT full_name FROM users WHERE user_id = %s AND role_id = 5",
+                    (user_id,),
+                )
+                student = cursor.fetchone()
+
+                if not student:
+                    raise HTTPException(status_code=404, detail="Student not found")
+
+                try:
+                    cursor.execute("DELETE FROM users WHERE user_id = %s AND role_id = 5", (user_id,))
+                    conn.commit()
+                except Exception as e:
+                    if "1451" in str(e):  # Foreign key constraint error
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Cannot delete student because related records exist.",
+                        )
+                    raise
+
+        return {
+            "status": "success",
+            "message": f"Student '{student['full_name']}' deleted successfully",
+        }
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting student: {str(e)}")
