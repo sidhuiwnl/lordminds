@@ -34,7 +34,7 @@ CREATE TABLE `assignment_marks` (
   KEY `assignment_id` (`assignment_id`),
   CONSTRAINT `assignment_marks_ibfk_1` FOREIGN KEY (`student_id`) REFERENCES `users` (`user_id`),
   CONSTRAINT `assignment_marks_ibfk_2` FOREIGN KEY (`assignment_id`) REFERENCES `assignments` (`assignment_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -43,6 +43,7 @@ CREATE TABLE `assignment_marks` (
 
 LOCK TABLES `assignment_marks` WRITE;
 /*!40000 ALTER TABLE `assignment_marks` DISABLE KEYS */;
+INSERT INTO `assignment_marks` VALUES (1,1,1,3.00,3.00,'2025-11-12 16:33:14');
 /*!40000 ALTER TABLE `assignment_marks` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -160,7 +161,7 @@ CREATE TABLE `department_topic_map` (
   KEY `topic_id` (`topic_id`),
   CONSTRAINT `department_topic_map_ibfk_1` FOREIGN KEY (`department_id`) REFERENCES `departments` (`department_id`),
   CONSTRAINT `department_topic_map_ibfk_2` FOREIGN KEY (`topic_id`) REFERENCES `topics` (`topic_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -169,6 +170,7 @@ CREATE TABLE `department_topic_map` (
 
 LOCK TABLES `department_topic_map` WRITE;
 /*!40000 ALTER TABLE `department_topic_map` DISABLE KEYS */;
+INSERT INTO `department_topic_map` VALUES (1,1,1,'2025-11-12 16:04:13');
 /*!40000 ALTER TABLE `department_topic_map` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -254,7 +256,7 @@ CREATE TABLE `questions` (
   KEY `question_type_id` (`question_type_id`),
   KEY `idx_test_scope_ref` (`test_scope`,`reference_id`),
   CONSTRAINT `questions_ibfk_2` FOREIGN KEY (`question_type_id`) REFERENCES `question_type` (`question_type_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -263,7 +265,7 @@ CREATE TABLE `questions` (
 
 LOCK TABLES `questions` WRITE;
 /*!40000 ALTER TABLE `questions` DISABLE KEYS */;
-INSERT INTO `questions` VALUES (1,'assignment',1,1,'Fluent communication means speaking with a natural rhythm and without breaks.','{\"options\": [true, false, \"Sometimes\", \"Never\"], \"correct_answer\": true}',1.00,1,'2025-11-12 08:57:05','2025-11-12 08:57:05',1),(2,'assignment',1,1,'Which of the following best defines fluency?','{\"options\": [\"Smooth speech flow\", \"Perfect grammar\", \"Loud voice\", \"Slow speaking\"], \"correct_answer\": \"Smooth speech flow\"}',1.00,2,'2025-11-12 08:57:05','2025-11-12 08:57:05',1),(3,'assignment',1,1,'What skill helps improve fluency in a language?','{\"options\": [\"Listening\", \"Writing\", \"Translation\", \"Memorization\"], \"correct_answer\": \"Listening\"}',1.00,3,'2025-11-12 08:57:05','2025-11-12 08:57:05',1);
+INSERT INTO `questions` VALUES (1,'assignment',1,1,'Fluent communication means speaking with a natural rhythm and without breaks.','{\"options\": [true, false, \"Sometimes\", \"Never\"], \"correct_answer\": true}',1.00,1,'2025-11-12 08:57:05','2025-11-12 08:57:05',1),(2,'assignment',1,1,'Which of the following best defines fluency?','{\"options\": [\"Smooth speech flow\", \"Perfect grammar\", \"Loud voice\", \"Slow speaking\"], \"correct_answer\": \"Smooth speech flow\"}',1.00,2,'2025-11-12 08:57:05','2025-11-12 08:57:05',1),(3,'assignment',1,1,'What skill helps improve fluency in a language?','{\"options\": [\"Listening\", \"Writing\", \"Translation\", \"Memorization\"], \"correct_answer\": \"Listening\"}',1.00,3,'2025-11-12 08:57:05','2025-11-12 08:57:05',1),(4,'sub_topic',1,1,'Fluent communication means speaking with a natural rhythm and without breaks.','{\"options\": [true, false, \"Sometimes\", \"Never\"], \"correct_answer\": true}',1.00,1,'2025-11-12 18:25:55','2025-11-12 18:25:55',1),(5,'sub_topic',1,1,'Which of the following best defines fluency?','{\"options\": [\"Smooth speech flow\", \"Perfect grammar\", \"Loud voice\", \"Slow speaking\"], \"correct_answer\": \"Smooth speech flow\"}',1.00,2,'2025-11-12 18:25:55','2025-11-12 18:25:55',1),(6,'sub_topic',1,1,'What skill helps improve fluency in a language?','{\"options\": [\"Listening\", \"Writing\", \"Translation\", \"Memorization\"], \"correct_answer\": \"Listening\"}',1.00,3,'2025-11-12 18:25:55','2025-11-12 18:25:55',1),(7,'sub_topic',2,1,'Fluent communication means speaking with a natural rhythm and without breaks.','{\"options\": [true, false, \"Sometimes\", \"Never\"], \"correct_answer\": true}',1.00,1,'2025-11-12 18:38:47','2025-11-12 18:38:47',1),(8,'sub_topic',2,1,'Which of the following best defines fluency?','{\"options\": [\"Smooth speech flow\", \"Perfect grammar\", \"Loud voice\", \"Slow speaking\"], \"correct_answer\": \"Smooth speech flow\"}',1.00,2,'2025-11-12 18:38:47','2025-11-12 18:38:47',1),(9,'sub_topic',2,1,'What skill helps improve fluency in a language?','{\"options\": [\"Listening\", \"Writing\", \"Translation\", \"Memorization\"], \"correct_answer\": \"Listening\"}',1.00,3,'2025-11-12 18:38:47','2025-11-12 18:38:47',1);
 /*!40000 ALTER TABLE `questions` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -415,7 +417,7 @@ CREATE TABLE `sub_topics` (
   KEY `idx_subtopic_topic` (`topic_id`),
   KEY `idx_subtopic_order` (`topic_id`,`sub_topic_order`),
   CONSTRAINT `sub_topics_ibfk_1` FOREIGN KEY (`topic_id`) REFERENCES `topics` (`topic_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -424,6 +426,7 @@ CREATE TABLE `sub_topics` (
 
 LOCK TABLES `sub_topics` WRITE;
 /*!40000 ALTER TABLE `sub_topics` DISABLE KEYS */;
+INSERT INTO `sub_topics` VALUES (1,1,'Past Tense',1,'https://us7xgl2xx9.ufs.sh/f/NLwJvYRc8DXfBe34fsIZrb67gjCL5kFMaqTzV3evG81Ec0su','sample_question_upload1.xlsx','uploads/tests\\sub_topic\\1af9cb04-6d32-47af-9613-4929906fb0c5.xlsx','<p>Requirements of ElectCare</p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p> <br></p><p><br></p><p><br></p>',1,'2025-11-12 16:04:00','2025-11-12 18:25:55'),(2,1,'Present Tense',2,'https://us7xgl2xx9.ufs.sh/f/NLwJvYRc8DXfBe34fsIZrb67gjCL5kFMaqTzV3evG81Ec0su','sample_question_upload1.xlsx','uploads/tests\\sub_topic\\a068f7ee-386e-429c-be17-521f9f3451c0.xlsx','<p>Requirements of ElectCare</p><p><br></p><p>Day 2 (10:00am to 13:20pm)Doubt Clarification for Special Allowences</p><p><br></p>',1,'2025-11-12 18:38:33','2025-11-12 18:38:47');
 /*!40000 ALTER TABLE `sub_topics` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -447,7 +450,7 @@ CREATE TABLE `topics` (
   KEY `idx_topic_dept` (`department_id`),
   KEY `idx_topic_name` (`topic_name`),
   CONSTRAINT `topics_ibfk_1` FOREIGN KEY (`department_id`) REFERENCES `departments` (`department_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -456,6 +459,7 @@ CREATE TABLE `topics` (
 
 LOCK TABLES `topics` WRITE;
 /*!40000 ALTER TABLE `topics` DISABLE KEYS */;
+INSERT INTO `topics` VALUES (1,NULL,'Tenses',NULL,2,1,'2025-11-12 16:03:37','2025-11-12 18:38:33');
 /*!40000 ALTER TABLE `topics` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -475,7 +479,7 @@ CREATE TABLE `user_sessions` (
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`),
   CONSTRAINT `user_sessions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -484,6 +488,7 @@ CREATE TABLE `user_sessions` (
 
 LOCK TABLES `user_sessions` WRITE;
 /*!40000 ALTER TABLE `user_sessions` DISABLE KEYS */;
+INSERT INTO `user_sessions` (`id`, `user_id`, `start_time`, `end_time`) VALUES (1,1,'2025-11-12 17:03:24',NULL),(2,1,'2025-11-12 17:04:11',NULL),(3,1,'2025-11-12 17:04:11',NULL),(4,1,'2025-11-12 17:04:27',NULL),(5,1,'2025-11-12 17:04:27',NULL),(6,1,'2025-11-12 23:29:10',NULL),(7,1,'2025-11-12 23:29:10',NULL),(8,1,'2025-11-12 23:29:19',NULL),(9,1,'2025-11-12 23:29:19',NULL),(10,1,'2025-11-12 23:29:35',NULL),(11,1,'2025-11-12 23:29:35',NULL),(12,1,'2025-11-12 23:34:01',NULL),(13,1,'2025-11-12 23:34:01',NULL),(14,1,'2025-11-12 23:34:04',NULL),(15,1,'2025-11-12 23:38:27',NULL),(16,1,'2025-11-12 23:49:16',NULL),(17,1,'2025-11-12 23:49:16',NULL),(18,1,'2025-11-12 23:52:57',NULL),(19,1,'2025-11-12 23:52:57',NULL),(20,1,'2025-11-12 23:55:09',NULL),(21,1,'2025-11-12 23:55:09',NULL),(22,1,'2025-11-13 00:06:16',NULL),(23,1,'2025-11-13 00:06:16',NULL);
 /*!40000 ALTER TABLE `user_sessions` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -506,6 +511,7 @@ CREATE TABLE `users` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `last_login` datetime DEFAULT NULL,
+  `last_logout` datetime DEFAULT NULL,
   `profile_image` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`user_id`),
   UNIQUE KEY `username` (`username`),
@@ -525,7 +531,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (1,'21AIB38','$2b$12$jouElwAygx/GHEYYN3wFp.J5A1UBpbc.3EBE7fMOjPa8/1vjzhf6C','Sidharth',1,1,5,1,'2025-10-24 17:31:45','2025-11-02 09:23:53',NULL,'profile_images/user_1_20251102145353.jpeg'),(2,'21AIB30','$2b$12$EX9j10zMqjOKInWtmaqOIeI38eZzUq1RCuHWqoJsJ8gQ/Adqz5T3C','Sankar',2,2,5,1,'2025-10-24 17:35:43','2025-10-24 17:35:43',NULL,NULL),(3,'superadmin','$2a$12$iV8iuYIOOgf5BNve1Zje7utPfnFvc6RO4xdsU3yXmsotrySTWwR0q','superadmin',NULL,NULL,1,1,'2025-10-24 17:39:39','2025-10-24 17:39:39',NULL,NULL),(8,'Teacher','$2b$12$vmpXfhzWXwDc8ipEDULuxO19NKKFoZhCJwa5xA1q4BQ8YWRChX7eu',NULL,1,NULL,4,1,'2025-10-29 16:36:16','2025-11-02 09:47:18',NULL,'profile_images/user_8_20251102151718.jpg'),(9,'Administrator','$2b$12$.04MnS.u4AWwOF92KOXgrO3SZfLCzhHPN2UgGGBep7R3qKYT3w7PK',NULL,1,NULL,3,1,'2025-10-29 16:36:33','2025-10-29 16:36:33',NULL,NULL),(11,'Admin','$2a$12$zcJbM1QgIyl4f3TicukrWuhzo5BsRaLHvWihmG4VHt8zv8JpVfZcy','Admin',NULL,NULL,2,1,'2025-11-01 17:20:05','2025-11-01 17:20:05',NULL,NULL),(12,'Siva Ramana','$2b$12$ZNAcL4AMSeHCYcooSo6mc.cMAllQWxIBxJbJGzTC0bhM/DPbpZoNy','21AIB40',1,2,5,1,'2025-11-02 17:44:51','2025-11-11 17:00:11',NULL,NULL);
+INSERT INTO `users` VALUES (1,'21AIB38','$2b$12$jouElwAygx/GHEYYN3wFp.J5A1UBpbc.3EBE7fMOjPa8/1vjzhf6C','Sidharth',1,1,5,1,'2025-10-24 17:31:45','2025-11-12 18:39:01','2025-11-13 00:09:01','2025-11-13 00:07:55','profile_images/user_1_20251102145353.jpeg'),(2,'21AIB30','$2b$12$EX9j10zMqjOKInWtmaqOIeI38eZzUq1RCuHWqoJsJ8gQ/Adqz5T3C','Sankar',2,2,5,1,'2025-10-24 17:35:43','2025-10-24 17:35:43',NULL,NULL,NULL),(3,'superadmin','$2a$12$iV8iuYIOOgf5BNve1Zje7utPfnFvc6RO4xdsU3yXmsotrySTWwR0q','superadmin',NULL,NULL,1,1,'2025-10-24 17:39:39','2025-11-12 18:38:01','2025-11-13 00:08:02',NULL,NULL),(8,'Teacher','$2b$12$vmpXfhzWXwDc8ipEDULuxO19NKKFoZhCJwa5xA1q4BQ8YWRChX7eu',NULL,1,NULL,4,1,'2025-10-29 16:36:16','2025-11-12 11:34:46','2025-11-12 17:04:46',NULL,'profile_images/user_8_20251102151718.jpg'),(9,'Administrator','$2b$12$.04MnS.u4AWwOF92KOXgrO3SZfLCzhHPN2UgGGBep7R3qKYT3w7PK',NULL,1,NULL,3,1,'2025-10-29 16:36:33','2025-11-12 12:54:43','2025-11-12 18:24:43',NULL,NULL),(11,'Admin','$2a$12$zcJbM1QgIyl4f3TicukrWuhzo5BsRaLHvWihmG4VHt8zv8JpVfZcy','Admin',NULL,NULL,2,1,'2025-11-01 17:20:05','2025-11-12 17:05:13','2025-11-12 22:35:13',NULL,NULL),(12,'Siva Ramana','$2b$12$ZNAcL4AMSeHCYcooSo6mc.cMAllQWxIBxJbJGzTC0bhM/DPbpZoNy','21AIB40',1,2,5,1,'2025-11-02 17:44:51','2025-11-11 17:00:11',NULL,NULL,NULL);
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -538,4 +544,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-11-12 15:02:00
+-- Dump completed on 2025-11-13  0:22:53
