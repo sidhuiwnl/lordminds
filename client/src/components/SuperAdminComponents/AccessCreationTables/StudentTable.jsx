@@ -191,6 +191,8 @@ export const StudentTable = ({
   const handleUpdateSuccess = () => {
     toast.success("Student updated successfully!");
     setIsModalOpen(false);
+    // Reload the page after successful update
+    window.location.reload();
   };
 
   useEffect(() => {
@@ -246,6 +248,8 @@ export const StudentTable = ({
 
       if (res.data.status === "success") {
         toast.success(`${student.full_name} deleted successfully!`);
+        // Reload the page after successful deletion
+        window.location.reload();
       } else {
         toast.error(res.data.detail || "Failed to delete student.");
       }

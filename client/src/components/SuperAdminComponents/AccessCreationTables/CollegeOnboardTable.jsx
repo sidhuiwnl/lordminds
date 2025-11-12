@@ -273,6 +273,8 @@ export const CollegeTable = ({
     toast.success(message || "College updated successfully!");
     setSuccessMessage(message);
     if (refreshData) refreshData();
+    // Reload the page after successful update
+    window.location.reload();
   };
 
  
@@ -287,6 +289,8 @@ const handleDeleteCollege = async (college) => {
     if (res.data.status === "success") {
       toast.success(`${college.name} deleted successfully!`);
       if (refreshData) refreshData();
+      // Reload the page after successful deletion
+      window.location.reload();
     } else {
       // Backend sent a failure message (e.g., constraint)
       toast.error(res.data.message || "Failed to delete college.");

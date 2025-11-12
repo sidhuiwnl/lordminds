@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -27,6 +27,16 @@ const SuperAdminHome = () => {
     students: false,
     report: false,
   });
+
+  // College search states
+  const [collegeSearch, setCollegeSearch] = useState('');
+  const [showCollegeDropdown, setShowCollegeDropdown] = useState(false);
+  const collegeRef = useRef(null);
+
+  // Department search states
+  const [departmentSearch, setDepartmentSearch] = useState('');
+  const [showDepartmentDropdown, setShowDepartmentDropdown] = useState(false);
+  const departmentRef = useRef(null);
 
   const API_URL = import.meta.env.VITE_BACKEND_API_URL;
 
@@ -139,6 +149,50 @@ const SuperAdminHome = () => {
     fetchStudentReports();
   }, [selectedCollege, selectedDepartment, API_URL]);
 
+  // Filter colleges based on search
+  const filteredColleges = colleges.filter((college) =>
+    college.name.toLowerCase().includes(collegeSearch.toLowerCase())
+  );
+
+  // Filter departments based on search
+  const filteredDepartments = departments.filter((dept) =>
+    dept.department_name.toLowerCase().includes(departmentSearch.toLowerCase())
+  );
+
+  // Handle college selection
+  const handleCollegeSelect = (collegeId, collegeName) => {
+    setSelectedCollege(collegeId);
+    setCollegeSearch(collegeName);
+    setShowCollegeDropdown(false);
+    setSelectedDepartment("");
+    setStudents([]);
+    setDepartmentSearch('');
+  };
+
+  // Handle department selection
+  const handleDepartmentSelect = (deptId, deptName) => {
+    setSelectedDepartment(deptId);
+    setDepartmentSearch(deptName);
+    setShowDepartmentDropdown(false);
+  };
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (collegeRef.current && !collegeRef.current.contains(event.target)) {
+        setShowCollegeDropdown(false);
+      }
+      if (departmentRef.current && !departmentRef.current.contains(event.target)) {
+        setShowDepartmentDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
   // Bar chart data for topics (Students vs Topics) - Vertical bars
   const chartData = reportData?.topics ? {
     labels: reportData.topics.map((topic) => topic.topic_name),
@@ -239,52 +293,98 @@ const SuperAdminHome = () => {
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        {/* College Dropdown */}
-        <select
-          value={selectedCollege}
-          onChange={(e) => {
-            setSelectedCollege(e.target.value);
-            setSelectedDepartment("");
-            setStudents([]);
-          }}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 flex-1 bg-white transition-all"
-        >
-          <option value="">
-            {loading.colleges
-              ? "Loading colleges..."
-              : colleges.length
-              ? "Select College"
-              : "No colleges available"}
-          </option>
-          {colleges.map((college) => (
-            <option key={college.college_id || college.id} value={college.college_id || college.id}>
-              {college.name}
-            </option>
-          ))}
-        </select>
+        {/* College Search Dropdown */}
+        <div className="relative flex-1" ref={collegeRef}>
+          <input
+            type="text"
+            value={collegeSearch}
+            onChange={(e) => setCollegeSearch(e.target.value)}
+            onFocus={() => setShowCollegeDropdown(true)}
+            placeholder={
+              loading.colleges
+                ? "Loading colleges..."
+                : colleges.length
+                ? "Search College..."
+                : "No colleges available"
+            }
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 w-full bg-white transition-all pr-8"
+            onClick={() => setShowCollegeDropdown(true)}
+          />
+          {showCollegeDropdown && (
+            <div className="absolute top-full left-0 right-0 z-10 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto mt-1">
+              {loading.colleges ? (
+                <div className="px-4 py-2 text-gray-500">Loading...</div>
+              ) : filteredColleges.length > 0 ? (
+                filteredColleges.map((college) => (
+                  <div
+                    key={college.college_id || college.id}
+                    onClick={() => handleCollegeSelect(college.college_id || college.id, college.name)}
+                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                  >
+                    {college.name}
+                  </div>
+                ))
+              ) : collegeSearch ? (
+                <div className="px-4 py-2 text-gray-500 text-sm">No colleges found.</div>
+              ) : null}
+            </div>
+          )}
+          {selectedCollege && (
+            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          )}
+        </div>
 
-        {/* Department Dropdown */}
-        <select
-          value={selectedDepartment}
-          onChange={(e) => setSelectedDepartment(e.target.value)}
-          disabled={!selectedCollege}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 flex-1 bg-white disabled:bg-gray-100 transition-all"
-        >
-          <option value="">
-            {!selectedCollege
-              ? "Select a college first"
-              : loading.departments
-              ? "Loading departments..."
-              : departments.length
-              ? "Select Department"
-              : "No departments found"}
-          </option>
-          {departments.map((dept) => (
-            <option key={dept.department_id || dept.id} value={dept.department_id || dept.id}>
-              {dept.department_name}
-            </option>
-          ))}
-        </select>
+        {/* Department Search Dropdown */}
+        <div className="relative flex-1" ref={departmentRef}>
+          <input
+            type="text"
+            value={departmentSearch}
+            onChange={(e) => setDepartmentSearch(e.target.value)}
+            onFocus={() => !selectedCollege || setShowDepartmentDropdown(true)}
+            placeholder={
+              !selectedCollege
+                ? "Select a college first"
+                : loading.departments
+                ? "Loading departments..."
+                : departments.length
+                ? "Search Department..."
+                : "No departments found"
+            }
+            disabled={!selectedCollege}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 w-full bg-white disabled:bg-gray-100 disabled:cursor-not-allowed transition-all pr-8"
+            onClick={() => selectedCollege && setShowDepartmentDropdown(true)}
+          />
+          {showDepartmentDropdown && selectedCollege && (
+            <div className="absolute top-full left-0 right-0 z-10 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto mt-1">
+              {loading.departments ? (
+                <div className="px-4 py-2 text-gray-500">Loading...</div>
+              ) : filteredDepartments.length > 0 ? (
+                filteredDepartments.map((dept) => (
+                  <div
+                    key={dept.department_id || dept.id}
+                    onClick={() => handleDepartmentSelect(dept.department_id || dept.id, dept.department_name)}
+                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                  >
+                    {dept.department_name}
+                  </div>
+                ))
+              ) : departmentSearch ? (
+                <div className="px-4 py-2 text-gray-500 text-sm">No departments found.</div>
+              ) : null}
+            </div>
+          )}
+          {selectedDepartment && (
+            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Topics Section */}

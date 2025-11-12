@@ -12,25 +12,42 @@ const Assignments = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [recording, setRecording] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [analysisResults, setAnalysisResults] = useState({});
   const [feedback, setFeedback] = useState("");
   const [answers, setAnswers] = useState({});
   const recorderRef = useRef(null);
   const [sessionId, setSessionId] = useState(null);
- const [sessionEnded, setSessionEnded] = useState(false);
-
+  const [sessionEnded, setSessionEnded] = useState(false);
 
   const totalSteps = questions.length;
   const API_URL = import.meta.env.VITE_BACKEND_API_URL;
   const user = JSON.parse(localStorage.getItem("user"));
   const userId = user?.user_id;
 
-  // ✅ Fetch Assignment Questions
+  // ✅ Retry function (exponential backoff)
+  const retryFetch = async (fetchFn, maxRetries = 2, baseDelay = 1000) => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await fetchFn();
+      } catch (err) {
+        if (attempt === maxRetries) throw err;
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  };
+
+  // ✅ Fetch Questions
   useEffect(() => {
     const fetchQuestions = async () => {
       try {
         setLoading(true);
-        const res = await fetch(`${API_URL}/assignments/get/${assignment}/questions`);
+        const res = await retryFetch(async () => {
+          const response = await fetch(`${API_URL}/assignments/get/${assignment}/questions`);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response;
+        });
         const data = await res.json();
 
         if (Array.isArray(data)) {
@@ -42,56 +59,68 @@ const Assignments = () => {
                 : q.question_data || {},
           }));
           setQuestions(parsed);
+          setHeading(parsed[0]?.assignment_heading || "Assignment");
+
+          if (!sessionId && !sessionEnded) await startSession();
         } else {
           throw new Error("Invalid response structure");
         }
       } catch (err) {
+        console.error("Error fetching questions:", err);
         setError(err.message);
+        toast.error("Failed to load questions. Retrying...");
       } finally {
         setLoading(false);
       }
     };
 
     fetchQuestions();
-  }, [assignment, API_URL]);
+  }, [assignment, API_URL, sessionId, sessionEnded]);
 
   const currentQuestion = questions[currentStep - 1];
 
-
-  useEffect(() => {
-  if (!userId || sessionEnded) return;
-
+  // ✅ Start Session
   const startSession = async () => {
+    if (!userId || sessionEnded) return;
     try {
-      const res = await fetch(`${API_URL}/tests/start/${userId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: parseInt(userId) }),
+      const res = await retryFetch(async () => {
+        const response = await fetch(`${API_URL}/tests/start/${userId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: parseInt(userId) }),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response;
       });
       const data = await res.json();
       if (data.status === "success") {
         setSessionId(data.session_id);
         console.log("✅ Assignment session started:", data.session_id);
+      } else {
+        console.error("Failed to start session:", data.message);
       }
     } catch (err) {
       console.error("Error starting session:", err);
+      toast.error("Failed to start session. Please refresh and try again.");
     }
   };
 
-  startSession();
-}, [userId]);
-
-
-const endSession = async () => {
-  if (!sessionId || sessionEnded) return;
-  try {
-    await fetch(`${API_URL}/tests/end/${sessionId}`, { method: "PUT" });
-    console.log("✅ Assignment session ended:", sessionId);
-    setSessionEnded(true);
-  } catch (err) {
-    console.error("Error ending session:", err);
-  }
-};
+  // ✅ End Session
+  const endSession = async () => {
+    if (!sessionId || sessionEnded) return;
+    try {
+      await retryFetch(async () => {
+        const response = await fetch(`${API_URL}/tests/end/${sessionId}`, { method: "PUT" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response;
+      });
+      console.log("✅ Assignment session ended:", sessionId);
+      setSessionEnded(true);
+    } catch (err) {
+      console.error("Error ending session:", err);
+      toast.error("Failed to end session.");
+    }
+  };
 
   // 🎤 Start Recording
   const startRecording = async () => {
@@ -105,17 +134,17 @@ const endSession = async () => {
         numberOfAudioChannels: 1,
         desiredSampRate: 16000,
       });
-
       recorder.startRecording();
       recorderRef.current = recorder;
       setRecording(true);
     } catch (err) {
       console.error("Error starting recording:", err);
       setFeedback("⚠️ Please allow microphone access.");
+      toast.error("Microphone access denied. Please enable and try again.");
     }
   };
 
-  // 🎤 Stop Recording → Auto Analyze
+  // 🎤 Stop Recording → Analyze
   const stopRecording = async () => {
     if (!recorderRef.current) return;
     try {
@@ -124,7 +153,6 @@ const endSession = async () => {
         setRecording(false);
         setAnswers((prev) => ({ ...prev, [`audio-${currentQuestion.question_id}`]: blob }));
 
-        // 🗣️ Announce analyzing
         if (window.speechSynthesis) {
           const utter = new SpeechSynthesisUtterance("Analyzing your answer");
           utter.lang = "en-US";
@@ -136,18 +164,25 @@ const endSession = async () => {
       });
     } catch (err) {
       console.error("Error stopping recording:", err);
+      setRecording(false);
     }
   };
 
   // 🧠 Analyze Audio
   const sendAudioForAnalysis = async (audioBlob) => {
+    setAnalyzing(true);
+    setFeedback("🔄 Analyzing Audio...");
     const formData = new FormData();
     formData.append("file", audioBlob, "response.wav");
 
     try {
-      const res = await fetch(`${API_URL}/users/analyze-voice`, {
-        method: "POST",
-        body: formData,
+      const res = await retryFetch(async () => {
+        const response = await fetch(`${API_URL}/users/analyze-voice`, {
+          method: "POST",
+          body: formData,
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response;
       });
 
       const result = await res.json();
@@ -156,9 +191,15 @@ const endSession = async () => {
 
       const expectedAnswer =
         currentQuestion?.question_data?.correct_answer?.toString().toLowerCase() || "";
-      const transcript = result?.transcription?.toLowerCase() || "";
 
-      if (transcript === "could not understand the audio.") {
+      // ✅ Handle both flat and nested result formats
+      const transcript =
+        result?.data?.transcription?.toLowerCase?.() ||
+        result?.transcription?.toLowerCase?.() ||
+        "";
+
+      // ⚠️ Handle “Could not understand the audio.”
+      if (transcript.includes("could not understand")) {
         setFeedback("⚠️ Could not understand your answer. Try again.");
         speechSynthesis.speak(
           new SpeechSynthesisUtterance("Could not understand your answer, please try again.")
@@ -166,14 +207,13 @@ const endSession = async () => {
         return;
       }
 
-      // ✅ Check correctness only from voice
+      // ✅ Check correctness
       if (expectedAnswer && transcript.includes(expectedAnswer)) {
         setFeedback("✅ Correct Answer!");
         setAnalysisResults((prev) => ({
           ...prev,
           [qid]: { ...result, correctness: "correct" },
         }));
-        // Mark this question as completed
         setAnswers((prev) => ({ ...prev, [`completed-${qid}`]: true }));
         speechSynthesis.speak(new SpeechSynthesisUtterance("Correct answer"));
         setTimeout(() => handleNext(), 1500);
@@ -187,8 +227,10 @@ const endSession = async () => {
       }
     } catch (err) {
       console.error("Error analyzing audio:", err);
-      setFeedback("⚠️ Error analyzing audio.");
-      speechSynthesis.speak(new SpeechSynthesisUtterance("Error analyzing your answer."));
+      setFeedback("⚠️ Error analyzing audio. Retrying...");
+      toast.error("Analysis failed. Please try again.");
+    } finally {
+      setAnalyzing(false);
     }
   };
 
@@ -214,7 +256,6 @@ const endSession = async () => {
     setFeedback("");
   };
 
-  // 🧮 Calculate Score
   const calculateScore = () => {
     let marksObtained = 0;
     questions.forEach((q) => {
@@ -224,19 +265,22 @@ const endSession = async () => {
     return { marks_obtained: marksObtained, max_marks: questions.length };
   };
 
-  // 🧾 Submit Results
   const handleSubmit = async () => {
     const score = calculateScore();
     try {
-      const res = await fetch(`${API_URL}/student/store-assignment-marks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          student_id: parseInt(userId),
-          assignment_id: parseInt(assignment),
-          marks_obtained: score.marks_obtained,
-          max_marks: score.max_marks,
-        }),
+      const res = await retryFetch(async () => {
+        const response = await fetch(`${API_URL}/student/store-assignment-marks`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            student_id: parseInt(userId),
+            assignment_id: parseInt(assignment),
+            marks_obtained: score.marks_obtained,
+            max_marks: score.max_marks,
+          }),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response;
       });
       const data = await res.json();
       if (data.status === "success") {
@@ -252,16 +296,16 @@ const endSession = async () => {
     }
   };
 
-  // Check if all questions are completed
   const allCompleted = questions.every((q) => answers[`completed-${q.question_id}`]);
 
-  // 🧭 UI Rendering
   if (loading)
     return <div className="flex justify-center items-center h-screen text-gray-600">Loading questions...</div>;
   if (error)
     return <div className="flex justify-center items-center h-screen text-red-500">Error: {error}</div>;
   if (questions.length === 0)
     return <div className="flex justify-center items-center h-screen text-gray-600">No questions found.</div>;
+
+  const isNavigationDisabled = recording || analyzing;
 
   return (
     <div className="p-4 lg:p-6 bg-gray-50 mt-30 min-h-screen">
@@ -307,8 +351,9 @@ const endSession = async () => {
             <button
               onClick={startRecording}
               className="px-4 py-2 bg-[#1b65a6] text-white rounded-full hover:bg-blue-700 transition"
+              disabled={analyzing}
             >
-              Start Recording
+              {analyzing ? "Analyzing..." : "Start Recording"}
             </button>
           ) : (
             <button
@@ -338,7 +383,7 @@ const endSession = async () => {
         <div className="flex items-center justify-center gap-2 mt-6">
           <button
             onClick={handlePrevious}
-            disabled={currentStep === 1}
+            disabled={currentStep === 1 || isNavigationDisabled}
             className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center disabled:opacity-30 hover:bg-gray-800 transition"
           >
             ‹
@@ -358,7 +403,6 @@ const endSession = async () => {
                 ? "bg-orange-400"
                 : "bg-gray-300";
 
-            // 🔒 Lock future questions until previous one completed
             const isUnlocked =
               qNum === currentStep ||
               answers[`completed-${questions[qNum - 2]?.question_id}`] ||
@@ -367,16 +411,16 @@ const endSession = async () => {
             return (
               <button
                 key={qNum}
-                disabled={!isUnlocked}
+                disabled={!isUnlocked || isNavigationDisabled}
                 onClick={() => {
-                  if (isUnlocked) {
+                  if (isUnlocked && !isNavigationDisabled) {
                     setCurrentStep(qNum);
                     setFeedback("");
                   }
                 }}
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${
-                  isUnlocked
-                    ? `${color} hover:opacity-90`
+                  isUnlocked && !isNavigationDisabled
+                    ? `${color} hover:opacity-90 cursor-pointer`
                     : "bg-gray-200 cursor-not-allowed opacity-60"
                 } ${isActive ? "ring-2 ring-yellow-400" : ""}`}
               >
@@ -389,7 +433,8 @@ const endSession = async () => {
             onClick={handleNext}
             disabled={
               currentStep === totalSteps ||
-              !answers[`completed-${currentQuestion.question_id}`]
+              !answers[`completed-${currentQuestion.question_id}`] ||
+              isNavigationDisabled
             }
             className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center disabled:opacity-30 hover:bg-gray-800 transition"
           >
@@ -402,10 +447,10 @@ const endSession = async () => {
           <div className="flex justify-center mt-8">
             <button
               onClick={handleSubmit}
-              disabled={!allCompleted}
+              disabled={!allCompleted || isNavigationDisabled}
               className={`px-6 py-2 rounded-lg transition ${
-                allCompleted
-                  ? "bg-yellow-400 text-gray-900 hover:bg-yellow-300"
+                allCompleted && !isNavigationDisabled
+                  ? "bg-yellow-400 text-gray-900 hover:bg-yellow-300 cursor-pointer"
                   : "bg-gray-300 text-gray-500 cursor-not-allowed"
               }`}
             >

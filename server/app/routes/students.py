@@ -11,11 +11,11 @@ router = APIRouter()
 async def get_specific_topic_progress(college_id: int, department_id: int, topic_id: int):
     """
     Fetch average progress and score for a specific topic 
-    under a department in a college.
+    under a department in a college using department_topic_map.
     """
     try:
         with get_db() as conn:
-            with conn.cursor() as cursor:
+            with conn.cursor(dictionary=True) as cursor:
                 query = """
                     SELECT 
                         t.topic_id,
@@ -25,18 +25,21 @@ async def get_specific_topic_progress(college_id: int, department_id: int, topic
                         ROUND(AVG(stp.average_score), 2) AS avg_score,
                         SUM(CASE WHEN stp.status = 'Completed' THEN 1 ELSE 0 END) AS completed_students,
                         SUM(CASE WHEN stp.status = 'Not Started' THEN 1 ELSE 0 END) AS not_started_students
-                    FROM topics t
-                    LEFT JOIN student_topic_progress stp 
-                        ON t.topic_id = stp.topic_id
+                    FROM department_topic_map dtm
+                    INNER JOIN topics t 
+                        ON dtm.topic_id = t.topic_id
                     INNER JOIN departments d 
-                        ON t.department_id = d.department_id
+                        ON dtm.department_id = d.department_id
                     INNER JOIN college_departments cd 
                         ON d.department_id = cd.department_id
                     INNER JOIN colleges c 
                         ON cd.college_id = c.college_id
-                    WHERE cd.department_id = %s 
-                      AND cd.college_id = %s 
+                    LEFT JOIN student_topic_progress stp 
+                        ON t.topic_id = stp.topic_id
+                    WHERE dtm.department_id = %s
+                      AND cd.college_id = %s
                       AND t.topic_id = %s
+                      AND t.is_active = 1
                     GROUP BY t.topic_id, t.topic_name
                     LIMIT 1
                 """
@@ -52,8 +55,11 @@ async def get_specific_topic_progress(college_id: int, department_id: int, topic
                     "data": topic
                 }
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching topic progress: {str(e)}")
+
 
 
 @router.post("/store-marks")
@@ -82,6 +88,106 @@ async def store_marks(marks_data: dict):
         raise HTTPException(status_code=500, detail=f"Error storing marks: {str(e)}")
     
     
+    
+#To calcualte the progress and best score for each subtopic and topic level, use the below code
+    
+# @router.post("/store-marks")
+# async def store_marks(marks_data: dict):
+#     """
+#     ✅ Store marks for a student's subtopic test.
+#     - Records each attempt in sub_topic_marks.
+#     - Tracks best score and completion in student_subtopic_progress.
+#     - Recalculates overall topic progress (completion % and avg score).
+#     """
+#     try:
+#         with get_db() as conn:
+#             with conn.cursor(dictionary=True) as cursor:
+#                 # 1️⃣ Extract required fields from frontend payload
+#                 student_id = marks_data["student_id"]
+#                 sub_topic_id = marks_data["sub_topic_id"]
+#                 marks_obtained = marks_data["marks_obtained"]
+#                 max_marks = marks_data["max_marks"]
+
+#                 # 2️⃣ Insert new attempt into sub_topic_marks
+#                 cursor.execute("""
+#                     INSERT INTO sub_topic_marks 
+#                     (student_id, sub_topic_id, marks_obtained, max_marks, attempted_at)
+#                     VALUES (%s, %s, %s, %s, NOW())
+#                 """, (student_id, sub_topic_id, marks_obtained, max_marks))
+
+#                 # 3️⃣ Find the best score (highest marks) for this subtopic
+#                 cursor.execute("""
+#                     SELECT MAX(marks_obtained) AS best_marks 
+#                     FROM sub_topic_marks
+#                     WHERE student_id = %s AND sub_topic_id = %s
+#                 """, (student_id, sub_topic_id))
+#                 best_attempt = cursor.fetchone()
+#                 best_score = best_attempt["best_marks"] if best_attempt and best_attempt["best_marks"] else 0
+
+#                 # 4️⃣ Compute percentage and completion status
+#                 score_percentage = (best_score / max_marks * 100) if max_marks > 0 else 0
+#                 is_completed = 1 if score_percentage >= 40 else 0  # Threshold = 40%
+
+#                 # 5️⃣ Identify parent topic_id for this subtopic
+#                 cursor.execute("""
+#                     SELECT topic_id FROM sub_topics WHERE sub_topic_id = %s
+#                 """, (sub_topic_id,))
+#                 topic_result = cursor.fetchone()
+#                 if not topic_result:
+#                     raise HTTPException(status_code=404, detail="Sub-topic not found")
+#                 topic_id = topic_result["topic_id"]
+
+#                 # 6️⃣ Insert or update student's progress for this subtopic
+#                 cursor.execute("""
+#                     INSERT INTO student_subtopic_progress 
+#                     (student_id, topic_id, sub_topic_id, is_completed, score, last_accessed)
+#                     VALUES (%s, %s, %s, %s, %s, NOW())
+#                     ON DUPLICATE KEY UPDATE
+#                         is_completed = VALUES(is_completed),
+#                         score = VALUES(score),
+#                         last_accessed = NOW();
+#                 """, (student_id, topic_id, sub_topic_id, is_completed, score_percentage))
+
+#                 # 7️⃣ Recalculate topic-level progress (for analytics)
+#                 cursor.execute("""
+#                     SELECT 
+#                         COUNT(*) AS total_sub_topics,
+#                         SUM(CASE WHEN is_completed = 1 THEN 1 ELSE 0 END) AS completed_sub_topics,
+#                         ROUND(AVG(score), 2) AS avg_score
+#                     FROM student_subtopic_progress
+#                     WHERE student_id = %s AND topic_id = %s
+#                 """, (student_id, topic_id))
+#                 topic_progress = cursor.fetchone()
+
+#                 conn.commit()
+
+#                 # 8️⃣ Return complete result
+#                 return {
+#                     "status": "success",
+#                     "message": "Marks stored and progress updated successfully",
+#                     "data": {
+#                         "marks_obtained": marks_obtained,
+#                         "max_marks": max_marks,
+#                         "best_score": best_score,
+#                         "score_percentage": round(score_percentage, 2),
+#                         "is_completed": bool(is_completed),
+#                         "topic_progress": {
+#                             "total_sub_topics": topic_progress["total_sub_topics"],
+#                             "completed_sub_topics": topic_progress["completed_sub_topics"],
+#                             "average_score": topic_progress["avg_score"],
+#                         },
+#                     },
+#                 }
+
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error storing marks: {str(e)}")
+
+    
+
+
+
 @router.post("/store-assignment-marks")
 async def store_assignment_marks(marks_data: dict):
     """

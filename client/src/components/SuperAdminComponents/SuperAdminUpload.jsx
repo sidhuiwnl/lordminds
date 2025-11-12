@@ -602,14 +602,18 @@ const SuperAdminUpload = () => {
         <>
           {/* Assignment Form */}
           <form onSubmit={handleAssignmentSubmit} className="bg-white rounded-lg shadow p-4 lg:p-6 mb-6">
-            <h2 className="text-lg lg:text-xl font-semibold text-gray-800 mb-4 lg:mb-6">Fill the details to create a assignment</h2>
+            <h2 className="text-lg lg:text-xl font-semibold text-gray-800 mb-4 lg:mb-6">
+              Fill the details to create an assignment
+            </h2>
 
+            {/* Select College */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">Select College</label>
               <select
                 name="assignmentCollege"
                 value={formData.assignmentCollege}
                 onChange={handleInputChange}
+                required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               >
                 <option value="">Select College</option>
@@ -619,14 +623,15 @@ const SuperAdminUpload = () => {
               </select>
             </div>
 
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-6">
+              {/* Department */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Select Department</label>
                 <select
                   name="department"
                   value={formData.department}
                   onChange={handleInputChange}
+                  required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 >
                   <option value="">Select Department</option>
@@ -636,6 +641,7 @@ const SuperAdminUpload = () => {
                 </select>
               </div>
 
+              {/* Assignment No */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Assignment No</label>
                 <input
@@ -644,10 +650,12 @@ const SuperAdminUpload = () => {
                   value={formData.assignmentNo}
                   onChange={handleInputChange}
                   placeholder="Type assignment no"
+                  required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
               </div>
 
+              {/* Assignment Topic */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Assignment Topic</label>
                 <input
@@ -656,12 +664,14 @@ const SuperAdminUpload = () => {
                   value={formData.assignmentTopic}
                   onChange={handleInputChange}
                   placeholder="Type assignment topic"
+                  required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-6">
+              {/* Start Date */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Assignment Starting Date</label>
                 <input
@@ -669,10 +679,12 @@ const SuperAdminUpload = () => {
                   name="startDate"
                   value={formData.startDate}
                   onChange={handleInputChange}
+                  required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
               </div>
 
+              {/* End Date (not required) */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Assignment Ending Date</label>
                 <input
@@ -684,6 +696,7 @@ const SuperAdminUpload = () => {
                 />
               </div>
 
+              {/* File Upload */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">File Upload</label>
                 <div className="relative">
@@ -691,6 +704,7 @@ const SuperAdminUpload = () => {
                     type="file"
                     name="file"
                     onChange={handleFileChange}
+                    required
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   />
                   <div className="absolute inset-y-0 right-0 pr-8 flex items-center pointer-events-none">
@@ -703,12 +717,12 @@ const SuperAdminUpload = () => {
               </div>
             </div>
 
+            {/* Buttons */}
             <div className="flex justify-end gap-2">
               <a
                 href="/sample_question_upload.xlsx"
                 download
                 className="bg-gray-500 text-white px-6 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow"
-
               >
                 Download Template
               </a>
@@ -719,22 +733,22 @@ const SuperAdminUpload = () => {
                 Upload Assignment
               </button>
             </div>
-
           </form>
 
-          
-            <AssignmentTable
-              data={assignmentData}
-              page={assignmentPage}
-              rowsPerPage={rowsPerPage}
-              total={assignmentData.length}
-              totalPages={assignmentTotalPages}
-              onPrev={handleAssignmentPrev}
-              onNext={handleAssignmentNext}
-              formatDate={formatDate}
-            />
-            
-         
+
+
+          <AssignmentTable
+            data={assignmentData}
+            page={assignmentPage}
+            rowsPerPage={rowsPerPage}
+            total={assignmentData.length}
+            totalPages={assignmentTotalPages}
+            onPrev={handleAssignmentPrev}
+            onNext={handleAssignmentNext}
+            formatDate={formatDate}
+          />
+
+
         </>
       )}
 
@@ -742,8 +756,12 @@ const SuperAdminUpload = () => {
         <>
           {/* Overview Form */}
           <form onSubmit={handleOverviewSubmit} className="bg-white rounded-lg shadow p-4 lg:p-6 mb-6">
-            <h2 className="text-lg lg:text-xl font-semibold text-gray-800 mb-4 lg:mb-6">Fill the details to upload overview</h2>
+            <h2 className="text-lg lg:text-xl font-semibold text-gray-800 mb-4 lg:mb-6">
+              Fill the details to upload overview
+            </h2>
+
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 lg:gap-6 mb-6">
+              {/* Topic Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Topic Name</label>
                 <div className="flex flex-row gap-2">
@@ -751,24 +769,27 @@ const SuperAdminUpload = () => {
                     name="topicName"
                     value={formData.topicName}
                     onChange={handleInputChange}
+                    required
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   >
                     <option value="">Select Topic</option>
                     {topics.map((topic) => (
-                      <option key={topic.topic_id} value={topic.topic_name}>{topic.topic_name}</option>
+                      <option key={topic.topic_id} value={topic.topic_name}>
+                        {topic.topic_name}
+                      </option>
                     ))}
-
                   </select>
                   <button
+                    type="button"
                     onClick={() => setIsModalOpen(true)}
                     className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg shadow-md transition"
                   >
                     +
                   </button>
                 </div>
-
               </div>
 
+              {/* Sub-Topic Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Sub - Topic Name</label>
                 <input
@@ -777,10 +798,12 @@ const SuperAdminUpload = () => {
                   value={formData.subTopicName}
                   onChange={handleInputChange}
                   placeholder="Type sub-topic name"
+                  required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
               </div>
 
+              {/* No of Sub-Topics */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">No of Sub-Topic</label>
                 <input
@@ -789,12 +812,14 @@ const SuperAdminUpload = () => {
                   value={formData.noOfSubTopic}
                   onChange={handleInputChange}
                   placeholder="Type no of sub-topic"
+                  required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 mb-6">
+              {/* Overview Video */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Overview Video</label>
                 <input
@@ -803,11 +828,13 @@ const SuperAdminUpload = () => {
                   value={formData.overviewVideo}
                   onChange={handleInputChange}
                   placeholder="Enter video URL"
+                  required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
                 <p className="text-xs text-gray-500 mt-1">Enter video link</p>
               </div>
 
+              {/* Overview Document */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Overview Document</label>
                 <div className="relative">
@@ -816,11 +843,17 @@ const SuperAdminUpload = () => {
                     name="overviewDocument"
                     onChange={handleFileChange}
                     accept=".pdf,.docx"
+                    required
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   />
                   <div className="absolute inset-y-0 right-0 pr-8 flex items-center pointer-events-none">
                     <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 20l-5.5-5.5M15 20l5.5-5.5" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 20l-5.5-5.5M15 20l5.5-5.5"
+                      />
                     </svg>
                   </div>
                 </div>
@@ -852,8 +885,8 @@ const SuperAdminUpload = () => {
                 Upload Overview
               </button>
             </div>
-
           </form>
+
 
           {/* List of Uploaded Documents */}
           <OverviewTable
@@ -872,42 +905,53 @@ const SuperAdminUpload = () => {
         <>
           {/* MCQ Form */}
           <form onSubmit={handleMcqSubmit} className="bg-white rounded-lg shadow p-4 lg:p-6 mb-6">
-            <h2 className="text-lg lg:text-xl font-semibold text-gray-800 mb-4 lg:mb-6">Fill the details to Upload Question's</h2>
+            <h2 className="text-lg lg:text-xl font-semibold text-gray-800 mb-4 lg:mb-6">
+              Fill the details to Upload Question's
+            </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 lg:gap-6 mb-6">
+              {/* Topic Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Topic Name</label>
                 <select
                   name="mcqTopicName"
                   value={formData.mcqTopicName}
                   onChange={handleInputChange}
+                  required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 >
                   <option value="">Select Topic</option>
                   {topics.map((topic) => (
-                    <option key={topic.topic_id} value={topic.topic_name}>{topic.topic_name}</option>
+                    <option key={topic.topic_id} value={topic.topic_name}>
+                      {topic.topic_name}
+                    </option>
                   ))}
                 </select>
               </div>
 
+              {/* Sub-Topic Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Sub - Topic Name</label>
                 <select
                   name="mcqSubTopicName"
                   value={formData.mcqSubTopicName}
                   onChange={handleInputChange}
+                  required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 >
                   <option value="">Select Sub-Topic</option>
                   {(() => {
-                    const selectedTopic = topics.find(t => t.topic_name === formData.mcqTopicName);
+                    const selectedTopic = topics.find((t) => t.topic_name === formData.mcqTopicName);
                     return (selectedTopic ? selectedTopic.sub_topics : []).map((st) => (
-                      <option key={st.sub_topic_id} value={st.sub_topic_name}>{st.sub_topic_name}</option>
+                      <option key={st.sub_topic_id} value={st.sub_topic_name}>
+                        {st.sub_topic_name}
+                      </option>
                     ));
                   })()}
                 </select>
               </div>
 
+              {/* No of Sub-Topics */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">No of Sub-Topic</label>
                 <input
@@ -916,12 +960,14 @@ const SuperAdminUpload = () => {
                   value={formData.mcqNoOfSubTopic}
                   onChange={handleInputChange}
                   placeholder="Type no of sub-topic"
+                  required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-1 gap-4 lg:gap-6 mb-6">
+            <div className="grid grid-cols-1 gap-4 lg:gap-6 mb-6">
+              {/* File Upload */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">MCQ's File Upload</label>
                 <div className="relative">
@@ -930,16 +976,21 @@ const SuperAdminUpload = () => {
                     name="mcqFile"
                     onChange={handleFileChange}
                     accept=".xlsx,.xls"
+                    required
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   />
-
                   <div className="absolute inset-y-0 right-0 pr-8 flex items-center pointer-events-none">
                     <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 20l-5.5-5.5M15 20l5.5-5.5" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 20l-5.5-5.5M15 20l5.5-5.5"
+                      />
                     </svg>
                   </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">File Upload (doc 2mb)</p>
+                <p className="text-xs text-gray-500 mt-1">File Upload (xls or xlsx, 2mb)</p>
               </div>
             </div>
 
@@ -948,7 +999,6 @@ const SuperAdminUpload = () => {
                 href="/sample_question_upload.xlsx"
                 download
                 className="bg-gray-500 text-white px-6 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow"
-
               >
                 Download Template
               </a>
@@ -959,19 +1009,19 @@ const SuperAdminUpload = () => {
                 Upload Questions's
               </button>
             </div>
-
           </form>
+
 
           {/* List of Uploaded MCQs */}
           <McqTable
-          data={mcqRows}
-          page={mcqPage}
-          rowsPerPage={rowsPerPage}
-          total={mcqRows.length}
-          totalPages={mcqTotalPages}
-          onPrev={handleMcqPrev}
-          onNext={handleMcqNext}
-        />
+            data={mcqRows}
+            page={mcqPage}
+            rowsPerPage={rowsPerPage}
+            total={mcqRows.length}
+            totalPages={mcqTotalPages}
+            onPrev={handleMcqPrev}
+            onNext={handleMcqNext}
+          />
         </>
       )}
       {isModalOpen && (

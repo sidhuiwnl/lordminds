@@ -377,11 +377,17 @@ async def get_user_subtopics(user_id: int):
 
                 # 2️⃣ Fetch topics for the department
                 cursor.execute("""
-                    SELECT topic_id, topic_name, topic_number 
-                    FROM topics 
-                    WHERE department_id = %s AND is_active = TRUE
-                    ORDER BY topic_number
-                """, (department_id,))
+                SELECT 
+                    t.topic_id, 
+                    t.topic_name, 
+                    t.topic_number
+                FROM department_topic_map dtm
+                INNER JOIN topics t 
+                    ON dtm.topic_id = t.topic_id
+                WHERE dtm.department_id = %s
+                AND t.is_active = TRUE
+                ORDER BY t.topic_number ASC
+            """, (department_id,))
                 topics = cursor.fetchall()
                 topic_ids = [t['topic_id'] for t in topics]
 

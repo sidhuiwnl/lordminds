@@ -183,8 +183,9 @@ export const TeacherTable = ({ teachers, rowsPerPage = 10, onPageChange, refresh
   };
 
   const handleUpdateSuccess = () => {
-    toast.success("Teacher updated successfully!");
     if (refreshData) refreshData();
+    // Reload the page after successful update
+    window.location.reload();
   };
 
   const handleDeleteTeacher = async (teacher) => {
@@ -199,6 +200,8 @@ export const TeacherTable = ({ teachers, rowsPerPage = 10, onPageChange, refresh
       if (res.data.status === "success") {
         toast.success(`${teacher.username} deleted successfully!`);
         if (refreshData) refreshData();
+        // Reload the page after successful deletion
+        window.location.reload();
       } else {
         toast.error(res.data.detail || "Failed to delete teacher.");
       }

@@ -181,8 +181,9 @@ export const AdminTable = ({ admins, rowsPerPage = 10, onPageChange, refreshData
   };
 
   const handleUpdateSuccess = () => {
-    toast.success("Administrator updated successfully!");
     if (refreshData) refreshData();
+    // Reload the page after successful update
+    window.location.reload();
   };
 
   const handleDeleteAdmin = async (admin) => {
@@ -197,6 +198,8 @@ export const AdminTable = ({ admins, rowsPerPage = 10, onPageChange, refreshData
       if (res.data.status === "success") {
         toast.success(`${admin.username} deleted successfully!`);
         if (refreshData) refreshData();
+        // Reload the page after successful deletion
+        window.location.reload();
       } else {
         toast.error(res.data.detail || "Failed to delete admin.");
       }

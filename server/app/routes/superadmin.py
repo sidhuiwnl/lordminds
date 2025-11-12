@@ -9,11 +9,11 @@ async def get_superadmin_report():
     Fetch Super Admin report:
     1️⃣ Total number of colleges (for pie chart)
     2️⃣ Total number of students (role_id = 5)
-    3️⃣ Each topic → total number of students in that topic's department (for bar chart)
+    3️⃣ Each topic → total number of students in departments mapped to that topic (for bar chart)
     """
     try:
         with get_db() as conn:
-            with conn.cursor() as cursor:  # ✅ dictionary=True to get key-based access
+            with conn.cursor() as cursor:
 
                 # 1️⃣ Total Colleges
                 cursor.execute("SELECT COUNT(*) AS total_colleges FROM colleges")
@@ -23,22 +23,24 @@ async def get_superadmin_report():
                 cursor.execute("SELECT COUNT(*) AS total_students FROM users WHERE role_id = 5")
                 total_students = cursor.fetchone()["total_students"]
 
-                # 3️⃣ Each Topic → number of students (linked via department)
+                # 3️⃣ Each Topic → total students (via department_topic_map)
                 cursor.execute("""
                     SELECT 
                         t.topic_id,
                         t.topic_name,
                         COUNT(u.user_id) AS total_students
                     FROM topics t
+                    LEFT JOIN department_topic_map dtm 
+                        ON dtm.topic_id = t.topic_id
                     LEFT JOIN users u 
-                        ON u.department_id = t.department_id
+                        ON u.department_id = dtm.department_id
                         AND u.role_id = 5
                     GROUP BY t.topic_id, t.topic_name
                     ORDER BY t.topic_id ASC
                 """)
                 topics = cursor.fetchall() or []
 
-                # ✅ Final response
+                # ✅ Final Response
                 return {
                     "status": "success",
                     "data": {

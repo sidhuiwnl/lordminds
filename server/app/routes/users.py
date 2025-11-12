@@ -10,10 +10,13 @@ from datetime import datetime
 from voice.voice_analyzer import VoiceAnalyzer
 import shutil
 import os
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
 
 router = APIRouter()
 analyzer = VoiceAnalyzer()
-
+executor = ThreadPoolExecutor(max_workers=4)
 
 UPLOAD_DIR = "uploads/profile_images"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -22,12 +25,43 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/analyze-voice")
 async def analyze_voice(file: UploadFile = File(...)):
-    temp_path = f"temp_{file.filename}"
-    with open(temp_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    temp_path = None
+    try:
+        # ✅ 1. Validate file type
+        if not file.filename.endswith(('.mp3', '.wav', '.m4a', '.ogg', '.flac')):
+            raise HTTPException(status_code=400, detail="Only audio files allowed (.mp3, .wav, .m4a, .ogg, .flac)")
 
-    result = analyzer.analyze_audio(temp_path)
-    return result
+        # ✅ 2. Save uploaded file temporarily
+        temp_path = f"temp_{file.filename}"
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # ✅ 3. Check file size (avoid huge uploads)
+        file_size = os.path.getsize(temp_path)
+        if file_size > 50 * 1024 * 1024:  # 50MB limit
+            raise HTTPException(status_code=413, detail="File too large (max 50MB)")
+
+        # ✅ 4. Run heavy analyzer in thread pool (non-blocking)
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(executor, analyzer.analyze_audio, temp_path)
+
+        return {
+            "status": "success",
+            "data": result
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error analyzing voice: {str(e)}")
+    
+    finally:
+        # ✅ 5. Always cleanup temp file
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception as e:
+                print(f"⚠️ Cleanup warning: {e}")
 
 
 
@@ -428,9 +462,11 @@ async def get_topics_with_progress(college_id: int, department_id: int):
                         c.name AS college_name,
                         ROUND(AVG(stp.progress_percent), 2) AS avg_progress_percent,
                         ROUND(AVG(stp.average_score), 2) AS avg_score
-                    FROM topics t
+                    FROM department_topic_map dtm
+                    INNER JOIN topics t 
+                        ON dtm.topic_id = t.topic_id
                     INNER JOIN departments d 
-                        ON t.department_id = d.department_id
+                        ON dtm.department_id = d.department_id
                     INNER JOIN college_departments cd 
                         ON d.department_id = cd.department_id
                     INNER JOIN colleges c 
@@ -450,7 +486,7 @@ async def get_topics_with_progress(college_id: int, department_id: int):
                 """
 
                 cursor.execute(query, (department_id, college_id))
-                topics = cursor.fetchall()
+                topics = cursor.fetchall() or []
 
                 return {
                     "status": "success",
@@ -467,32 +503,37 @@ async def get_topics_with_progress(college_id: int, department_id: int):
 
 
 
-
 @router.get("/{topic_id}/subtopics")
 async def get_subtopics_by_topic(topic_id: int):
     """Fetch all active subtopics for a given topic"""
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
-                cursor.execute("""
+                query = """
                     SELECT 
-                        sub_topic_id,
-                        sub_topic_name,
-                        sub_topic_order,
-                        overview_video_url,
-                        file_name,
+                        s.sub_topic_id,
+                        s.sub_topic_name,
+                        s.sub_topic_order,
+                        s.overview_video_url,
+                        s.file_name,
                         CASE 
-                            WHEN overview_content IS NOT NULL 
-                            THEN TRUE 
+                            WHEN s.overview_content IS NOT NULL THEN TRUE 
                             ELSE FALSE 
-                        END as has_document,
-                        is_active,
-                        created_at
-                    FROM sub_topics 
-                    WHERE topic_id = %s AND is_active = TRUE
-                    ORDER BY sub_topic_order
-                """, (topic_id,))
-                subtopics = cursor.fetchall()
+                        END AS has_document,
+                        s.is_active,
+                        s.created_at
+                    FROM topic_subtopic_map tsm
+                    INNER JOIN sub_topics s 
+                        ON tsm.sub_topic_id = s.sub_topic_id
+                    INNER JOIN topics t 
+                        ON tsm.topic_id = t.topic_id
+                    WHERE t.topic_id = %s
+                        AND s.is_active = TRUE
+                    ORDER BY s.sub_topic_order
+                """
+
+                cursor.execute(query, (topic_id,))
+                subtopics = cursor.fetchall() or []
 
                 return {
                     "status": "success",
@@ -501,7 +542,11 @@ async def get_subtopics_by_topic(topic_id: int):
                 }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching subtopics for topic {topic_id}: {str(e)}")    
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching subtopics for topic {topic_id}: {str(e)}"
+        )
+ 
     
 
 @router.get("/subtopic/{sub_topic_id}")

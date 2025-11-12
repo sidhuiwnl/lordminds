@@ -234,6 +234,8 @@ export const TopicTable = () => {
 
   const handleUpdateSuccess = () => {
     fetchTopics();
+    // Reload the page after successful update
+    window.location.reload();
   };
 
   const handleDeleteTopic = async (topic) => {
@@ -246,6 +248,8 @@ export const TopicTable = () => {
       if (res.data.status === "success") {
         toast.success(`"${topic.topic_name}" deleted successfully!`);
         fetchTopics();
+        // Reload the page after successful deletion
+        window.location.reload();
       } else {
         toast.error(res.data.detail || "Failed to delete topic.");
       }
