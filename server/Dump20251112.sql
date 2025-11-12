@@ -34,7 +34,7 @@ CREATE TABLE `assignment_marks` (
   KEY `assignment_id` (`assignment_id`),
   CONSTRAINT `assignment_marks_ibfk_1` FOREIGN KEY (`student_id`) REFERENCES `users` (`user_id`),
   CONSTRAINT `assignment_marks_ibfk_2` FOREIGN KEY (`assignment_id`) REFERENCES `assignments` (`assignment_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -43,7 +43,6 @@ CREATE TABLE `assignment_marks` (
 
 LOCK TABLES `assignment_marks` WRITE;
 /*!40000 ALTER TABLE `assignment_marks` DISABLE KEYS */;
-INSERT INTO `assignment_marks` VALUES (3,1,1,5.00,10.00,'2025-10-30 22:27:21'),(4,1,1,8.00,10.00,'2025-10-30 22:27:21');
 /*!40000 ALTER TABLE `assignment_marks` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -73,7 +72,7 @@ CREATE TABLE `assignments` (
   KEY `idx_assignment_dept` (`department_id`),
   KEY `idx_assignment_dates` (`start_date`,`end_date`),
   CONSTRAINT `assignments_ibfk_1` FOREIGN KEY (`department_id`) REFERENCES `departments` (`department_id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -82,7 +81,7 @@ CREATE TABLE `assignments` (
 
 LOCK TABLES `assignments` WRITE;
 /*!40000 ALTER TABLE `assignments` DISABLE KEYS */;
-INSERT INTO `assignments` VALUES (1,'1','Tense',1,NULL,10.00,40.00,'2025-10-28 00:00:00','2025-10-30 00:00:00','sample_question_upload.xlsx','uploads/tests\\assignment\\cbac46c4-ebba-472e-a081-e12133656ff6.xlsx',1,'2025-10-27 14:17:25','2025-10-30 16:54:28'),(2,'2','Verbose',1,NULL,10.00,40.00,'2025-10-28 00:00:00','2025-10-30 00:00:00','sample_question_upload.xlsx','uploads/tests\\assignment\\46b0c0fc-c692-4ec4-ae04-e36adf968487.xlsx',1,'2025-10-27 15:04:56','2025-10-30 16:54:28'),(3,'1','Fill in the blanks',1,NULL,10.00,40.00,'2025-10-24 00:00:00','2025-10-31 00:00:00','sample_question_upload.xlsx','uploads/tests\\assignment\\5aab9b4a-1cb2-4223-9a35-7626aa388d26.xlsx',1,'2025-10-27 15:07:12','2025-10-30 16:54:28'),(4,'4','Golang',1,NULL,10.00,40.00,'2025-10-28 00:00:00','2025-10-30 00:00:00','sample_question_upload.xlsx','uploads/tests\\assignment\\7bbca04a-fd32-4b69-9d94-ec2b115a54f8.xlsx',1,'2025-10-27 17:40:16','2025-10-30 16:54:28'),(5,'5','Fill in the blanks 2',1,NULL,10.00,40.00,'2025-10-30 00:00:00','2025-10-31 00:00:00','sample_question_upload.xlsx','uploads/tests\\assignment\\fcddf084-ba8b-43cc-b0be-ea878853d73d.xlsx',1,'2025-10-27 17:49:42','2025-10-30 16:54:28');
+INSERT INTO `assignments` VALUES (1,'1','Tense',1,NULL,100.00,40.00,'2025-11-13 00:00:00','2025-11-14 00:00:00','sample_question_upload1.xlsx','uploads/tests\\assignment\\ba983104-5e23-40a7-9234-f5d507561fed.xlsx',1,'2025-11-12 08:57:05','2025-11-12 08:57:05');
 /*!40000 ALTER TABLE `assignments` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -104,7 +103,7 @@ CREATE TABLE `college_departments` (
   KEY `department_id` (`department_id`),
   CONSTRAINT `college_departments_ibfk_1` FOREIGN KEY (`college_id`) REFERENCES `colleges` (`college_id`) ON DELETE CASCADE,
   CONSTRAINT `college_departments_ibfk_2` FOREIGN KEY (`department_id`) REFERENCES `departments` (`department_id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -113,7 +112,7 @@ CREATE TABLE `college_departments` (
 
 LOCK TABLES `college_departments` WRITE;
 /*!40000 ALTER TABLE `college_departments` DISABLE KEYS */;
-INSERT INTO `college_departments` VALUES (1,1,1,'2025-10-27 17:06:50','2025-10-27 17:06:50'),(4,1,2,'2025-10-29 17:03:31','2025-10-29 17:03:31');
+INSERT INTO `college_departments` VALUES (1,1,1,'2025-11-12 08:56:41','2025-11-12 08:56:41');
 /*!40000 ALTER TABLE `college_departments` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -131,7 +130,7 @@ CREATE TABLE `colleges` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`college_id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -140,7 +139,7 @@ CREATE TABLE `colleges` (
 
 LOCK TABLES `colleges` WRITE;
 /*!40000 ALTER TABLE `colleges` DISABLE KEYS */;
-INSERT INTO `colleges` VALUES (1,'Kgisl Institute of Technology','14/02 Marutham Nagar','2025-10-27 17:06:50');
+INSERT INTO `colleges` VALUES (1,'Kgisl Institute of Technology','14/02 Marutham Nagar','2025-11-12 08:56:41');
 /*!40000 ALTER TABLE `colleges` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -194,7 +193,7 @@ CREATE TABLE `departments` (
   KEY `fk_department_college` (`college_id`),
   CONSTRAINT `departments_ibfk_1` FOREIGN KEY (`college_id`) REFERENCES `colleges` (`college_id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_department_college` FOREIGN KEY (`college_id`) REFERENCES `colleges` (`college_id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -203,7 +202,7 @@ CREATE TABLE `departments` (
 
 LOCK TABLES `departments` WRITE;
 /*!40000 ALTER TABLE `departments` DISABLE KEYS */;
-INSERT INTO `departments` VALUES (1,'Artificial Intelligence',NULL,'B.Sc AIand DS',1,'2025-10-27 17:06:19','2025-10-27 17:06:19'),(2,'Computer Science',NULL,'B.Sc CSE',1,'2025-10-29 16:50:08','2025-10-29 16:50:08');
+INSERT INTO `departments` VALUES (1,'Artificial Intelligence and Data Science',NULL,'B.Sc AI and DS',1,'2025-11-12 08:56:37','2025-11-12 08:56:37');
 /*!40000 ALTER TABLE `departments` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -250,11 +249,12 @@ CREATE TABLE `questions` (
   `order_no` int DEFAULT '1',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `is_active` tinyint(1) DEFAULT '1',
   PRIMARY KEY (`question_id`),
   KEY `question_type_id` (`question_type_id`),
   KEY `idx_test_scope_ref` (`test_scope`,`reference_id`),
   CONSTRAINT `questions_ibfk_2` FOREIGN KEY (`question_type_id`) REFERENCES `question_type` (`question_type_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -263,7 +263,7 @@ CREATE TABLE `questions` (
 
 LOCK TABLES `questions` WRITE;
 /*!40000 ALTER TABLE `questions` DISABLE KEYS */;
-INSERT INTO `questions` VALUES (1,'sub_topic',1,1,'Fluent communication means speaking with a natural rhythm and without breaks.','{\"options\": [true, false, \"Sometimes\", \"Never\"], \"correct_answer\": true}',1.00,1,'2025-10-27 17:27:44','2025-10-27 17:27:44'),(2,'sub_topic',1,1,'Which of the following best defines fluency?','{\"options\": [\"Smooth speech flow\", \"Perfect grammar\", \"Loud voice\", \"Slow speaking\"], \"correct_answer\": \"Smooth speech flow\"}',1.00,2,'2025-10-27 17:27:44','2025-10-27 17:27:44'),(3,'sub_topic',1,1,'What skill helps improve fluency in a language?','{\"options\": [\"Listening\", \"Writing\", \"Translation\", \"Memorization\"], \"correct_answer\": \"Listening\"}',1.00,3,'2025-10-27 17:27:44','2025-10-27 17:27:44'),(4,'assignment',4,1,'Fluent communication means speaking with a natural rhythm and without breaks.','{\"options\": [true, false, \"Sometimes\", \"Never\"], \"correct_answer\": true}',1.00,1,'2025-10-27 17:40:16','2025-10-27 17:40:16'),(5,'assignment',4,1,'Which of the following best defines fluency?','{\"options\": [\"Smooth speech flow\", \"Perfect grammar\", \"Loud voice\", \"Slow speaking\"], \"correct_answer\": \"Smooth speech flow\"}',1.00,2,'2025-10-27 17:40:16','2025-10-27 17:40:16'),(6,'assignment',4,1,'What skill helps improve fluency in a language?','{\"options\": [\"Listening\", \"Writing\", \"Translation\", \"Memorization\"], \"correct_answer\": \"Listening\"}',1.00,3,'2025-10-27 17:40:16','2025-10-27 17:40:16'),(7,'assignment',5,1,'Fluent communication means speaking with a natural rhythm and without breaks.','{\"options\": [true, false, \"Sometimes\", \"Never\"], \"correct_answer\": true}',1.00,1,'2025-10-27 17:49:42','2025-10-27 17:49:42'),(8,'assignment',5,1,'Which of the following best defines fluency?','{\"options\": [\"Smooth speech flow\", \"Perfect grammar\", \"Loud voice\", \"Slow speaking\"], \"correct_answer\": \"Smooth speech flow\"}',1.00,2,'2025-10-27 17:49:42','2025-10-27 17:49:42'),(9,'assignment',5,1,'What skill helps improve fluency in a language?','{\"options\": [\"Listening\", \"Writing\", \"Translation\", \"Memorization\"], \"correct_answer\": \"Listening\"}',1.00,3,'2025-10-27 17:49:42','2025-10-27 17:49:42');
+INSERT INTO `questions` VALUES (1,'assignment',1,1,'Fluent communication means speaking with a natural rhythm and without breaks.','{\"options\": [true, false, \"Sometimes\", \"Never\"], \"correct_answer\": true}',1.00,1,'2025-11-12 08:57:05','2025-11-12 08:57:05',1),(2,'assignment',1,1,'Which of the following best defines fluency?','{\"options\": [\"Smooth speech flow\", \"Perfect grammar\", \"Loud voice\", \"Slow speaking\"], \"correct_answer\": \"Smooth speech flow\"}',1.00,2,'2025-11-12 08:57:05','2025-11-12 08:57:05',1),(3,'assignment',1,1,'What skill helps improve fluency in a language?','{\"options\": [\"Listening\", \"Writing\", \"Translation\", \"Memorization\"], \"correct_answer\": \"Listening\"}',1.00,3,'2025-11-12 08:57:05','2025-11-12 08:57:05',1);
 /*!40000 ALTER TABLE `questions` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -315,7 +315,7 @@ CREATE TABLE `student_subtopic_progress` (
   CONSTRAINT `student_subtopic_progress_ibfk_1` FOREIGN KEY (`student_id`) REFERENCES `users` (`user_id`),
   CONSTRAINT `student_subtopic_progress_ibfk_2` FOREIGN KEY (`topic_id`) REFERENCES `topics` (`topic_id`),
   CONSTRAINT `student_subtopic_progress_ibfk_3` FOREIGN KEY (`sub_topic_id`) REFERENCES `sub_topics` (`sub_topic_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -324,7 +324,6 @@ CREATE TABLE `student_subtopic_progress` (
 
 LOCK TABLES `student_subtopic_progress` WRITE;
 /*!40000 ALTER TABLE `student_subtopic_progress` DISABLE KEYS */;
-INSERT INTO `student_subtopic_progress` VALUES (1,1,1,1,1,10.00,25,'2025-11-02 13:58:01'),(5,1,1,1,1,10.00,25,'2025-11-02 14:02:41'),(6,1,1,2,1,10.00,30,'2025-11-02 14:02:41');
 /*!40000 ALTER TABLE `student_subtopic_progress` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -350,7 +349,7 @@ CREATE TABLE `student_topic_progress` (
   KEY `topic_id` (`topic_id`),
   CONSTRAINT `student_topic_progress_ibfk_1` FOREIGN KEY (`student_id`) REFERENCES `users` (`user_id`),
   CONSTRAINT `student_topic_progress_ibfk_2` FOREIGN KEY (`topic_id`) REFERENCES `topics` (`topic_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -359,7 +358,6 @@ CREATE TABLE `student_topic_progress` (
 
 LOCK TABLES `student_topic_progress` WRITE;
 /*!40000 ALTER TABLE `student_topic_progress` DISABLE KEYS */;
-INSERT INTO `student_topic_progress` VALUES (1,1,1,2,2,100.00,60.00,'Completed','2025-11-02 13:52:21');
 /*!40000 ALTER TABLE `student_topic_progress` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -382,7 +380,7 @@ CREATE TABLE `sub_topic_marks` (
   KEY `sub_topic_id` (`sub_topic_id`),
   CONSTRAINT `sub_topic_marks_ibfk_1` FOREIGN KEY (`student_id`) REFERENCES `users` (`user_id`),
   CONSTRAINT `sub_topic_marks_ibfk_2` FOREIGN KEY (`sub_topic_id`) REFERENCES `sub_topics` (`sub_topic_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -391,7 +389,6 @@ CREATE TABLE `sub_topic_marks` (
 
 LOCK TABLES `sub_topic_marks` WRITE;
 /*!40000 ALTER TABLE `sub_topic_marks` DISABLE KEYS */;
-INSERT INTO `sub_topic_marks` VALUES (1,1,1,5.00,10.00,'2025-10-31 00:10:57'),(2,1,1,7.00,10.00,'2025-10-31 00:10:57'),(3,1,2,5.00,10.00,'2025-10-31 00:33:46'),(4,1,2,7.00,10.00,'2025-10-31 00:33:46'),(5,1,3,5.00,10.00,'2025-10-31 00:34:34'),(6,1,3,7.00,10.00,'2025-10-31 00:34:34');
 /*!40000 ALTER TABLE `sub_topic_marks` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -418,7 +415,7 @@ CREATE TABLE `sub_topics` (
   KEY `idx_subtopic_topic` (`topic_id`),
   KEY `idx_subtopic_order` (`topic_id`,`sub_topic_order`),
   CONSTRAINT `sub_topics_ibfk_1` FOREIGN KEY (`topic_id`) REFERENCES `topics` (`topic_id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -427,7 +424,6 @@ CREATE TABLE `sub_topics` (
 
 LOCK TABLES `sub_topics` WRITE;
 /*!40000 ALTER TABLE `sub_topics` DISABLE KEYS */;
-INSERT INTO `sub_topics` VALUES (1,1,'Past Tense',1,'https://us7xgl2xx9.ufs.sh/f/NLwJvYRc8DXfBe34fsIZrb67gjCL5kFMaqTzV3evG81Ec0su','sample_question_upload.xlsx','uploads/tests\\sub_topic\\ebe22947-6e02-4699-9659-8cbd05dcd848.xlsx','<p>Requirements of ElectCare</p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p> <br></p><p><br></p><p><br></p>',1,'2025-10-27 17:27:30','2025-10-27 17:27:43'),(2,1,'Past Tense 3',2,'https://us7xgl2xx9.ufs.sh/f/NLwJvYRc8DXfBe34fsIZrb67gjCL5kFMaqTzV3evG81Ec0su',NULL,NULL,'<p>dadadadad</p>',1,'2025-10-27 17:50:20','2025-10-27 17:50:20'),(3,2,'Go Routine',1,'https://us7xgl2xx9.ufs.sh/f/NLwJvYRc8DXfBe34fsIZrb67gjCL5kFMaqTzV3evG81Ec0su',NULL,NULL,'<p>Requirements of ElectCare</p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p> <br></p><p><br></p><p><br></p>',1,'2025-10-30 19:03:06','2025-10-30 19:03:06');
 /*!40000 ALTER TABLE `sub_topics` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -451,7 +447,7 @@ CREATE TABLE `topics` (
   KEY `idx_topic_dept` (`department_id`),
   KEY `idx_topic_name` (`topic_name`),
   CONSTRAINT `topics_ibfk_1` FOREIGN KEY (`department_id`) REFERENCES `departments` (`department_id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -460,7 +456,6 @@ CREATE TABLE `topics` (
 
 LOCK TABLES `topics` WRITE;
 /*!40000 ALTER TABLE `topics` DISABLE KEYS */;
-INSERT INTO `topics` VALUES (1,1,'Tenses',NULL,2,1,'2025-10-27 17:07:08','2025-10-30 16:51:36'),(2,NULL,'Golang',NULL,1,1,'2025-10-30 19:02:43','2025-10-30 19:03:06');
 /*!40000 ALTER TABLE `topics` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -480,7 +475,7 @@ CREATE TABLE `user_sessions` (
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`),
   CONSTRAINT `user_sessions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -489,7 +484,6 @@ CREATE TABLE `user_sessions` (
 
 LOCK TABLES `user_sessions` WRITE;
 /*!40000 ALTER TABLE `user_sessions` DISABLE KEYS */;
-INSERT INTO `user_sessions` (`id`, `user_id`, `start_time`, `end_time`) VALUES (1,1,'2025-11-02 16:56:02',NULL),(2,1,'2025-11-02 16:56:02','2025-11-02 17:06:18'),(3,1,'2025-11-02 17:45:27',NULL),(4,1,'2025-11-02 17:45:27','2025-11-02 17:45:55');
 /*!40000 ALTER TABLE `user_sessions` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -511,6 +505,7 @@ CREATE TABLE `users` (
   `is_active` tinyint(1) DEFAULT '1',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `last_login` datetime DEFAULT NULL,
   `profile_image` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`user_id`),
   UNIQUE KEY `username` (`username`),
@@ -530,7 +525,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (1,'21AIB38','$2b$12$jouElwAygx/GHEYYN3wFp.J5A1UBpbc.3EBE7fMOjPa8/1vjzhf6C','Sidharth',1,1,5,1,'2025-10-24 17:31:45','2025-11-02 09:23:53','profile_images/user_1_20251102145353.jpeg'),(2,'21AIB30','$2b$12$EX9j10zMqjOKInWtmaqOIeI38eZzUq1RCuHWqoJsJ8gQ/Adqz5T3C','Sankar',2,2,5,1,'2025-10-24 17:35:43','2025-10-24 17:35:43',NULL),(3,'superadmin','$2a$12$iV8iuYIOOgf5BNve1Zje7utPfnFvc6RO4xdsU3yXmsotrySTWwR0q','superadmin',NULL,NULL,1,1,'2025-10-24 17:39:39','2025-10-24 17:39:39',NULL),(8,'Teacher','$2b$12$vmpXfhzWXwDc8ipEDULuxO19NKKFoZhCJwa5xA1q4BQ8YWRChX7eu',NULL,1,NULL,4,1,'2025-10-29 16:36:16','2025-11-02 09:47:18','profile_images/user_8_20251102151718.jpg'),(9,'Administrator','$2b$12$.04MnS.u4AWwOF92KOXgrO3SZfLCzhHPN2UgGGBep7R3qKYT3w7PK',NULL,1,NULL,3,1,'2025-10-29 16:36:33','2025-10-29 16:36:33',NULL),(10,'21CSI38','$2b$12$0H42fQm4c5d4eNywI7du2Os6q31/0DYTY0vUuKJOXuvOxZRSBeADW','Sidharth Babu',1,2,5,1,'2025-10-29 17:04:07','2025-10-29 17:04:07',NULL),(11,'Admin','$2a$12$zcJbM1QgIyl4f3TicukrWuhzo5BsRaLHvWihmG4VHt8zv8JpVfZcy','Admin',NULL,NULL,2,1,'2025-11-01 17:20:05','2025-11-01 17:20:05',NULL),(12,'Siva Ramana','$2b$12$ZNAcL4AMSeHCYcooSo6mc.cMAllQWxIBxJbJGzTC0bhM/DPbpZoNy','21AIB39',1,2,5,1,'2025-11-02 17:44:51','2025-11-02 17:44:51',NULL);
+INSERT INTO `users` VALUES (1,'21AIB38','$2b$12$jouElwAygx/GHEYYN3wFp.J5A1UBpbc.3EBE7fMOjPa8/1vjzhf6C','Sidharth',1,1,5,1,'2025-10-24 17:31:45','2025-11-02 09:23:53',NULL,'profile_images/user_1_20251102145353.jpeg'),(2,'21AIB30','$2b$12$EX9j10zMqjOKInWtmaqOIeI38eZzUq1RCuHWqoJsJ8gQ/Adqz5T3C','Sankar',2,2,5,1,'2025-10-24 17:35:43','2025-10-24 17:35:43',NULL,NULL),(3,'superadmin','$2a$12$iV8iuYIOOgf5BNve1Zje7utPfnFvc6RO4xdsU3yXmsotrySTWwR0q','superadmin',NULL,NULL,1,1,'2025-10-24 17:39:39','2025-10-24 17:39:39',NULL,NULL),(8,'Teacher','$2b$12$vmpXfhzWXwDc8ipEDULuxO19NKKFoZhCJwa5xA1q4BQ8YWRChX7eu',NULL,1,NULL,4,1,'2025-10-29 16:36:16','2025-11-02 09:47:18',NULL,'profile_images/user_8_20251102151718.jpg'),(9,'Administrator','$2b$12$.04MnS.u4AWwOF92KOXgrO3SZfLCzhHPN2UgGGBep7R3qKYT3w7PK',NULL,1,NULL,3,1,'2025-10-29 16:36:33','2025-10-29 16:36:33',NULL,NULL),(11,'Admin','$2a$12$zcJbM1QgIyl4f3TicukrWuhzo5BsRaLHvWihmG4VHt8zv8JpVfZcy','Admin',NULL,NULL,2,1,'2025-11-01 17:20:05','2025-11-01 17:20:05',NULL,NULL),(12,'Siva Ramana','$2b$12$ZNAcL4AMSeHCYcooSo6mc.cMAllQWxIBxJbJGzTC0bhM/DPbpZoNy','21AIB40',1,2,5,1,'2025-11-02 17:44:51','2025-11-11 17:00:11',NULL,NULL);
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -543,4 +538,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-11-02 23:25:26
+-- Dump completed on 2025-11-12 15:02:00
