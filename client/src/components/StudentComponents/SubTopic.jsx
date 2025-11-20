@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 
 const SubtopicsComponent = () => {
   const [subtopics, setSubtopics] = useState([]);
+  const [topicName, setTopicName] = useState("");
   const [loading, setLoading] = useState(true);
+  const { topic } = useParams();
 
   useEffect(() => {
     async function fetchSubtopics() {
@@ -18,34 +21,36 @@ const SubtopicsComponent = () => {
         }
 
         const response = await fetch(
-          `${import.meta.env.VITE_BACKEND_API_URL}/topics/${userId}/subtopics`
+          `${import.meta.env.VITE_BACKEND_API_URL}/topics/${userId}/subtopics/${topic}`,
         );
 
         if (!response.ok) throw new Error("Failed to fetch subtopics");
 
         const data = await response.json();
 
-        // 🧩 Flatten nested topic/subtopic structure
-        const allSubtopics =
-          data.data?.flatMap((topicItem) =>
-            topicItem.sub_topics.map((sub) => ({
-              ...sub,
-              topic_name: topicItem.topic_name,
-              progress:
-                sub.progress?.completion_percent ?? 0, // 🧠 Use backend progress
-            }))
-          ) || [];
+        // ✅ NEW: Handle the single topic response structure
+        if (data.data && data.data.sub_topics) {
+          const processedSubtopics = data.data.sub_topics.map((sub) => ({
+            ...sub,
+            topic_name: data.data.topic_name, // Use the topic name from the response
+            progress: sub.progress?.completion_percent ?? 0,
+          }));
 
-        setSubtopics(allSubtopics);
+          setSubtopics(processedSubtopics);
+          setTopicName(data.data.topic_name);
+        } else {
+          setSubtopics([]);
+        }
       } catch (error) {
         console.error("Error fetching subtopics:", error);
+        setSubtopics([]);
       } finally {
         setLoading(false);
       }
     }
 
     fetchSubtopics();
-  }, []);
+  }, [topic]); // ✅ Added topic as dependency
 
   if (loading) {
     return (
@@ -65,7 +70,9 @@ const SubtopicsComponent = () => {
 
   return (
     <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
-      <h2 className="text-xl font-bold text-gray-800 mb-6">Subtopics</h2>
+      <h2 className="text-xl font-bold text-gray-800 mb-6">
+        {topicName} - Subtopics
+      </h2>
 
       <div className="space-y-4 lg:space-y-6 mx-0 lg:mx-4">
         {subtopics.map((sub) => (
@@ -78,8 +85,8 @@ const SubtopicsComponent = () => {
                 <h3 className="font-bold text-base lg:text-lg text-gray-800">
                   {sub.sub_topic_name}
                 </h3>
-                <p className="text-ls text-gray-500 mt-5 font-bold">
-                  Topic: {sub.topic_name}
+                <p className="text-sm text-gray-500 mt-2 font-bold">
+                  Order: {sub.sub_topic_order}
                 </p>
               </div>
 
@@ -92,7 +99,7 @@ const SubtopicsComponent = () => {
               </a>
             </div>
 
-            {/* 🧭 Progress bar */}
+            {/* Progress bar */}
             <div className="mt-2">
               <p className="text-xs font-semibold text-gray-700 mb-1">
                 Progress
@@ -102,7 +109,7 @@ const SubtopicsComponent = () => {
                   className="bg-blue-500 h-6 rounded-full transition-all duration-500 relative"
                   style={{ width: `${sub.progress}%` }}
                 >
-                  <span className="absolute left-2 text-xs text-white font-semibold mt-1 ">
+                  <span className="absolute left-2 text-xs text-white font-semibold mt-1">
                     {sub.progress}%
                   </span>
                 </div>
@@ -115,4 +122,4 @@ const SubtopicsComponent = () => {
   );
 };
 
-export default SubtopicsComponent;
+ export default SubtopicsComponent;

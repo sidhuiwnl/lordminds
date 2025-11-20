@@ -292,12 +292,12 @@ async def get_assignment_marks(department_id: int = None):
 async def get_topic_average_marks(department_id: int = None):
     """
     Fetch student-wise topic average marks (aggregating all sub-topic marks under each topic),
-    optionally filtered by department.
+    optionally filtered by department. Uses department_topic_map for proper topic-department relationships.
     """
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
-                # Base query
+                # Base query with department_topic_map join
                 query = """
                     SELECT 
                         u.username AS student_name,
@@ -312,6 +312,10 @@ async def get_topic_average_marks(department_id: int = None):
                     JOIN departments d ON u.department_id = d.department_id
                     JOIN sub_topics st ON stm.sub_topic_id = st.sub_topic_id
                     JOIN topics t ON st.topic_id = t.topic_id
+                    JOIN department_topic_map dtm ON (
+                        d.department_id = dtm.department_id 
+                        AND t.topic_id = dtm.topic_id
+                    )
                 """
 
                 params = []
@@ -320,7 +324,7 @@ async def get_topic_average_marks(department_id: int = None):
                     params.append(department_id)
 
                 query += """
-                    GROUP BY u.username, d.department_name, t.topic_name
+                    GROUP BY u.username, u.full_name, d.department_name, t.topic_name
                     ORDER BY u.username, t.topic_name
                 """
 
@@ -356,7 +360,6 @@ async def get_topic_average_marks(department_id: int = None):
             status_code=500,
             detail=f"Error fetching topic averages: {str(e)}"
         )
-
 
 @router.get("/total-duration/{department_id}")
 async def get_total_session_duration(department_id: int = None):

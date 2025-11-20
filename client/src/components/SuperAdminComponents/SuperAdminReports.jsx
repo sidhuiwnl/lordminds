@@ -12,6 +12,51 @@ import { Bar } from "react-chartjs-2";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
+// --- Reusable Components ---
+
+const Pagination = ({ currentPage, totalItems, itemsPerPage, onPageChange }) => {
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+  if (totalItems === 0) return null;
+
+  const indexOfFirstItem = (currentPage - 1) * itemsPerPage + 1;
+  const indexOfLastItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+  return (
+    <div className="flex flex-col sm:flex-row justify-between items-center px-4 py-3 bg-white border-t border-gray-200 sm:px-6 mt-4 rounded-b-lg">
+      <div className="text-sm text-gray-700 mb-2 sm:mb-0">
+        Showing <span className="font-medium">{indexOfFirstItem}</span> to{" "}
+        <span className="font-medium">{indexOfLastItem}</span> of{" "}
+        <span className="font-medium">{totalItems}</span> results
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md bg-white text-gray-700 ${
+            currentPage === 1
+              ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+              : "hover:bg-gray-50"
+          }`}
+        >
+          Previous
+        </button>
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md bg-white text-gray-700 ${
+            currentPage === totalPages
+              ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+              : "hover:bg-gray-50"
+          }`}
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const SearchableSelect = ({ label, value, onChange, options, searchValue, onSearchChange, disabled, placeholder, selectedDisplayName, showDropdown, setShowDropdown, allOptionLabel, refProp }) => {
   const inputRef = useRef(null);
 
@@ -103,6 +148,8 @@ const SearchableSelect = ({ label, value, onChange, options, searchValue, onSear
   );
 };
 
+// --- Main Component ---
+
 const SuperAdminReports = () => {
   const [selectedTab, setSelectedTab] = useState("current");
   const [assignmentMarksData, setAssignmentMarksData] = useState([]);
@@ -117,6 +164,11 @@ const SuperAdminReports = () => {
   const [departmentSearch, setDepartmentSearch] = useState("");
   const [showCollegeDropdown, setShowCollegeDropdown] = useState(false);
   const [showDepartmentDropdown, setShowDepartmentDropdown] = useState(false);
+  
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+
   const collegeRef = useRef(null);
   const departmentRef = useRef(null);
   const [loading, setLoading] = useState({
@@ -131,9 +183,6 @@ const SuperAdminReports = () => {
     { id: "duration", label: "Total Duration" },
     { id: "overall", label: "Overall Reports" },
   ];
-
-  console.log("Selected College:", selectedCollege);
-  console.log("Selected Department:", selectedDepartment);
 
   const fetchColleges = async () => {
     setLoading((p) => ({ ...p, colleges: true }));
@@ -223,7 +272,6 @@ const SuperAdminReports = () => {
       const res = await fetch(url);
       const data = await res.json();
       if (data.status === "success") {
-        // Sort by total_duration_hours descending
         const sortedData = data.data.sort((a, b) => b.total_duration_hours - a.total_duration_hours);
         setDurationData(sortedData);
       }
@@ -245,7 +293,6 @@ const SuperAdminReports = () => {
       const res = await fetch(url);
       const data = await res.json();
       if (data.status === "success") {
-        // Sort by average of assignment_percentage and topic_average_percentage descending
         const sortedData = data.data.sort((a, b) => {
           const avgA = (a.assignment_percentage + a.topic_average_percentage) / 2;
           const avgB = (b.assignment_percentage + b.topic_average_percentage) / 2;
@@ -267,6 +314,11 @@ const SuperAdminReports = () => {
   useEffect(() => {
     fetchDepartments();
   }, [selectedCollege]);
+
+  // Reset Pagination when filters or tab change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedTab, selectedCollege, selectedDepartment]);
 
   useEffect(() => {
     setDepartmentSearch("");
@@ -333,11 +385,11 @@ const SuperAdminReports = () => {
   };
 
   const getBarColor = (hours) => {
-    if (hours < 2) return "#ef4444"; // red
-    if (hours < 5) return "#f59e0b"; // yellow
-    if (hours < 10) return "#3b82f6"; // blue
-    if (hours < 15) return "#10b981"; // green
-    return "#059669"; // darker green for >15
+    if (hours < 2) return "#ef4444"; // Red
+    if (hours < 4) return "#f97316"; // Orange
+    if (hours < 6) return "#eab308"; // Yellow
+    if (hours < 10) return "#3b82f6"; // Blue
+    return "#22c55e"; // Green (More than 10)
   };
 
   const filteredColleges = colleges.filter(
@@ -397,6 +449,26 @@ const SuperAdminReports = () => {
 
   // 🟦 Render Current Marks (Topic Averages)
   const renderCurrentMarks = () => {
+    // Logic to prepare data before pagination
+    const allTopics = [
+      ...new Set(
+        topicAverageData.flatMap((s) => s.topics.map((t) => t.topic_name))
+      ),
+    ];
+    const rankedData = topicAverageData
+      .map((s) => {
+        const avg =
+          s.topics.reduce((sum, t) => sum + t.average_percentage, 0) /
+          s.topics.length;
+        return { ...s, average: avg };
+      })
+      .sort((a, b) => b.average - a.average);
+
+    // Pagination Logic
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentItems = rankedData.slice(indexOfFirstItem, indexOfLastItem);
+
     return (
       <div>
         {renderFilters()}
@@ -417,21 +489,14 @@ const SuperAdminReports = () => {
                     <th className="px-4 py-3 text-left border border-gray-400">
                       Students name in higher to lower score
                     </th>
-                    {(() => {
-                      const allTopics = [
-                        ...new Set(
-                          topicAverageData.flatMap((s) => s.topics.map((t) => t.topic_name))
-                        ),
-                      ];
-                      return allTopics.map((topic, i) => (
-                        <th
-                          key={i}
-                          className="px-4 py-3 text-left border border-gray-400"
-                        >
-                          {topic}
-                        </th>
-                      ));
-                    })()}
+                    {allTopics.map((topic, i) => (
+                      <th
+                        key={i}
+                        className="px-4 py-3 text-left border border-gray-400"
+                      >
+                        {topic}
+                      </th>
+                    ))}
                     <th className="px-4 py-3 text-left border border-gray-400">
                       Average %
                     </th>
@@ -439,53 +504,43 @@ const SuperAdminReports = () => {
                 </thead>
 
                 <tbody>
-                  {(() => {
-                    const allTopics = [
-                      ...new Set(
-                        topicAverageData.flatMap((s) => s.topics.map((t) => t.topic_name))
-                      ),
-                    ];
-                    const rankedData = topicAverageData
-                      .map((s) => {
-                        const avg =
-                          s.topics.reduce((sum, t) => sum + t.average_percentage, 0) /
-                          s.topics.length;
-                        return { ...s, average: avg };
-                      })
-                      .sort((a, b) => b.average - a.average);
-
-                    return rankedData.map((student, index) => (
-                      <tr key={index} className="hover:bg-gray-50 text-sm">
-                        <td className="px-4 py-3 font-medium text-gray-900 border border-gray-400">
-                          {index + 1}. {student.student_name}
-                        </td>
-                        {allTopics.map((topic, i) => {
-                          const t = student.topics.find(
-                            (tp) => tp.topic_name === topic
-                          );
-                          return (
-                            <td
-                              key={i}
-                              className={`px-4 py-3 border border-gray-400 ${
-                                t ? getColor(t.average_percentage) : "text-gray-400"
-                              }`}
-                            >
-                              {t ? `${t.average_percentage.toFixed(0)}` : "-"}
-                            </td>
-                          );
-                        })}
-                        <td
-                          className={`px-4 py-3 border border-gray-400 ${
-                            getColor(student.average)
-                          }`}
-                        >
-                          {student.average.toFixed(0)}
-                        </td>
-                      </tr>
-                    ));
-                  })()}
+                  {currentItems.map((student, index) => (
+                    <tr key={index} className="hover:bg-gray-50 text-sm">
+                      <td className="px-4 py-3 font-medium text-gray-900 border border-gray-400">
+                        {indexOfFirstItem + index}. {student.student_name} - {student.full_name}
+                      </td>
+                      {allTopics.map((topic, i) => {
+                        const t = student.topics.find(
+                          (tp) => tp.topic_name === topic
+                        );
+                        return (
+                          <td
+                            key={i}
+                            className={`px-4 py-3 border border-gray-400 ${
+                              t ? getColor(t.average_percentage) : "text-gray-400"
+                            }`}
+                          >
+                            {t ? `${t.average_percentage.toFixed(0)}` : "-"}
+                          </td>
+                        );
+                      })}
+                      <td
+                        className={`px-4 py-3 border border-gray-400 ${
+                          getColor(student.average)
+                        }`}
+                      >
+                        {student.average.toFixed(0)}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
+              <Pagination
+                currentPage={currentPage}
+                totalItems={rankedData.length}
+                itemsPerPage={itemsPerPage}
+                onPageChange={setCurrentPage}
+              />
             </div>
           </div>
         )}
@@ -495,6 +550,11 @@ const SuperAdminReports = () => {
 
   // 🧾 Render Assignment Marks (total)
   const renderAssignmentMarks = () => {
+    // Pagination Logic
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentItems = assignmentMarksData.slice(indexOfFirstItem, indexOfLastItem);
+
     return (
       <div>
         {renderFilters()}
@@ -521,10 +581,10 @@ const SuperAdminReports = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {assignmentMarksData.map((student, index) => (
+                  {currentItems.map((student, index) => (
                     <tr key={index} className="hover:bg-gray-50 text-sm">
                       <td className="px-4 py-3 font-medium text-gray-900 border border-gray-400">
-                        {index + 1}. {student.student_name}
+                        {indexOfFirstItem + index}. {student.student_name} - {student.full_name}
                       </td>
                       <td className="px-4 py-3 border border-gray-400 text-gray-700">
                         {student.total_marks_obtained}
@@ -533,6 +593,12 @@ const SuperAdminReports = () => {
                   ))}
                 </tbody>
               </table>
+              <Pagination
+                currentPage={currentPage}
+                totalItems={assignmentMarksData.length}
+                itemsPerPage={itemsPerPage}
+                onPageChange={setCurrentPage}
+              />
             </div>
           </div>
         )}
@@ -542,6 +608,11 @@ const SuperAdminReports = () => {
 
   // Render Total Duration
   const renderDuration = () => {
+    // Pagination Logic for Bar Chart
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentItems = durationData.slice(indexOfFirstItem, indexOfLastItem);
+
     return (
       <div>
         {renderFilters()}
@@ -561,13 +632,15 @@ const SuperAdminReports = () => {
             <div className="relative h-96">
               <Bar
                 data={{
-                  labels: durationData.map((d, i) => `${i + 1}. ${d.student_name}`),
+                  labels: currentItems.map((d, i) => `${indexOfFirstItem + i}. ${d.student_name}`),
                   datasets: [
                     {
                       label: "Total Hours",
-                      data: durationData.map((d) => d.total_duration_hours),
-                      backgroundColor: durationData.map((d) => getBarColor(d.total_duration_hours)),
+                      data: currentItems.map((d) => d.total_duration_hours),
+                      backgroundColor: currentItems.map((d) => getBarColor(d.total_duration_hours)),
                       borderWidth: 0,
+                      maxBarThickness: 35,
+                      barPercentage: 0.7,
                     },
                   ],
                 }}
@@ -583,6 +656,7 @@ const SuperAdminReports = () => {
                   scales: {
                     x: {
                       beginAtZero: true,
+                      // Set Max to highest value + padding to prevent bar clipping
                       max: Math.max(...durationData.map(d => d.total_duration_hours)) + 2 || 20,
                       title: {
                         display: true,
@@ -591,31 +665,42 @@ const SuperAdminReports = () => {
                     },
                     y: {
                       ticks: {
-                        maxRotation: 0,
-                        minRotation: 0,
+                        autoSkip: false,
                       },
                     },
                   },
                 }}
               />
             </div>
-            {/* Custom Legend */}
-            <div className="flex justify-around mt-4 pt-4 border-t border-gray-200">
+            
+            <Pagination
+              currentPage={currentPage}
+              totalItems={durationData.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setCurrentPage}
+            />
+
+            {/* UPDATED LEGEND BASED ON IMAGE */}
+            <div className="flex flex-wrap justify-center gap-4 lg:gap-8 mt-4 pt-4 border-t border-gray-200">
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-red-500 rounded"></div>
+                <div className="w-4 h-4 bg-[#ef4444] rounded shadow-sm"></div>
                 <span className="text-xs text-gray-600">Less than 2 hours</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-yellow-500 rounded"></div>
-                <span className="text-xs text-gray-600">Less than 5 hours</span>
+                <div className="w-4 h-4 bg-[#f97316] rounded shadow-sm"></div>
+                <span className="text-xs text-gray-600">Less than 4 hours</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-blue-500 rounded"></div>
+                <div className="w-4 h-4 bg-[#eab308] rounded shadow-sm"></div>
+                <span className="text-xs text-gray-600">Less than 6 hours</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-[#3b82f6] rounded shadow-sm"></div>
                 <span className="text-xs text-gray-600">Less than 10 hours</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-green-500 rounded"></div>
-                <span className="text-xs text-gray-600">Less than 15 hours</span>
+                <div className="w-4 h-4 bg-[#22c55e] rounded shadow-sm"></div>
+                <span className="text-xs text-gray-600">More than 10 hours</span>
               </div>
             </div>
           </div>
@@ -626,6 +711,11 @@ const SuperAdminReports = () => {
 
   // Render Overall Reports
   const renderOverall = () => {
+    // Pagination Logic
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentItems = overallData.slice(indexOfFirstItem, indexOfLastItem);
+
     return (
       <div>
         {renderFilters()}
@@ -654,10 +744,10 @@ const SuperAdminReports = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {overallData.map((student, index) => (
+                  {currentItems.map((student, index) => (
                     <tr key={index} className="hover:bg-gray-50 text-sm">
                       <td className="px-4 py-3 font-medium text-gray-900 border border-gray-400">
-                        {index + 1}. {student.student_name}
+                        {indexOfFirstItem + index}. {student.student_name} - {student.full_name}
                       </td>
                       <td className={`px-4 py-3 border border-gray-400 ${getColor(student.topic_average_percentage)}`}>
                         {student.topic_average_percentage}
@@ -675,6 +765,12 @@ const SuperAdminReports = () => {
                   ))}
                 </tbody>
               </table>
+              <Pagination
+                currentPage={currentPage}
+                totalItems={overallData.length}
+                itemsPerPage={itemsPerPage}
+                onPageChange={setCurrentPage}
+              />
             </div>
           </div>
         )}

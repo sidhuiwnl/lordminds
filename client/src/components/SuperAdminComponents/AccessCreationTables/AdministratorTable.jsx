@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
-import { toast } from "react-toastify";
+import Swal from "sweetalert2";
+
 
 /* ---------------- Edit Admin Modal ---------------- */
 const EditAdminModal = ({ admin, onClose, onUpdateSuccess }) => {
@@ -187,29 +188,65 @@ export const AdminTable = ({ admins, rowsPerPage = 10, onPageChange, refreshData
   };
 
   const handleDeleteAdmin = async (admin) => {
-    if (!window.confirm(`Are you sure you want to delete ${admin.username}?`))
-      return;
+  // Confirmation popup
+  const result = await Swal.fire({
+    title: "Are you sure?",
+    text: `Do you want to delete "${admin.username}"?`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Yes, delete!",
+    cancelButtonText: "Cancel",
+    confirmButtonColor: "#d33",
+    cancelButtonColor: "#3085d6",
+  });
 
-    try {
-      const res = await axios.delete(
-        `${import.meta.env.VITE_BACKEND_API_URL}/admins/delete/${admin.user_id}`
-      );
+  if (!result.isConfirmed) return;
 
-      if (res.data.status === "success") {
-        toast.success(`${admin.username} deleted successfully!`);
+  try {
+    const res = await axios.delete(
+      `${import.meta.env.VITE_BACKEND_API_URL}/administrator/delete/${admin.user_id}`
+    );
+
+    if (res.data.status === "success") {
+      Swal.fire({
+        toast: true,
+        icon: "success",
+        title: `${admin.username} deleted successfully!`,
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 1800,
+      });
+
+      setTimeout(() => {
         if (refreshData) refreshData();
-        // Reload the page after successful deletion
         window.location.reload();
-      } else {
-        toast.error(res.data.detail || "Failed to delete admin.");
-      }
-    } catch (err) {
-      console.error("Delete error:", err);
-      const errorMessage =
-        err.response?.data?.detail || "Unexpected error while deleting admin.";
-      toast.error(errorMessage);
+      }, 1000);
+    } else {
+      Swal.fire({
+        toast: true,
+        icon: "error",
+        title: res.data.detail || "Failed to delete admin.",
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 2000,
+      });
     }
-  };
+  } catch (err) {
+    console.error("Delete error:", err);
+
+    Swal.fire({
+      toast: true,
+      icon: "error",
+      title:
+        err.response?.data?.detail ||
+        "Unexpected error while deleting admin.",
+      position: "top-end",
+      showConfirmButton: false,
+      timer: 2000,
+    });
+  }
+};
+
 
   const formatDate = (dateStr) => {
     const date = new Date(dateStr);

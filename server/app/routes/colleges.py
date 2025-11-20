@@ -114,26 +114,39 @@ async def onboard_college(data: CollegeOnboard):
 
 
 
+
 @router.get("/get-all")
 async def get_colleges():
-    """Fetch all colleges"""
+    """Fetch all ACTIVE colleges"""
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT * FROM colleges ORDER BY name")
+                cursor.execute("""
+                    SELECT *
+                    FROM colleges
+                    WHERE is_active = 1
+                    ORDER BY name
+                """)
+                
                 colleges = cursor.fetchall()
+
                 return {
                     "status": "success",
                     "count": len(colleges),
                     "data": colleges
                 }
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching colleges: {str(e)}")
-    
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error fetching colleges: {str(e)}"
+        )
+
+
 
 @router.get("/{college_id}/departments")
 async def get_college_departments(college_id: int):
-    """Fetch departments associated with a specific college"""
+    """Fetch ACTIVE departments for a specific college"""
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
@@ -142,30 +155,38 @@ async def get_college_departments(college_id: int):
                     FROM departments d
                     JOIN college_departments cd ON d.department_id = cd.department_id
                     WHERE cd.college_id = %s
+                      AND d.is_active = 1
                     ORDER BY d.department_name
                 """
                 cursor.execute(query, (college_id,))
                 departments = cursor.fetchall()
+
                 return {
                     "status": "success",
                     "count": len(departments),
                     "data": departments
                 }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching departments for college {college_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error fetching departments for college {college_id}: {str(e)}"
+        )
+
+
+
 
     
 @router.get("/get-all-with-department")
 async def get_colleges():
-    """Fetch all colleges with their departments (via college_departments table)"""
+    """Fetch all active colleges with their departments (via college_departments table)"""
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
-                # Fetch all colleges
-                cursor.execute("SELECT * FROM colleges ORDER BY name")
+                # Fetch only active colleges
+                cursor.execute("SELECT * FROM colleges WHERE is_active = 1 ORDER BY name")
                 colleges = cursor.fetchall()
 
-                # Fetch all college-department relationships
+                # Fetch college-department relationships only for active colleges
                 cursor.execute("""
                     SELECT 
                         cd.college_id,
@@ -173,6 +194,8 @@ async def get_colleges():
                         d.department_name
                     FROM college_departments cd
                     JOIN departments d ON cd.department_id = d.department_id
+                    JOIN colleges c ON cd.college_id = c.college_id
+                    WHERE c.is_active = 1
                     ORDER BY d.department_name
                 """)
                 college_departments = cursor.fetchall()
@@ -205,6 +228,7 @@ async def get_colleges():
 
 
 
+
 @router.put("/update/{college_id}")
 async def update_college(
     college_id: int,
@@ -217,7 +241,7 @@ async def update_college(
     """
     try:
         with get_db() as conn:
-            with conn.cursor(dictionary=True) as cursor:
+            with conn.cursor() as cursor:
                 # --- 1️⃣ Update basic info ---
                 fields = []
                 values = []
@@ -230,7 +254,7 @@ async def update_college(
 
                 if fields:
                     values.append(college_id)
-                    query = f"UPDATE colleges SET {', '.join(fields)} WHERE id = %s"
+                    query = f"UPDATE colleges SET {', '.join(fields)} WHERE college_id = %s"
                     cursor.execute(query, values)
                     conn.commit()
 
@@ -254,7 +278,7 @@ async def update_college(
                     conn.commit()
 
                 # --- 3️⃣ Fetch updated college ---
-                cursor.execute("SELECT * FROM colleges WHERE id = %s", (college_id,))
+                cursor.execute("SELECT * FROM colleges WHERE college_id = %s", (college_id,))
                 updated_college = cursor.fetchone()
 
                 if not updated_college:
@@ -274,20 +298,18 @@ async def update_college(
     
 @router.delete("/delete/{college_id}")
 async def delete_college(college_id: int):
-    """Delete a college and its department mappings"""
+    """Soft delete a college by setting is_active = 0"""
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
-                # Delete relationships first (to maintain referential integrity)
-                cursor.execute("DELETE FROM college_departments WHERE college_id = %s", (college_id,))
-                # Delete the college itself
-                cursor.execute("DELETE FROM colleges WHERE college_id = %s", (college_id,))
+                # Soft delete by setting is_active = 0 instead of actual deletion
+                cursor.execute("UPDATE colleges SET is_active = 0 WHERE college_id = %s", (college_id,))
                 conn.commit()
 
                 if cursor.rowcount == 0:
                     raise HTTPException(status_code=404, detail="College not found")
 
-                return {"status": "success", "message": "College deleted successfully"}
+                return {"status": "success", "message": "College soft deleted successfully"}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error deleting college: {str(e)}")    
+        raise HTTPException(status_code=500, detail=f"Error deleting college: {str(e)}")

@@ -60,11 +60,12 @@ async def get_department_topics_average_progress(college_id: int, department_id:
 @router.get("/teacher-details/{user_id}")
 async def get_teacher_details(user_id: int):
     """
-    Fetch a teacher's basic details along with their college information.
+    Fetch an ACTIVE teacher's basic details with their college information.
     """
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
+
                 query = """
                     SELECT 
                         u.user_id,
@@ -75,12 +76,18 @@ async def get_teacher_details(user_id: int):
                     FROM users u
                     JOIN colleges c ON u.college_id = c.college_id
                     WHERE u.user_id = %s
+                      AND u.role_id = 4       -- assuming 4 = teacher role (you can change)
+                      AND u.is_active = 1
                 """
+
                 cursor.execute(query, (user_id,))
                 teacher_details = cursor.fetchone()
 
                 if not teacher_details:
-                    raise HTTPException(status_code=404, detail="Teacher not found")
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Active teacher not found"
+                    )
 
                 return {
                     "status": "success",
@@ -88,28 +95,36 @@ async def get_teacher_details(user_id: int):
                 }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching teacher details: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching teacher details: {str(e)}"
+        )
+
 
 
 
 @router.get("/{topic_id}/overall-student-topic")
 async def get_student_average_for_topic(topic_id: int):
     """
-    Fetch all students' average score for a particular topic
-    (aggregating all sub-topic marks under that topic).
+    Fetch all ACTIVE students' average score for a particular topic.
+    Aggregates all sub-topic marks for that topic.
     """
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
+                
                 # Step 1: Check if topic has subtopics
-                cursor.execute("SELECT COUNT(*) AS subtopic_count FROM sub_topics WHERE topic_id = %s", (topic_id,))
+                cursor.execute(
+                    "SELECT COUNT(*) AS subtopic_count FROM sub_topics WHERE topic_id = %s",
+                    (topic_id,)
+                )
                 result = cursor.fetchone()
                 count = result["subtopic_count"] if result else 0
 
                 if count == 0:
                     return {"status": "error", "message": f"No subtopics found for topic_id={topic_id}"}
 
-                # Step 2: Fetch aggregated averages
+                # Step 2: Fetch aggregated averages for ACTIVE students only
                 query = """
                     SELECT 
                         u.username AS student_name,
@@ -118,9 +133,12 @@ async def get_student_average_for_topic(topic_id: int):
                     JOIN sub_topics st ON st.sub_topic_id = stm.sub_topic_id
                     JOIN users u ON u.user_id = stm.student_id
                     WHERE st.topic_id = %s
+                      AND u.role_id = 5           -- student role
+                      AND u.is_active = 1         -- only active students
                     GROUP BY u.user_id, u.username
                     ORDER BY average_score DESC;
                 """
+
                 cursor.execute(query, (topic_id,))
                 results = cursor.fetchall()
 
@@ -143,6 +161,8 @@ async def get_student_average_for_topic(topic_id: int):
     except Exception as e:
         print("🔥 SQL Error in get_student_average_for_topic:", type(e), e)
         return {"status": "error", "message": str(e)}
+
+
 
 
 
@@ -206,12 +226,14 @@ async def update_teacher(
         raise HTTPException(status_code=500, detail=f"Error updating teacher: {str(e)}")
     
 
+
 @router.delete("/delete/{user_id}")
 async def delete_teacher(user_id: int):
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
-                # Check if teacher exists
+                
+                # Check if teacher exists and is role_id = 4
                 cursor.execute(
                     "SELECT full_name FROM users WHERE user_id = %s AND role_id = 4",
                     (user_id,),
@@ -221,23 +243,22 @@ async def delete_teacher(user_id: int):
                 if not teacher:
                     raise HTTPException(status_code=404, detail="Teacher not found")
 
-                try:
-                    cursor.execute("DELETE FROM users WHERE user_id = %s AND role_id = 4", (user_id,))
-                    conn.commit()
-                except Exception as e:
-                    if "1451" in str(e):
-                        raise HTTPException(
-                            status_code=400,
-                            detail="Cannot delete teacher because related records exist.",
-                        )
-                    raise
+                # Soft delete → set is_active = 0
+                cursor.execute(
+                    "UPDATE users SET is_active = 0 WHERE user_id = %s AND role_id = 4",
+                    (user_id,)
+                )
+                conn.commit()
 
         return {
             "status": "success",
-            "message": f"Teacher '{teacher['full_name']}' deleted successfully",
+            "message": f"Teacher '{teacher['full_name']}' deactivated successfully",
         }
 
     except HTTPException as e:
         raise e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error deleting teacher: {str(e)}")    
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error deactivating teacher: {str(e)}"
+        )

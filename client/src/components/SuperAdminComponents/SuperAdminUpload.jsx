@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import JoditEditor from 'jodit-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
@@ -8,6 +8,114 @@ import OverviewTable from "./UploadSectionTables/OverviewTable";
 import McqTable from "./UploadSectionTables/McqTable";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.js`;
+
+const SearchableDropdown = ({
+  options,
+  value,
+  onChange,
+  placeholder,
+  disabled = false,
+  name,
+  valueKey = "value",
+  labelKey = "label",
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const selectedOption = options.find((o) => o[valueKey] === value);
+
+  const filteredOptions = options.filter((o) =>
+    o[labelKey].toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleToggle = () => {
+    if (!disabled) {
+      setIsOpen(!isOpen);
+      if (!isOpen) setSearch("");
+    }
+  };
+
+  const handleSelect = (opt) => {
+    onChange({ target: { name, value: opt[valueKey] } });
+    setIsOpen(false);
+    setSearch("");
+  };
+
+  const handleSearchChange = (e) => setSearch(e.target.value);
+
+  const handleClose = () => {
+    setIsOpen(false);
+    setSearch("");
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (isOpen && !e.target.closest(".dropdown-container")) {
+        handleClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen]);
+
+  return (
+    <div className="relative dropdown-container">
+      <div className="relative">
+        <input
+          type="text"
+          readOnly
+          value={selectedOption ? selectedOption[labelKey] : ""}
+          onClick={handleToggle}
+          className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${disabled
+              ? "bg-gray-100 cursor-not-allowed"
+              : "focus:ring-blue-500 border-gray-300 cursor-pointer hover:border-gray-400"
+          }`}
+          placeholder={placeholder}
+          disabled={disabled}
+        />
+        <svg
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""} ${disabled ? "text-gray-400" : "text-gray-500"}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+      {isOpen && (
+        <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto mt-1">
+          <input
+            type="text"
+            autoFocus
+            value={search}
+            onChange={handleSearchChange}
+            placeholder="Search..."
+            className="w-full px-3 py-2 border-b border-gray-300 text-sm focus:outline-none"
+          />
+          {filteredOptions.length === 0 ? (
+            <div className="px-3 py-2 text-gray-500 text-sm">No options found</div>
+          ) : (
+            filteredOptions.map((opt, index) => (
+              <div
+                key={index}
+                onClick={() => handleSelect(opt)}
+                className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm border-b border-gray-100 last:border-b-0"
+              >
+                {opt[labelKey]}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const SuperAdminUpload = () => {
   const [selectedTab, setSelectedTab] = useState("upload-assignment");
@@ -193,15 +301,24 @@ const SuperAdminUpload = () => {
 
   const handleOverviewSubmit = async (e) => {
     e.preventDefault();
+
+    if (!formData.overviewVideo && !formData.overviewDocument) {
+      toast.error("Please provide at least one of Overview Video or Overview Document.");
+      return;
+    }
+
     const formDataToSend = new FormData();
     // formDataToSend.append('college_id', formData.topicSelectionCollege);
     // formDataToSend.append('department_id', formData.topicSelectionDepartment); // Example department ID
     formDataToSend.append('topic_name', formData.topicName);
     formDataToSend.append('sub_topic_name', formData.subTopicName);
     formDataToSend.append('no_of_sub_topics', formData.noOfSubTopic);
-    formDataToSend.append('video_link', formData.overviewVideo);
-    formDataToSend.append('file_name', formData.overviewDocument.name);
-    formDataToSend.append('overview_content', formData.overviewText);
+    formDataToSend.append('video_link', formData.overviewVideo || '');
+    formDataToSend.append('overview_content', formData.overviewText || '');
+
+    if (formData.overviewDocument) {
+      formDataToSend.append('file_name', formData.overviewDocument.name);
+    }
 
     const response = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/overviews/upload`, {
       method: "POST",
@@ -370,12 +487,8 @@ const SuperAdminUpload = () => {
   // Pagination logic for Assignment
   const assignmentTotal = assignmentData.length;
   const assignmentTotalPages = Math.ceil(assignmentTotal / rowsPerPage);
-  const paginatedAssignmentData = useMemo(() =>
-    assignmentData.slice((assignmentPage - 1) * rowsPerPage, assignmentPage * rowsPerPage),
-    [assignmentData, assignmentPage]
-  );
-  const assignmentStartIdx = (assignmentPage - 1) * rowsPerPage + 1;
-  const assignmentEndIdx = Math.min(assignmentPage * rowsPerPage, assignmentTotal);
+
+
 
   const handleAssignmentPrev = () => {
     if (assignmentPage > 1) setAssignmentPage(assignmentPage - 1);
@@ -409,8 +522,7 @@ const SuperAdminUpload = () => {
     overviewRows.slice((overviewPage - 1) * rowsPerPage, overviewPage * rowsPerPage),
     [overviewRows, overviewPage]
   );
-  const overviewStartIdx = (overviewPage - 1) * rowsPerPage + 1;
-  const overviewEndIdx = Math.min(overviewPage * rowsPerPage, overviewTotal);
+
 
   const handleOverviewPrev = () => {
     if (overviewPage > 1) setOverviewPage(overviewPage - 1);
@@ -443,8 +555,7 @@ const SuperAdminUpload = () => {
     mcqRows.slice((mcqPage - 1) * rowsPerPage, mcqPage * rowsPerPage),
     [mcqRows, mcqPage]
   );
-  const mcqStartIdx = (mcqPage - 1) * rowsPerPage + 1;
-  const mcqEndIdx = Math.min(mcqPage * rowsPerPage, mcqTotal);
+
 
   const handleMcqPrev = () => {
     if (mcqPage > 1) setMcqPage(mcqPage - 1);
@@ -454,120 +565,10 @@ const SuperAdminUpload = () => {
     if (mcqPage < mcqTotalPages) setMcqPage(mcqPage + 1);
   };
 
-  const getRowspan = useCallback((rows, startIdx, groupKey) => {
-    let count = 1;
-    const groupValue = rows[startIdx][groupKey];
-    for (let j = startIdx + 1; j < rows.length; j++) {
-      if (rows[j][groupKey] === groupValue) {
-        count++;
-      } else {
-        break;
-      }
-    }
-    return count;
-  }, []);
-
-  const renderPagination = (currentPage, totalPages, startIdx, endIdx, total, prevHandler, nextHandler) => (
-    <div className="p-4 border-t border-gray-200 bg-gray-50">
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-        <div className="text-sm text-gray-700">
-          Showing {startIdx} to {endIdx} of {total} entries
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={prevHandler}
-            disabled={currentPage <= 1}
-            className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-          >
-            Previous
-          </button>
-          <span className="text-sm text-gray-700">
-            Page {currentPage} of {totalPages}
-          </span>
-          <button
-            onClick={nextHandler}
-            disabled={currentPage >= totalPages}
-            className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-          >
-            Next
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderOverviewTbody = () => (
-    <tbody className="divide-y divide-gray-500">
-      {paginatedOverviewRows.map((row, idx) => {
-        const isGroupStart = idx === 0 || paginatedOverviewRows[idx].topicSerial !== paginatedOverviewRows[idx - 1].topicSerial;
-        let rowspan = 1;
-        if (isGroupStart) {
-          rowspan = getRowspan(paginatedOverviewRows, idx, 'topicSerial');
-        }
-        return (
-          <tr key={`${row.topic_id}-${row.sub_topic_name}-${idx}`}>
-            {isGroupStart && (
-              <td rowSpan={rowspan} className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">
-                {row.topicSerial}
-              </td>
-            )}
-            {isGroupStart && (
-              <td rowSpan={rowspan} className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-                {row.topic_name}
-              </td>
-            )}
-            <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-              {row.sub_topic_name}
-            </td>
-            <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-              {row.overview_video_url}
-            </td>
-            {/* <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
-              {row.progress}
-            </td> */}
-          </tr>
-        );
-      })}
-    </tbody>
-  );
-
-  const renderMcqTbody = () => (
-    <tbody className="divide-y divide-gray-500">
-      {paginatedMcqRows.map((row, idx) => {
-        const isGroupStart = idx === 0 || paginatedMcqRows[idx].topicSerial !== paginatedMcqRows[idx - 1].topicSerial;
-        let rowspan = 1;
-        if (isGroupStart) {
-          rowspan = getRowspan(paginatedMcqRows, idx, 'topicSerial');
-        }
-        return (
-          <tr key={`${row.topic_name}-${row.sub_topic_name}-${idx}`}>
-            {isGroupStart && (
-              <td rowSpan={rowspan} className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">
-                {row.topicSerial}
-              </td>
-            )}
-            {isGroupStart && (
-              <td rowSpan={rowspan} className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-                {row.topic_name}
-              </td>
-            )}
-            <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-              {row.sub_topic_name}
-            </td>
-            <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">
-              {row.total_questions} questions
-            </td>
-            <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
-              {row.file_name}
-            </td>
-            {/* <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">
-              {row.progress}
-            </td> */}
-          </tr>
-        );
-      })}
-    </tbody>
-  );
+  const getSubTopics = () => {
+    const selectedTopic = topics.find((t) => t.topic_name === formData.mcqTopicName);
+    return selectedTopic?.sub_topics || [];
+  };
 
   return (
     <div className="p-4 lg:p-6 mt-30 min-h-screen">
@@ -609,36 +610,32 @@ const SuperAdminUpload = () => {
             {/* Select College */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">Select College</label>
-              <select
-                name="assignmentCollege"
+              <SearchableDropdown
                 value={formData.assignmentCollege}
                 onChange={handleInputChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              >
-                <option value="">Select College</option>
-                {colleges.map((college, index) => (
-                  <option key={index} value={college.college_id}>{college.name}</option>
-                ))}
-              </select>
+                options={colleges}
+                placeholder="Select College"
+                name="assignmentCollege"
+                valueKey="college_id"
+                labelKey="name"
+                required={true}
+              />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-6">
               {/* Department */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Select Department</label>
-                <select
-                  name="department"
+                <SearchableDropdown
                   value={formData.department}
                   onChange={handleInputChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                >
-                  <option value="">Select Department</option>
-                  {assignmentDepartments.map((dept, index) => (
-                    <option key={index} value={dept.department_id}>{dept.department_name}</option>
-                  ))}
-                </select>
+                  options={assignmentDepartments}
+                  placeholder="Select Department"
+                  name="department"
+                  valueKey="department_id"
+                  labelKey="department_name"
+                  required={true}
+                />
               </div>
 
               {/* Assignment No */}
@@ -735,8 +732,6 @@ const SuperAdminUpload = () => {
             </div>
           </form>
 
-
-
           <AssignmentTable
             data={assignmentData}
             page={assignmentPage}
@@ -747,8 +742,6 @@ const SuperAdminUpload = () => {
             onNext={handleAssignmentNext}
             formatDate={formatDate}
           />
-
-
         </>
       )}
 
@@ -765,20 +758,17 @@ const SuperAdminUpload = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Topic Name</label>
                 <div className="flex flex-row gap-2">
-                  <select
-                    name="topicName"
-                    value={formData.topicName}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  >
-                    <option value="">Select Topic</option>
-                    {topics.map((topic) => (
-                      <option key={topic.topic_id} value={topic.topic_name}>
-                        {topic.topic_name}
-                      </option>
-                    ))}
-                  </select>
+                <SearchableDropdown
+                  value={formData.topicName}
+                  onChange={handleInputChange}
+                  options={topics}
+                  placeholder="Select Topic"
+                  name="topicName"
+                  valueKey="topic_name"
+                  labelKey="topic_name"
+                  required={true}
+                />
+
                   <button
                     type="button"
                     onClick={() => setIsModalOpen(true)}
@@ -821,14 +811,13 @@ const SuperAdminUpload = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 mb-6">
               {/* Overview Video */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Overview Video</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Overview Video (optional)</label>
                 <input
                   type="url"
                   name="overviewVideo"
                   value={formData.overviewVideo}
                   onChange={handleInputChange}
                   placeholder="Enter video URL"
-                  required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
                 <p className="text-xs text-gray-500 mt-1">Enter video link</p>
@@ -836,14 +825,13 @@ const SuperAdminUpload = () => {
 
               {/* Overview Document */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Overview Document</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Overview Document (optional)</label>
                 <div className="relative">
                   <input
                     type="file"
                     name="overviewDocument"
                     onChange={handleFileChange}
                     accept=".pdf,.docx"
-                    required
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   />
                   <div className="absolute inset-y-0 right-0 pr-8 flex items-center pointer-events-none">
@@ -860,6 +848,8 @@ const SuperAdminUpload = () => {
                 <p className="text-xs text-gray-500 mt-1">File Upload (pdf or docx 1mb)</p>
               </div>
             </div>
+
+            <p className="text-sm text-gray-600 mb-4">Provide at least one of Overview Video or Overview Document.</p>
 
             {formData.overviewText && (
               <div className="w-full mb-6">
@@ -887,8 +877,6 @@ const SuperAdminUpload = () => {
             </div>
           </form>
 
-
-          {/* List of Uploaded Documents */}
           <OverviewTable
             data={overviewRows}
             page={overviewPage}
@@ -913,42 +901,31 @@ const SuperAdminUpload = () => {
               {/* Topic Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Topic Name</label>
-                <select
-                  name="mcqTopicName"
+                <SearchableDropdown
                   value={formData.mcqTopicName}
                   onChange={handleInputChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                >
-                  <option value="">Select Topic</option>
-                  {topics.map((topic) => (
-                    <option key={topic.topic_id} value={topic.topic_name}>
-                      {topic.topic_name}
-                    </option>
-                  ))}
-                </select>
+                  options={topics}
+                  placeholder="Select Topic"
+                  name="mcqTopicName"
+                  valueKey="topic_name"
+                  labelKey="topic_name"
+                  required={true}
+                />
               </div>
 
               {/* Sub-Topic Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Sub - Topic Name</label>
-                <select
-                  name="mcqSubTopicName"
+                <SearchableDropdown
                   value={formData.mcqSubTopicName}
                   onChange={handleInputChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                >
-                  <option value="">Select Sub-Topic</option>
-                  {(() => {
-                    const selectedTopic = topics.find((t) => t.topic_name === formData.mcqTopicName);
-                    return (selectedTopic ? selectedTopic.sub_topics : []).map((st) => (
-                      <option key={st.sub_topic_id} value={st.sub_topic_name}>
-                        {st.sub_topic_name}
-                      </option>
-                    ));
-                  })()}
-                </select>
+                  options={getSubTopics()}
+                  placeholder="Select Sub-Topic"
+                  name="mcqSubTopicName"
+                  valueKey="sub_topic_name"
+                  labelKey="sub_topic_name"
+                  required={true}
+                />
               </div>
 
               {/* No of Sub-Topics */}
@@ -1011,8 +988,6 @@ const SuperAdminUpload = () => {
             </div>
           </form>
 
-
-          {/* List of Uploaded MCQs */}
           <McqTable
             data={mcqRows}
             page={mcqPage}

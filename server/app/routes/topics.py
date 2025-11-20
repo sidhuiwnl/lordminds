@@ -357,7 +357,6 @@ async def assign_topics_to_college_department(payload: AssignTopicsRequest):
 #  
 
 
-
 @router.get("/{user_id}/subtopics")
 async def get_user_subtopics(user_id: int):
     """Fetch subtopics and topic-level progress (in percentage) for the given user"""
@@ -471,6 +470,127 @@ async def get_user_subtopics(user_id: int):
         raise HTTPException(status_code=500, detail=f"Error fetching subtopic progress: {str(e)}")
 
 
+@router.get("/{user_id}/subtopics/{topic_id}")
+async def get_user_subtopics_by_topic(user_id: int, topic_id: int):
+    """Fetch subtopics and progress for a specific topic for the given user"""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+                # 1️⃣ Get user's department_id and verify topic access
+                cursor.execute("""
+                    SELECT u.department_id, 
+                           CASE WHEN dtm.topic_id IS NOT NULL THEN TRUE ELSE FALSE END AS has_access
+                    FROM users u
+                    LEFT JOIN department_topic_map dtm 
+                        ON u.department_id = dtm.department_id AND dtm.topic_id = %s
+                    WHERE u.user_id = %s AND u.is_active = TRUE
+                """, (topic_id, user_id))
+                user = cursor.fetchone()
+                
+                if not user:
+                    raise HTTPException(status_code=404, detail="User not found")
+                if not user['has_access']:
+                    raise HTTPException(status_code=403, detail="User doesn't have access to this topic")
+                
+                department_id = user['department_id']
+
+                # 2️⃣ Fetch the specific topic
+                cursor.execute("""
+                    SELECT 
+                        t.topic_id, 
+                        t.topic_name, 
+                        t.topic_number
+                    FROM topics t
+                    INNER JOIN department_topic_map dtm 
+                        ON t.topic_id = dtm.topic_id
+                    WHERE t.topic_id = %s 
+                      AND dtm.department_id = %s
+                      AND t.is_active = TRUE
+                """, (topic_id, department_id))
+                topic = cursor.fetchone()
+                
+                if not topic:
+                    raise HTTPException(status_code=404, detail="Topic not found or not accessible")
+
+                # 3️⃣ Fetch subtopics for this specific topic only
+                cursor.execute("""
+                    SELECT 
+                        sub_topic_id, topic_id, sub_topic_name, sub_topic_order, 
+                        overview_video_url, file_name, test_file,
+                        CASE WHEN overview_content IS NOT NULL THEN TRUE ELSE FALSE END AS has_document,
+                        is_active, created_at
+                    FROM sub_topics
+                    WHERE topic_id = %s 
+                      AND is_active = TRUE
+                    ORDER BY sub_topic_order
+                """, (topic_id,))
+                subtopics = cursor.fetchall()
+
+                if not subtopics:
+                    return {
+                        "status": "success", 
+                        "data": {
+                            **topic,
+                            "sub_topics": [],
+                            "progress_percent": 0
+                        }
+                    }
+
+                # 4️⃣ Fetch progress for the user's subtopics
+                subtopic_ids = [s['sub_topic_id'] for s in subtopics]
+                cursor.execute(f"""
+                    SELECT 
+                        sub_topic_id, 
+                        is_completed, 
+                        COALESCE(score, 0) AS score, 
+                        COALESCE(time_spent_minutes, 0) AS time_spent_minutes,
+                        last_accessed
+                    FROM student_subtopic_progress
+                    WHERE student_id = %s 
+                      AND sub_topic_id IN ({','.join(['%s'] * len(subtopic_ids))})
+                """, (user_id, *subtopic_ids))
+                progress_records = cursor.fetchall()
+                progress_map = {p['sub_topic_id']: p for p in progress_records}
+
+                # 5️⃣ Attach progress percentage to each subtopic
+                for st in subtopics:
+                    progress = progress_map.get(st['sub_topic_id'], None)
+                    if progress:
+                        percent = 100 if progress['is_completed'] else 0
+                    else:
+                        percent = 0
+                    
+                    st['progress'] = {
+                        "completion_percent": percent,
+                        "is_completed": bool(progress and progress['is_completed']),
+                        "score": progress['score'] if progress else 0,
+                        "time_spent_minutes": progress['time_spent_minutes'] if progress else 0,
+                        "last_accessed": progress['last_accessed'] if progress else None
+                    }
+
+                # 6️⃣ Calculate topic completion percentage
+                completed_subtopics = sum(1 for s in subtopics if s['progress']['completion_percent'] == 100)
+                total_subtopics = len(subtopics)
+                progress_percent = round((completed_subtopics / total_subtopics) * 100, 2) if total_subtopics > 0 else 0
+
+                # 7️⃣ Return single topic with its subtopics
+                response_data = {
+                    **topic,
+                    "sub_topics": subtopics,
+                    "progress_percent": progress_percent
+                }
+
+                return {
+                    "status": "success",
+                    "data": response_data
+                }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching subtopic progress: {str(e)}")
+
+
 
 
 
@@ -509,6 +629,8 @@ async def get_overall_report(college_id: int, department_id: int):
                 cursor.execute("""
                     SELECT 
                         u.username AS student_name,
+                        u.full_name,
+                        u.last_login,              
                         ROUND(
                             (
                                 COALESCE(SUM(stm.marks_obtained), 0) +
@@ -526,7 +648,7 @@ async def get_overall_report(college_id: int, department_id: int):
                     LEFT JOIN assignment_marks am ON am.student_id = u.user_id
                     WHERE u.college_id = %s 
                       AND u.department_id = %s
-                    GROUP BY u.username
+                    GROUP BY u.username, u.full_name
                     ORDER BY u.username ASC;
                 """, (college_id, department_id))
 
@@ -650,39 +772,42 @@ async def update_topic_assignment(topic_id: int, topic_name: str = Form(...)):
     
 @router.delete("/delete/{topic_id}")
 async def delete_topic(topic_id: int):
-    """Delete a topic by ID."""
+    """Soft delete a topic by setting is_active = 0"""
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
-                # Check if topic exists
-                cursor.execute("SELECT * FROM topics WHERE topic_id = %s", (topic_id,))
+
+                # 1. Check if topic exists and get its current state
+                cursor.execute("""
+                    SELECT topic_id, topic_name, is_active
+                    FROM topics 
+                    WHERE topic_id = %s
+                """, (topic_id,))
+                
                 topic = cursor.fetchone()
+
                 if not topic:
                     raise HTTPException(status_code=404, detail="Topic not found")
 
-                # Optional: Check if assigned to any department (prevent accidental deletion)
-                cursor.execute(
-                    """
-                    SELECT * FROM department_topic_map 
-                    WHERE topic_id = %s
-                    """,
-                    (topic_id,)
-                )
-                assigned = cursor.fetchone()
-                if assigned:
-                    raise HTTPException(status_code=400, detail="Cannot delete topic — it is assigned to a department")
+                if topic["is_active"] == 0:
+                    raise HTTPException(status_code=400, detail="Topic is already inactive")
 
-                # Delete topic
-                cursor.execute("DELETE FROM topics WHERE topic_id = %s", (topic_id,))
+                # 2. Soft delete → mark inactive
+                cursor.execute("""
+                    UPDATE topics 
+                    SET is_active = 0 
+                    WHERE topic_id = %s
+                """, (topic_id,))
+                
                 conn.commit()
 
                 return {
                     "status": "success",
-                    "message": f"Topic '{topic['topic_name']}' deleted successfully"
+                    "message": f"Topic '{topic['topic_name']}' marked as inactive successfully"
                 }
 
-    except HTTPException as e:
-        raise e
+    except HTTPException:
+        raise
     except Exception as e:
-        print("Error deleting topic:", e)
+        print("🔥 Error soft deleting topic:", e)
         raise HTTPException(status_code=500, detail="Internal server error")

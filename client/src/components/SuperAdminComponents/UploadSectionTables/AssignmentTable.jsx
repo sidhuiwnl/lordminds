@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from "react";
 import ActionButtons from "./common/ActionButton";
 import { toast } from "react-toastify";
+import Swal from "sweetalert2";
+
 
 const AssignmentTable = ({
   data,
@@ -91,7 +93,18 @@ const AssignmentTable = ({
 
 
   const handleDeleteAssignment = async (assignment) => {
-  if (!window.confirm(`Are you sure you want to delete "${assignment.assignment_topic}"?`)) return;
+  const result = await Swal.fire({
+    title: "Are you sure?",
+    text: `Do you want to delete "${assignment.assignment_topic}"?`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Yes, delete it!",
+    cancelButtonText: "Cancel",
+    confirmButtonColor: "#d33",
+    cancelButtonColor: "#3085d6",
+  });
+
+  if (!result.isConfirmed) return;
 
   try {
     const response = await fetch(
@@ -105,16 +118,39 @@ const AssignmentTable = ({
     const data = await response.json();
 
     if (response.ok) {
-      toast.success(data.message || "Assignment deleted successfully!");
-      window.location.reload();
+      Swal.fire({
+        toast: true,
+        icon: "success",
+        title: data.message || "Assignment deleted successfully!",
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 1800,
+      });
+
+      setTimeout(() => window.location.reload(), 1000);
     } else {
-      toast.error(data.detail || "Failed to delete assignment.");
+      Swal.fire({
+        toast: true,
+        icon: "error",
+        title: data.detail || "Failed to delete assignment.",
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 1800,
+      });
     }
   } catch (error) {
     console.error("Delete Error:", error);
-    toast.error("Something went wrong while deleting!");
+    Swal.fire({
+      toast: true,
+      icon: "error",
+      title: "Something went wrong while deleting!",
+      position: "top-end",
+      showConfirmButton: false,
+      timer: 1800,
+    });
   }
 };
+
 
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">

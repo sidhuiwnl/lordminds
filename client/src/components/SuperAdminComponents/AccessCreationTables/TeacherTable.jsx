@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
-import { toast } from "react-toastify";
+import Swal from "sweetalert2";
+
 
 /* ---------------- Edit Teacher Modal ---------------- */
 const EditTeacherModal = ({ teacher, onClose, onUpdateSuccess }) => {
@@ -189,29 +190,72 @@ export const TeacherTable = ({ teachers, rowsPerPage = 10, onPageChange, refresh
   };
 
   const handleDeleteTeacher = async (teacher) => {
-    if (!window.confirm(`Are you sure you want to delete ${teacher.username}?`))
-      return;
+  // Confirmation popup
+  const result = await Swal.fire({
+    title: "Are you sure?",
+    text: `Do you want to delete "${teacher.username}"?`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Yes, delete!",
+    cancelButtonText: "Cancel",
+    confirmButtonColor: "#d33",
+    cancelButtonColor: "#3085d6",
+  });
 
-    try {
-      const res = await axios.delete(
-        `${import.meta.env.VITE_BACKEND_API_URL}/teachers/delete/${teacher.user_id}`
-      );
+  if (!result.isConfirmed) return;
 
-      if (res.data.status === "success") {
-        toast.success(`${teacher.username} deleted successfully!`);
+  try {
+    const res = await axios.delete(
+      `${import.meta.env.VITE_BACKEND_API_URL}/teacher/delete/${teacher.user_id}`
+    );
+
+    if (res.data.status === "success") {
+      Swal.fire({
+        toast: true,
+        icon: "success",
+        title: `${teacher.username} deleted successfully!`,
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 1800,
+      });
+
+      setTimeout(() => {
         if (refreshData) refreshData();
-        // Reload the page after successful deletion
-        window.location.reload();
-      } else {
-        toast.error(res.data.detail || "Failed to delete teacher.");
-      }
-    } catch (err) {
-      console.error("Delete error:", err);
-      const errorMessage =
-        err.response?.data?.detail || "Unexpected error while deleting teacher.";
-      toast.error(errorMessage);
+        // Consider removing window.location.reload() if refreshData() properly updates the UI
+        // window.location.reload();
+      }, 1000);
+
+    } else {
+      Swal.fire({
+        toast: true,
+        icon: "error",
+        title: res.data.detail || "Failed to delete teacher.",
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 2000,
+      });
     }
-  };
+
+  } catch (err) {
+    console.error("Delete error:", err);
+
+    // Enhanced error message extraction
+    const errorMessage = err.response?.data?.detail || 
+                        err.response?.data?.message ||
+                        err.message ||
+                        "Unexpected error while deleting teacher.";
+
+    Swal.fire({
+      toast: true,
+      icon: "error",
+      title: errorMessage,
+      position: "top-end",
+      showConfirmButton: false,
+      timer: 2000,
+    });
+  }
+};
+
 
   const formatDate = (dateStr) => {
     const date = new Date(dateStr);

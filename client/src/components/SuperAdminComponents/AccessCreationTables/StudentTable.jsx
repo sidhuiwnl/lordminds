@@ -1,6 +1,109 @@
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
-import { toast } from "react-toastify";
+import Swal from "sweetalert2";
+
+
+/* ------------------ Searchable Dropdown Component ------------------ */
+const SearchableDropdown = ({ options, value, onChange, placeholder, disabled = false }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const selectedOption = options.find((o) => o.value === value);
+  const filteredOptions = options.filter((o) =>
+    o.label.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleToggle = () => {
+    if (!disabled) {
+      setIsOpen(!isOpen);
+      if (!isOpen) setSearch(""); // Clear search when opening
+    }
+  };
+
+  const handleSelect = (opt) => {
+    onChange(opt.value);
+    setIsOpen(false);
+    setSearch("");
+  };
+
+  const handleSearchChange = (e) => setSearch(e.target.value);
+
+  const handleClose = () => {
+    setIsOpen(false);
+    setSearch("");
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (isOpen && !e.target.closest(".dropdown-container")) {
+        handleClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen]);
+
+  return (
+    <div className="relative dropdown-container">
+      <div className="relative">
+        <input
+          type="text"
+          readOnly
+          value={selectedOption ? selectedOption.label : ""}
+          onClick={handleToggle}
+          className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${
+            disabled
+              ? "bg-gray-100 cursor-not-allowed"
+              : "focus:ring-blue-500 border-gray-300 cursor-pointer hover:border-gray-400"
+          }`}
+          placeholder={placeholder}
+          disabled={disabled}
+        />
+        <svg
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-transform ${
+            isOpen ? "rotate-180" : ""
+          } ${disabled ? "text-gray-400" : "text-gray-500"}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+      {isOpen && (
+        <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto mt-1">
+          <input
+            type="text"
+            autoFocus
+            value={search}
+            onChange={handleSearchChange}
+            placeholder="Search..."
+            className="w-full px-3 py-2 border-b border-gray-300 text-sm focus:outline-none"
+          />
+          {filteredOptions.length === 0 ? (
+            <div className="px-3 py-2 text-gray-500 text-sm">No options found</div>
+          ) : (
+            filteredOptions.map((opt) => (
+              <div
+                key={opt.value}
+                onClick={() => handleSelect(opt)}
+                className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm border-b border-gray-100 last:border-b-0"
+              >
+                {opt.label}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 /* ------------------ Edit Student Modal ------------------ */
 const EditStudentModal = ({ student, onClose, onUpdateSuccess }) => {
@@ -230,34 +333,83 @@ export const StudentTable = ({
   const studentStartIdx = (studentPage - 1) * rowsPerPage + 1;
   const studentEndIdx = Math.min(studentPage * rowsPerPage, studentTotal);
 
+  // Options for searchable dropdowns
+  const collegeOptions = useMemo(
+    () => colleges.map((college) => ({ value: college.name, label: college.name })),
+    [colleges]
+  );
+
+  const departmentOptions = useMemo(
+    () =>
+      studentDepartments.map((dept) => ({
+        value: dept.department_name,
+        label: dept.department_name,
+      })),
+    [studentDepartments]
+  );
+
   const handleEditStudent = (student) => {
     setSelectedStudent(student);
     setIsModalOpen(true);
   };
 
   const handleDeleteStudent = async (student) => {
-    if (
-      !window.confirm(`Are you sure you want to delete ${student.full_name}?`)
-    )
-      return;
+  // Confirm popup
+  const result = await Swal.fire({
+    title: "Are you sure?",
+    text: `Do you want to delete "${student.full_name}"?`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Yes, delete!",
+    cancelButtonText: "Cancel",
+    confirmButtonColor: "#d33",
+    cancelButtonColor: "#3085d6",
+  });
 
-    try {
-      const res = await axios.delete(
-        `${import.meta.env.VITE_BACKEND_API_URL}/student/delete/${student.user_id}`
-      );
+  if (!result.isConfirmed) return;
 
-      if (res.data.status === "success") {
-        toast.success(`${student.full_name} deleted successfully!`);
-        // Reload the page after successful deletion
+  try {
+    const res = await axios.delete(
+      `${import.meta.env.VITE_BACKEND_API_URL}/student/delete/${student.user_id}`
+    );
+
+    if (res.data.status === "success") {
+      Swal.fire({
+        toast: true,
+        icon: "success",
+        title: `${student.full_name} deleted successfully!`,
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 1800,
+      });
+
+      setTimeout(() => {
         window.location.reload();
-      } else {
-        toast.error(res.data.detail || "Failed to delete student.");
-      }
-    } catch (err) {
-      console.error("Delete error:", err);
-      toast.error("Unexpected error while deleting student.");
+      }, 1000);
+    } else {
+      Swal.fire({
+        toast: true,
+        icon: "error",
+        title: res.data.detail || "Failed to delete student.",
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 2000,
+      });
     }
-  };
+  } catch (err) {
+    console.error("Delete error:", err);
+
+    Swal.fire({
+      toast: true,
+      icon: "error",
+      title: "Unexpected error while deleting student.",
+      position: "top-end",
+      showConfirmButton: false,
+      timer: 2000,
+    });
+  }
+};
+
 
   const formatDate = (dateStr) => {
     const date = new Date(dateStr);
@@ -277,25 +429,16 @@ export const StudentTable = ({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Filter by College
             </label>
-            <select
+            <SearchableDropdown
+              options={collegeOptions}
               value={selectedCollegeFilter}
-              onChange={(e) => {
-                setSelectedCollegeFilter(e.target.value);
+              onChange={(val) => {
+                setSelectedCollegeFilter(val);
                 setSelectedDepartmentFilter("");
                 setStudentPage(1);
               }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-            >
-              <option value="">All Colleges</option>
-              {colleges.map((college) => (
-                <option
-                  key={college.college_id || college.id}
-                  value={college.name}
-                >
-                  {college.name}
-                </option>
-              ))}
-            </select>
+              placeholder="All Colleges"
+            />
           </div>
 
           {/* Department Filter */}
@@ -303,22 +446,16 @@ export const StudentTable = ({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Filter by Department
             </label>
-            <select
+            <SearchableDropdown
+              options={departmentOptions}
               value={selectedDepartmentFilter}
-              onChange={(e) => {
-                setSelectedDepartmentFilter(e.target.value);
+              onChange={(val) => {
+                setSelectedDepartmentFilter(val);
                 setStudentPage(1);
               }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              placeholder="All Departments"
               disabled={!selectedCollegeFilter}
-            >
-              <option value="">All Departments</option>
-              {studentDepartments.map((dept) => (
-                <option key={dept.department_id} value={dept.department_name}>
-                  {dept.department_name}
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           {/* Search Filter */}

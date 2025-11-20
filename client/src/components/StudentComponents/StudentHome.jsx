@@ -5,6 +5,7 @@ const StudentHome = () => {
   const navigate = useNavigate();
   const [assignmentData, setAssignmentData] = useState([]);
   const [topics, setTopics] = useState([]);
+  const [userData, setUserData] = useState(null);
 
   async function getUserDetails() {
     try {
@@ -27,9 +28,10 @@ const StudentHome = () => {
 
       const data = await response.json();
       const userData = data.data;
+      setUserData(userData);
 
       if (userData.college_id && userData.department_id) {
-        await fetchAssignments(userData.college_id, userData.department_id);
+        await fetchAssignments(userData.college_id, userData.department_id, user.user_id);
         await fetchTopics(userData.college_id, userData.department_id);
       } else {
         console.error("Missing college_id or department_id for user");
@@ -39,24 +41,51 @@ const StudentHome = () => {
     }
   }
 
-    
-  async function fetchAssignments(college_id, department_id) {
+  async function fetchAssignments(college_id, department_id, student_id) {
     try {
+      // ✅ Pass student_id as query parameter to get completion status
       const response = await fetch(
-        `${import.meta.env.VITE_BACKEND_API_URL}/users/colleges/${college_id}/departments/${department_id}/assignments`,
+        `${import.meta.env.VITE_BACKEND_API_URL}/users/colleges/${college_id}/departments/${department_id}/assignments?student_id=${student_id}`,
         { method: "GET", headers: { "Content-Type": "application/json" } }
       );
 
       if (!response.ok) throw new Error("Failed to fetch assignments");
 
       const data = await response.json();
+      console.log("Assignments API Response:", data); // Debug log
       const assignments = data.data || [];
 
-      // 🔓 Determine which assignment(s) are unlocked
+      // ✅ Process assignments with proper status
       const processedAssignments = assignments.map((assignment, index, arr) => {
-        const firstPendingIndex = arr.findIndex((a) => !a.is_submitted);
-        const isUnlocked = index <= firstPendingIndex; // unlock submitted + first pending
-        return { ...assignment, isUnlocked };
+        const hasSubmitted = assignment.student_has_submitted === true;
+        const isExpired = assignment.time_status === 'expired';
+        const isActive = assignment.time_status === 'active';
+        
+        // Determine if assignment is unlocked
+        // First assignment is always unlocked
+        // Subsequent assignments are unlocked if previous one is submitted or expired
+        let isUnlocked = false;
+        if (index === 0) {
+          isUnlocked = true; // First assignment always unlocked
+        } else {
+          const previousAssignment = arr[index - 1];
+          const previousSubmitted = previousAssignment.student_has_submitted === true;
+          const previousExpired = previousAssignment.time_status === 'expired';
+          isUnlocked = previousSubmitted || previousExpired;
+        }
+
+        // If current assignment is expired, it should be accessible for viewing results
+        if (isExpired && hasSubmitted) {
+          isUnlocked = true;
+        }
+
+        return { 
+          ...assignment, 
+          isUnlocked,
+          hasSubmitted,
+          isExpired,
+          isActive
+        };
       });
 
       setAssignmentData(processedAssignments);
@@ -77,14 +106,14 @@ const StudentHome = () => {
 
       const data = await response.json();
 
-      console.log("The topic data",data.data)
+      console.log("The topic data", data.data);
       const formattedTopics = (data.data || []).map((topic) => ({
         id: topic.topic_id,
         title: topic.topic_name,
         status: "Not Started",
         icon: "📘",
-        progress: topic.avg_progress_percent,
-        score: topic.avg_score,
+        progress: topic.avg_progress_percent || 0,
+        score: topic.avg_score || 0,
         color: "gray",
         department: topic.department_name,
         college: topic.college_name,
@@ -100,6 +129,73 @@ const StudentHome = () => {
     getUserDetails();
   }, []);
 
+  // Get button text and styling based on assignment status
+  const getAssignmentButtonConfig = (assignment) => {
+    if (assignment.hasSubmitted) {
+      return {
+        text: "✅ View Results",
+        className: "bg-green-100 text-green-800 hover:bg-green-200",
+        disabled: false,
+        action: () => navigate(`/student/assignment/${assignment.assignment_id}/results`)
+      };
+    } else if (assignment.isExpired) {
+      return {
+        text: "🔴 Time Expired",
+        className: "bg-red-100 text-red-800 cursor-not-allowed",
+        disabled: true
+      };
+    } else if (assignment.isActive && assignment.isUnlocked) {
+      return {
+        text: "Start Assignment",
+        className: "bg-yellow-400 text-gray-900 hover:bg-yellow-500",
+        disabled: false,
+        action: () => navigate(`/student/assignment/${assignment.assignment_id}`)
+      };
+    } else if (!assignment.isUnlocked) {
+      return {
+        text: "🔒 Locked",
+        className: "bg-gray-200 text-gray-500 cursor-not-allowed",
+        disabled: true
+      };
+    } else {
+      return {
+        text: "Cannot Start",
+        className: "bg-gray-200 text-gray-500 cursor-not-allowed",
+        disabled: true
+      };
+    }
+  };
+
+  // Get status badge text and styling
+  const getStatusBadgeConfig = (assignment) => {
+    if (assignment.hasSubmitted) {
+      return {
+        text: "✅ Submitted",
+        className: "bg-green-100 text-green-800"
+      };
+    } else if (assignment.isExpired) {
+      return {
+        text: "🔴 Expired",
+        className: "bg-red-100 text-red-800"
+      };
+    } else if (assignment.isActive && assignment.isUnlocked) {
+      return {
+        text: "🕒 Pending",
+        className: "bg-yellow-100 text-yellow-800"
+      };
+    } else if (!assignment.isUnlocked) {
+      return {
+        text: "🔒 Locked",
+        className: "bg-gray-100 text-gray-500"
+      };
+    } else {
+      return {
+        text: "Unknown",
+        className: "bg-gray-100 text-gray-500"
+      };
+    }
+  };
+
   // 🧱 Empty state
   const EmptyState = ({ title, message, icon = "📝" }) => (
     <div className="col-span-full bg-white rounded-2xl shadow-sm p-8 lg:p-10 flex flex-col items-center justify-center border border-gray-100">
@@ -111,6 +207,8 @@ const StudentHome = () => {
 
   return (
     <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
+     
+
       {/* ===================== ASSIGNMENTS SECTION ===================== */}
       <h2 className="text-lg lg:text-xl font-bold text-gray-800 mb-4">
         Assignments
@@ -125,59 +223,52 @@ const StudentHome = () => {
       ) : (
         <div className="overflow-x-auto mb-6 lg:mb-8">
           <div className="flex gap-4 lg:gap-6 min-w-min pb-4">
-            {assignmentData.map((assignment) => (
-              <div
-                key={assignment.assignment_id}
-                className={`min-w-[260px] lg:min-w-[500px] bg-white rounded-2xl shadow-sm p-4 lg:p-6 flex-shrink-0 transition-opacity ${
-                  !assignment.isUnlocked ? "opacity-60" : ""
-                }`}
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <h3 className="font-bold text-base lg:text-lg text-gray-800">
-                    {assignment.assignment_topic}
-                  </h3>
-                  <span
-                    className={`text-xs lg:text-sm font-medium flex items-center gap-1 px-2 py-1 rounded-full ${
-                      assignment.is_submitted
-                        ? "bg-green-100 text-green-800"
-                        : assignment.isUnlocked
-                        ? "bg-yellow-100 text-yellow-800"
-                        : "bg-gray-100 text-gray-500"
-                    }`}
-                  >
-                    {assignment.is_submitted
-                      ? "✅ Submitted"
-                      : assignment.isUnlocked
-                      ? "🕒 Pending"
-                      : "🔒 Locked"}
-                  </span>
-                </div>
+            {assignmentData.map((assignment) => {
+              const buttonConfig = getAssignmentButtonConfig(assignment);
+              const badgeConfig = getStatusBadgeConfig(assignment);
 
-                <p className="text-xs text-gray-500 mb-4 lg:mb-6">
-                  Due: {new Date(assignment.end_date).toLocaleDateString()}
-                </p>
-
-                <button
-                  onClick={() =>
-                    navigate(`/student/assignment/${assignment.assignment_id}`)
-                  }
-                  disabled={!assignment.isUnlocked}
-                  className={`w-full py-2 lg:py-2.5 rounded-full text-xs lg:text-sm font-medium transition-colors ${
-                    assignment.is_submitted
-                      ? "bg-green-100 text-green-800 cursor-not-allowed"
-                      : assignment.isUnlocked
-                      ? "bg-yellow-400 text-gray-900 hover:bg-yellow-500"
-                      : "bg-gray-200 text-gray-500 cursor-not-allowed"
+              return (
+                <div
+                  key={assignment.assignment_id}
+                  className={`min-w-[260px] lg:min-w-[500px] bg-white rounded-2xl shadow-sm p-4 lg:p-6 flex-shrink-0 transition-opacity ${
+                    !assignment.isUnlocked && !assignment.hasSubmitted ? "opacity-60" : ""
                   }`}
                 >
-                  {assignment.is_submitted
-                    ? "✅ Submitted"
-                    : assignment.isUnlocked
-                    ? "Attend Now"
-                    : "🔒 Locked"}
-                </button>
-              </div>
-            ))}
+                  <div className="flex justify-between items-start mb-3">
+                    <h3 className="font-bold text-base lg:text-lg text-gray-800">
+                      {assignment.assignment_topic}
+                    </h3>
+                    <span
+                      className={`text-xs lg:text-sm font-medium flex items-center gap-1 px-2 py-1 rounded-full ${badgeConfig.className}`}
+                    >
+                      {badgeConfig.text}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-gray-500 mb-2">
+                    Due: {new Date(assignment.end_date).toLocaleDateString()}
+                  </p>
+
+                  {assignment.student_marks_obtained !== null && (
+                    <p className="text-xs text-green-600 mb-2">
+                      Score: {assignment.student_marks_obtained}/{assignment.total_marks}
+                    </p>
+                  )}
+
+                  <p className="text-xs text-gray-500 mb-4 lg:mb-6">
+                    Status: {assignment.time_status} • Submissions: {assignment.total_submissions}
+                  </p>
+
+                  <button
+                    onClick={buttonConfig.action}
+                    disabled={buttonConfig.disabled}
+                    className={`w-full py-2 lg:py-2.5 rounded-full text-xs lg:text-sm font-medium transition-colors ${buttonConfig.className}`}
+                  >
+                    {buttonConfig.text}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -211,10 +302,9 @@ const StudentHome = () => {
               yellow: "bg-yellow-100 text-yellow-800",
               gray: "bg-gray-100 text-gray-500",
             };
-            const progressColor =  colorClasses.yellow;
-            const statusColor =  statusClasses.yellow;
-            const textColor =
-              topic.color === "yellow" ? "text-yellow-400" : "text-white";
+            const progressColor = colorClasses.yellow;
+            const statusColor = statusClasses.yellow;
+            const textColor = topic.color === "yellow" ? "text-yellow-400" : "text-white";
 
             return (
               <Link

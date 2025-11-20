@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
 import Select from "react-select"
+import Swal from "sweetalert2";
 
 
 const EditCollegeModal = ({ college, onClose, onUpdateSuccess }) => {
@@ -235,21 +236,20 @@ export const CollegeTable = ({
   }, [collegePage, onPageChange]);
 
   /* 🔍 Combine filters + search */
-  const filteredColleges = useMemo(
-    () =>
-      (collegesWithDepts || []).filter(
-        (college) => {
-          const query = searchQuery.toLowerCase();
-          return (
-            college.name.toLowerCase().includes(query) ||
-            college.departments.some(
-              (d) => d.department_name.toLowerCase().includes(query)
-            )
-          );
-        }
-      ),
-    [collegesWithDepts, searchQuery]
-  );
+  const filteredColleges = useMemo(() =>
+  (collegesWithDepts || []).filter((college) => {
+    const query = searchQuery.toLowerCase();
+
+    return (
+      college.name.toLowerCase().includes(query) ||
+      college.departments.some((d) =>
+        (d.department_name || d.name)?.toLowerCase().includes(query)
+      )
+    );
+  }),
+  [collegesWithDepts, searchQuery]
+);
+
 
   const total = filteredColleges.length;
   const totalPages = Math.ceil(total / rowsPerPage);
@@ -279,7 +279,19 @@ export const CollegeTable = ({
 
  
 const handleDeleteCollege = async (college) => {
-  toast.info(`Deleting ${college.name}...`);
+  // Confirm popup
+  const result = await Swal.fire({
+    title: "Are you sure?",
+    text: `Do you want to delete "${college.name}"?`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Yes, delete it!",
+    cancelButtonText: "Cancel",
+    confirmButtonColor: "#d33",
+    cancelButtonColor: "#3085d6",
+  });
+
+  if (!result.isConfirmed) return;
 
   try {
     const res = await axios.delete(
@@ -287,32 +299,60 @@ const handleDeleteCollege = async (college) => {
     );
 
     if (res.data.status === "success") {
-      toast.success(`${college.name} deleted successfully!`);
-      if (refreshData) refreshData();
-      // Reload the page after successful deletion
-      window.location.reload();
+      Swal.fire({
+        toast: true,
+        icon: "success",
+        title: `${college.name} deleted successfully!`,
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 1800,
+      });
+
+      setTimeout(() => {
+        if (refreshData) refreshData();
+        window.location.reload();
+      }, 1000);
     } else {
-      // Backend sent a failure message (e.g., constraint)
-      toast.error(res.data.message || "Failed to delete college.");
+      Swal.fire({
+        toast: true,
+        icon: "error",
+        title: res.data.message || "Failed to delete college.",
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 1800,
+      });
     }
   } catch (err) {
     console.error("Delete error:", err);
 
-    // Handle MySQL constraint error (code 1451)
     const errorMessage =
       err.response?.data?.message ||
       err.response?.data?.detail ||
       err.message;
 
     if (errorMessage?.includes("1451") || errorMessage?.includes("foreign key")) {
-      toast.error(
-        "Cannot delete this college because students or teachers are mapped to it."
-      );
+      Swal.fire({
+        toast: true,
+        icon: "error",
+        title:
+          "Cannot delete this college because students or teachers are mapped to it.",
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 2200,
+      });
     } else {
-      toast.error("An unexpected error occurred while deleting college.");
+      Swal.fire({
+        toast: true,
+        icon: "error",
+        title: "An unexpected error occurred while deleting.",
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 2000,
+      });
     }
   }
 };
+
 
   const formatDate = (dateStr) => {
     const date = new Date(dateStr);

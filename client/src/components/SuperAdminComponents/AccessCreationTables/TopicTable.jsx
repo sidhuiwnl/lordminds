@@ -1,6 +1,65 @@
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
-import { toast } from "react-toastify";
+import Swal from "sweetalert2";
+
+
+const SearchableSelect = ({ options, value, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const filtered = options.filter((opt) =>
+    opt.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="relative z-50">
+      {/* Input Box */}
+      <div
+        onClick={() => {
+          setIsOpen(!isOpen);
+          setSearch("");
+        }}
+        className="px-3 py-2 border border-gray-300 rounded-md cursor-pointer bg-white"
+      >
+        {value}
+      </div>
+
+      {/* Dropdown */}
+      {isOpen && (
+        <div className="absolute mt-1 w-full bg-white shadow-lg rounded-md border border-gray-300 max-h-48 overflow-y-auto">
+
+          {/* Search Input */}
+          <input
+            autoFocus
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search..."
+            className="px-3 py-2 w-full border-b border-gray-200 text-sm outline-none"
+          />
+
+          {/* Options */}
+          {filtered.length > 0 ? (
+            filtered.map((opt) => (
+              <div
+                key={opt}
+                onClick={() => {
+                  onChange(opt);
+                  setIsOpen(false);
+                }}
+                className="px-3 py-2 cursor-pointer hover:bg-gray-100 text-sm"
+              >
+                {opt}
+              </div>
+            ))
+          ) : (
+            <div className="px-3 py-2 text-sm text-gray-500">No results</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 /* ---------------- Edit Topic Modal ---------------- */
 const EditTopicModal = ({ topic, onClose, onUpdateSuccess }) => {
@@ -133,18 +192,12 @@ const EditTopicModal = ({ topic, onClose, onUpdateSuccess }) => {
             <label className="block text-sm font-medium text-gray-700">
               Select New Topic
             </label>
-            <select
+            <SearchableSelect
+              options={availableTopics}
               value={topicName}
-              onChange={(e) => setTopicName(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm
-              focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              {availableTopics.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setTopicName(val)}
+            />
+
           </div>
 
           {error && <p className="text-red-600 text-sm">{error}</p>}
@@ -239,25 +292,70 @@ export const TopicTable = () => {
   };
 
   const handleDeleteTopic = async (topic) => {
-    if (!window.confirm(`Are you sure you want to delete "${topic.topic_name}"?`))
-      return;
+    // Confirmation popup
+    const result = await Swal.fire({
+      title: "Are you sure?",
+      text: `Do you want to delete "${topic.topic_name}"?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Yes, delete!",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+    });
+
+    if (!result.isConfirmed) return;
 
     try {
-      const res = await axios.delete(`${import.meta.env.VITE_BACKEND_API_URL}/topics/delete/${topic.topic_id}`);
+      const res = await axios.delete(
+        `${import.meta.env.VITE_BACKEND_API_URL}/topics/delete/${topic.topic_id}`
+      );
 
       if (res.data.status === "success") {
-        toast.success(`"${topic.topic_name}" deleted successfully!`);
-        fetchTopics();
-        // Reload the page after successful deletion
-        window.location.reload();
+        Swal.fire({
+          toast: true,
+          icon: "success",
+          title: `"${topic.topic_name}" deleted successfully!`,
+          position: "top-end",
+          showConfirmButton: false,
+          timer: 1800,
+        });
+
+        setTimeout(() => {
+          fetchTopics();
+          window.location.reload();
+        }, 1000);
+
       } else {
-        toast.error(res.data.detail || "Failed to delete topic.");
+        Swal.fire({
+          toast: true,
+          icon: "error",
+          title: res.data.detail || "Failed to delete topic.",
+          position: "top-end",
+          showConfirmButton: false,
+          timer: 2000,
+        });
       }
+
     } catch (err) {
       console.error("Delete error:", err);
-      toast.error("Unexpected error while deleting topic.");
+
+      // Get the actual error message from the backend response
+      const errorMessage = err.response?.data?.detail || 
+                          err.response?.data?.message || 
+                          "Unexpected error while deleting topic.";
+
+      Swal.fire({
+        toast: true,
+        icon: "error",
+        title: errorMessage,
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 2000,
+      });
     }
   };
+
 
   if (isLoading) {
     return (
