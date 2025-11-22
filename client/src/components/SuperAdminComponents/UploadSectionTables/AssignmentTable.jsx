@@ -8,13 +8,9 @@ const AssignmentTable = ({
   data,
   page,
   rowsPerPage,
-  total,
-  totalPages,
   onPrev,
   onNext,
   formatDate,
-  onEdit,
-  onDelete,
   onPageChange,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -193,7 +189,7 @@ const AssignmentTable = ({
                   <td className="px-4 py-3 border border-gray-400 text-sm">{row.department_name}</td>
                   <td className="px-4 py-3 border border-gray-400 text-sm">{row.assignment_topic}</td>
                   <td className="px-4 py-3 border border-gray-400 text-sm">{formatDate(row.start_date)}</td>
-                  <td className="px-4 py-3 border border-gray-400 text-sm">{formatDate(row.end_date)}</td>
+                  <td className="px-4 py-3 border border-gray-400 text-sm">{row.end_date ? formatDate(row.end_date) : "No End Date"}</td>
                   <td className="px-4 py-3 border border-gray-400 text-sm">{row.file_name}</td>
                   <td className="px-4 py-3 border border-gray-400 text-center">
                     <ActionButtons row={row} onEdit={handleEditClick} onDelete={handleDeleteAssignment} />

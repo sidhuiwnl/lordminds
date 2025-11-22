@@ -228,7 +228,7 @@ const SuperAdminReports = () => {
     }
     setLoading((p) => ({ ...p, data: true }));
     try {
-      const url = `${import.meta.env.VITE_BACKEND_API_URL}/assignments/assignment-marks/${selectedDepartment}`;
+      const url = `${import.meta.env.VITE_BACKEND_API_URL}/assignments/assignment-marks/${selectedCollege}/${selectedDepartment}`;
       const res = await fetch(url);
       const data = await res.json();
       if (data.status === "success") {
@@ -248,7 +248,7 @@ const SuperAdminReports = () => {
     }
     setLoading((p) => ({ ...p, data: true }));
     try {
-      const url = `${import.meta.env.VITE_BACKEND_API_URL}/assignments/topic-averages/${selectedDepartment}`;
+      const url = `${import.meta.env.VITE_BACKEND_API_URL}/assignments/topic-averages/${selectedCollege}/${selectedDepartment}`;
       const res = await fetch(url);
       const data = await res.json();
       if (data.status === "success") {
@@ -632,7 +632,7 @@ const SuperAdminReports = () => {
             <div className="relative h-96">
               <Bar
                 data={{
-                  labels: currentItems.map((d, i) => `${indexOfFirstItem + i}. ${d.student_name}`),
+                  labels: currentItems.map((d, i) => `${indexOfFirstItem + i}. ${d.student_name} - ${d.full_name}`),
                   datasets: [
                     {
                       label: "Total Hours",

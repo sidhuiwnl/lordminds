@@ -421,7 +421,7 @@ const SuperAdminHome = () => {
             <thead>
               <tr className="bg-[#175d9e] text-white">
                 <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider">Student Name</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider">Overall Average</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider">Overall Percentage</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider">Last Login</th>
               </tr>
             </thead>
@@ -439,7 +439,7 @@ const SuperAdminHome = () => {
                       {indexOfFirstItem + idx + 1}. {student.student_name} - {student.full_name}
                     </td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                      {(student.overall_average || 0).toFixed(2)}
+                      {(student.overall_percentage || 0).toFixed(2)}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">
                       {student.last_login ? new Date(student.last_login).toLocaleString() : "Never"}

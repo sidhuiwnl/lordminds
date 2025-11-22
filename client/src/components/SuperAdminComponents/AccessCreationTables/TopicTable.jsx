@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import Swal from "sweetalert2";
 
-
+/* ---------------- SearchableSelect Component ---------------- */
 const SearchableSelect = ({ options, value, onChange }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -13,7 +13,6 @@ const SearchableSelect = ({ options, value, onChange }) => {
 
   return (
     <div className="relative z-50">
-      {/* Input Box */}
       <div
         onClick={() => {
           setIsOpen(!isOpen);
@@ -24,11 +23,8 @@ const SearchableSelect = ({ options, value, onChange }) => {
         {value}
       </div>
 
-      {/* Dropdown */}
       {isOpen && (
         <div className="absolute mt-1 w-full bg-white shadow-lg rounded-md border border-gray-300 max-h-48 overflow-y-auto">
-
-          {/* Search Input */}
           <input
             autoFocus
             type="text"
@@ -38,7 +34,6 @@ const SearchableSelect = ({ options, value, onChange }) => {
             className="px-3 py-2 w-full border-b border-gray-200 text-sm outline-none"
           />
 
-          {/* Options */}
           {filtered.length > 0 ? (
             filtered.map((opt) => (
               <div
@@ -61,7 +56,7 @@ const SearchableSelect = ({ options, value, onChange }) => {
   );
 };
 
-/* ---------------- Edit Topic Modal ---------------- */
+/* ---------------- EditTopicModal Component ---------------- */
 const EditTopicModal = ({ topic, onClose, onUpdateSuccess }) => {
   const [topicName, setTopicName] = useState(topic.topic_name);
   const [availableTopics, setAvailableTopics] = useState([]);
@@ -70,38 +65,32 @@ const EditTopicModal = ({ topic, onClose, onUpdateSuccess }) => {
 
   const API_BASE = import.meta.env.VITE_BACKEND_API_URL;
 
-  // Fetch all topics (to show remaining unassigned)
   useEffect(() => {
     const fetchAvailableTopics = async () => {
       try {
         const res = await axios.get(`${API_BASE}/topics/all-topics`);
         if (res.data.status === "success") {
           const allTopics = res.data.data.map((t) => t.topic_name);
-
-          // Fetch assigned topics for this department
           const assignedRes = await axios.get(`${API_BASE}/topics/topic-with-department`);
           const assignedTopics = assignedRes.data.data
             .filter(
               (t) =>
-                t.department_name === topic.department_name &&
-                t.college_name === topic.college_name
+                t.department_id === topic.department_id &&
+                t.college_id === topic.college_id
             )
             .map((t) => t.topic_name);
 
-          // Filter out already assigned topics, but keep current one
           const remaining = allTopics.filter(
-            (t) =>
-              !assignedTopics.includes(t) || t === topic.topic_name
+            (t) => !assignedTopics.includes(t) || t === topic.topic_name
           );
-
           setAvailableTopics(remaining);
+        } else {
+          setAvailableTopics([topic.topic_name]);
         }
       } catch (err) {
-        console.error("Error fetching available topics:", err);
         setAvailableTopics([topic.topic_name]);
       }
     };
-
     fetchAvailableTopics();
   }, [topic]);
 
@@ -111,10 +100,11 @@ const EditTopicModal = ({ topic, onClose, onUpdateSuccess }) => {
     setError(null);
 
     const formData = new FormData();
-    if (topicName !== topic.topic_name)
-      formData.append("topic_name", topicName);
+    formData.append("college_id", topic.college_id);
+    formData.append("department_id", topic.department_id);
+    formData.append("new_topic_name", topicName);
 
-    if (!formData.has("topic_name")) {
+    if (topicName === topic.topic_name) {
       setError("No changes detected.");
       setIsLoading(false);
       return;
@@ -128,15 +118,27 @@ const EditTopicModal = ({ topic, onClose, onUpdateSuccess }) => {
       );
 
       if (res.data.status === "success") {
-        toast.success("Topic updated successfully!");
+        Swal.fire({
+          toast: true,
+          icon: "success",
+          title: "Topic assignment updated successfully!",
+          position: "top-end",
+          showConfirmButton: false,
+          timer: 1800,
+        });
         onUpdateSuccess();
         onClose();
-      } else {
+      } else if (res.data.status === "error") {
         setError(res.data.detail || "Update failed.");
+      } else {
+        setError("Unexpected server response.");
       }
     } catch (err) {
-      console.error("Error updating topic:", err);
-      setError(err.response?.data?.detail || "Unexpected error occurred.");
+      const errorMessage =
+        err.response?.data?.detail ||
+        err.response?.data?.message ||
+        "Unexpected error occurred.";
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -165,7 +167,6 @@ const EditTopicModal = ({ topic, onClose, onUpdateSuccess }) => {
         </button>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* College (read-only) */}
           <div>
             <label className="block text-sm font-medium text-gray-700">College</label>
             <input
@@ -176,7 +177,6 @@ const EditTopicModal = ({ topic, onClose, onUpdateSuccess }) => {
             />
           </div>
 
-          {/* Department (read-only) */}
           <div>
             <label className="block text-sm font-medium text-gray-700">Department</label>
             <input
@@ -187,17 +187,34 @@ const EditTopicModal = ({ topic, onClose, onUpdateSuccess }) => {
             />
           </div>
 
-          {/* Topic Dropdown */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Current Topic</label>
+            <input
+              type="text"
+              value={topic.topic_name}
+              readOnly
+              className="mt-1 block w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-600 cursor-not-allowed"
+            />
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Select New Topic
             </label>
-            <SearchableSelect
-              options={availableTopics}
+            <select
               value={topicName}
-              onChange={(val) => setTopicName(val)}
-            />
-
+              onChange={(e) => setTopicName(e.target.value)}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            >
+              {availableTopics.map((topicOption) => (
+                <option key={topicOption} value={topicOption}>
+                  {topicOption}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-sm text-gray-500">
+              {availableTopics.length} available topics
+            </p>
           </div>
 
           {error && <p className="text-red-600 text-sm">{error}</p>}
@@ -216,9 +233,9 @@ const EditTopicModal = ({ topic, onClose, onUpdateSuccess }) => {
               type="submit"
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm 
               hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-              disabled={isLoading}
+              disabled={isLoading || topicName === topic.topic_name}
             >
-              {isLoading ? "Updating..." : "Save Changes"}
+              {isLoading ? "Updating..." : "Update Assignment"}
             </button>
           </div>
         </form>
@@ -227,8 +244,7 @@ const EditTopicModal = ({ topic, onClose, onUpdateSuccess }) => {
   );
 };
 
-
-/* ---------------- Topic Table ---------------- */
+/* ---------------- TopicTable Component ---------------- */
 export const TopicTable = () => {
   const [topics, setTopics] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -238,19 +254,37 @@ export const TopicTable = () => {
   const [selectedTopic, setSelectedTopic] = useState(null);
   const rowsPerPage = 10;
 
-  /* Fetch topics from backend */
+  const API_BASE = import.meta.env.VITE_BACKEND_API_URL;
+
   const fetchTopics = async () => {
     try {
       setIsLoading(true);
-      const res = await axios.get(`${import.meta.env.VITE_BACKEND_API_URL}/topics/topic-with-department`);
+      const res = await axios.get(`${API_BASE}/topics/topic-with-department`);
       if (res.data.status === "success") {
         setTopics(res.data.data);
       } else {
-        toast.error("Failed to load topics.");
+        Swal.fire({
+          toast: true,
+          icon: "error",
+          title: res.data.detail || "Failed to load topics.",
+          position: "top-end",
+          showConfirmButton: false,
+          timer: 2000,
+        });
       }
     } catch (err) {
-      console.error("Error fetching topics:", err);
-      toast.error("Error fetching topics.");
+      const errorMessage =
+        err.response?.data?.detail ||
+        err.response?.data?.message ||
+        "Error fetching topics.";
+      Swal.fire({
+        toast: true,
+        icon: "error",
+        title: errorMessage,
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 2000,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -260,7 +294,6 @@ export const TopicTable = () => {
     fetchTopics();
   }, []);
 
-  /* ---------------- Search Filter ---------------- */
   const filteredTopics = useMemo(() => {
     return topics.filter((topic) =>
       `${topic.topic_name} ${topic.department_name} ${topic.college_name}`
@@ -287,12 +320,10 @@ export const TopicTable = () => {
 
   const handleUpdateSuccess = () => {
     fetchTopics();
-    // Reload the page after successful update
-    window.location.reload();
+    setIsModalOpen(false);
   };
 
   const handleDeleteTopic = async (topic) => {
-    // Confirmation popup
     const result = await Swal.fire({
       title: "Are you sure?",
       text: `Do you want to delete "${topic.topic_name}"?`,
@@ -303,12 +334,11 @@ export const TopicTable = () => {
       confirmButtonColor: "#d33",
       cancelButtonColor: "#3085d6",
     });
-
     if (!result.isConfirmed) return;
 
     try {
       const res = await axios.delete(
-        `${import.meta.env.VITE_BACKEND_API_URL}/topics/delete/${topic.topic_id}`
+        `${API_BASE}/topics/delete/${topic.topic_id}`
       );
 
       if (res.data.status === "success") {
@@ -320,13 +350,8 @@ export const TopicTable = () => {
           showConfirmButton: false,
           timer: 1800,
         });
-
-        setTimeout(() => {
-          fetchTopics();
-          window.location.reload();
-        }, 1000);
-
-      } else {
+        fetchTopics();
+      } else if (res.data.status === "error") {
         Swal.fire({
           toast: true,
           icon: "error",
@@ -335,16 +360,21 @@ export const TopicTable = () => {
           showConfirmButton: false,
           timer: 2000,
         });
+      } else {
+        Swal.fire({
+          toast: true,
+          icon: "error",
+          title: "Unexpected server response.",
+          position: "top-end",
+          showConfirmButton: false,
+          timer: 2000,
+        });
       }
-
     } catch (err) {
-      console.error("Delete error:", err);
-
-      // Get the actual error message from the backend response
-      const errorMessage = err.response?.data?.detail || 
-                          err.response?.data?.message || 
-                          "Unexpected error while deleting topic.";
-
+      const errorMessage =
+        err.response?.data?.detail ||
+        err.response?.data?.message ||
+        "Unexpected error while deleting topic.";
       Swal.fire({
         toast: true,
         icon: "error",
@@ -356,7 +386,6 @@ export const TopicTable = () => {
     }
   };
 
-
   if (isLoading) {
     return (
       <div className="flex justify-center items-center py-10">
@@ -367,7 +396,6 @@ export const TopicTable = () => {
 
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden mt-6">
-      {/* Header + Search */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 lg:p-6 border-b border-gray-200 gap-4">
         <h2 className="text-lg lg:text-xl font-semibold text-gray-800">
           List of Topics
@@ -384,7 +412,6 @@ export const TopicTable = () => {
         />
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto max-h-96 overflow-y-auto">
         <table className="w-full min-w-[1000px] border-collapse">
           <thead>
@@ -420,8 +447,8 @@ export const TopicTable = () => {
                           strokeLinejoin="round"
                           strokeWidth={2}
                           d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5
-                           m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9
-                           v-2.828l8.586-8.586z"
+                            m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9
+                            v-2.828l8.586-8.586z"
                         />
                       </svg>
                       <svg
@@ -436,9 +463,9 @@ export const TopicTable = () => {
                           strokeLinejoin="round"
                           strokeWidth={2}
                           d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862
-                           a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6
-                           m1-10V4a1 1 0 00-1-1h-4a1 1 0
-                           00-1 1v3M4 7h16"
+                            a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6
+                            m1-10V4a1 1 0 00-1-1h-4a1 1 0
+                            00-1 1v3M4 7h16"
                         />
                       </svg>
                     </div>
@@ -459,7 +486,6 @@ export const TopicTable = () => {
         </table>
       </div>
 
-      {/* Pagination */}
       <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
         <p className="text-sm text-gray-700">
           Showing {(topicPage - 1) * rowsPerPage + 1} to{" "}

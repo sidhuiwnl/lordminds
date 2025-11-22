@@ -27,8 +27,8 @@ async def create_test(
     assignment_topic: str = Form(None),
     total_marks: float = Form(100),
     passing_marks: float = Form(40),
-    start_date: datetime = Form(None),
-    end_date: datetime = Form(None),
+    start_date: str = Form(None),
+    end_date: str = Form(None),  # Can be null
 
     # Subtopic fields
     topic_name: str = Form(None),
@@ -38,7 +38,7 @@ async def create_test(
     """Create assignment or subtopic test — optimized for speed."""
 
     # Validate file
-    if not file.filename.endswith((".xlsx", ".xls")):
+    if not file.filename or not file.filename.endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Only Excel (.xlsx/.xls) files are allowed.")
 
     # ✅ Step 1: Save uploaded file asynchronously
@@ -54,6 +54,7 @@ async def create_test(
             await out_file.write(content)
 
     try:
+        # Use the context manager properly
         with get_db() as conn:
             with conn.cursor() as cursor:
 
@@ -61,18 +62,40 @@ async def create_test(
                 # Step 2: Assignment validations
                 # ------------------------------
                 if test_type == "assignment":
-                    if not department_id:
-                        raise HTTPException(status_code=400, detail="department_id is required for assignments.")
+                    if not all([department_id, assignment_number, assignment_topic]):
+                        raise HTTPException(status_code=400, detail="department_id, assignment_number, and assignment_topic are required for assignments.")
 
+                    # Validate department exists
                     cursor.execute(
-                        "SELECT department_id FROM departments WHERE department_id=%s",
+                        "SELECT department_id FROM departments WHERE department_id=%s AND is_active=TRUE",
                         (department_id,)
                     )
                     if not cursor.fetchone():
                         raise HTTPException(status_code=400, detail="Department not found.")
 
-                    if not (assignment_number and assignment_topic and start_date and end_date):
-                        raise HTTPException(status_code=400, detail="Missing required assignment fields.")
+                    # Parse dates if provided
+                    start_dt = None
+                    end_dt = None
+                    
+                    if start_date:
+                        try:
+                            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                        except ValueError:
+                            raise HTTPException(status_code=400, detail="Invalid start_date format. Use ISO format.")
+                    
+                    if end_date:
+                        try:
+                            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                        except ValueError:
+                            raise HTTPException(status_code=400, detail="Invalid end_date format. Use ISO format.")
+
+                    # Check for duplicate assignment number in same department
+                    cursor.execute(
+                        "SELECT assignment_id FROM assignments WHERE assignment_number=%s AND department_id=%s",
+                        (assignment_number, department_id)
+                    )
+                    if cursor.fetchone():
+                        raise HTTPException(status_code=400, detail="Assignment number already exists for this department.")
 
                     # Insert assignment
                     cursor.execute(
@@ -88,13 +111,12 @@ async def create_test(
                             department_id,
                             total_marks,
                             passing_marks,
-                            start_date.strftime("%Y-%m-%d %H:%M:%S"),
-                            end_date.strftime("%Y-%m-%d %H:%M:%S"),
+                            start_dt,
+                            end_dt,
                             file.filename,
                             file_path,
                         ),
                     )
-                    conn.commit()
                     ref_id = cursor.lastrowid
                     test_scope = "assignment"
 
@@ -102,7 +124,7 @@ async def create_test(
                 # Step 3: Subtopic validations
                 # ------------------------------
                 elif test_type == "sub_topic":
-                    if not (topic_name and sub_topic_name):
+                    if not all([topic_name, sub_topic_name]):
                         raise HTTPException(status_code=400, detail="Missing topic_name or sub_topic_name.")
 
                     # Get topic_id by topic_name
@@ -133,7 +155,6 @@ async def create_test(
                             """,
                             (file.filename, file_path, ref_id)
                         )
-                        conn.commit()
                     else:
                         cursor.execute(
                             """
@@ -143,7 +164,6 @@ async def create_test(
                             """,
                             (topic_id, sub_topic_name, file.filename, file_path)
                         )
-                        conn.commit()
                         ref_id = cursor.lastrowid
 
                     test_scope = "sub_topic"
@@ -151,57 +171,82 @@ async def create_test(
                 else:
                     raise HTTPException(status_code=400, detail="Invalid test_type. Must be 'assignment' or 'sub_topic'.")
 
-        # ------------------------------
-        # Step 4: Parse Excel for questions
-        # ------------------------------
-        df = pd.read_excel(file_path)
-        if df.empty:
-            raise HTTPException(status_code=400, detail="Uploaded Excel file is empty or invalid.")
+                # ------------------------------
+                # Step 4: Parse Excel for questions
+                # ------------------------------
+                try:
+                    df = pd.read_excel(file_path)
+                    if df.empty:
+                        raise HTTPException(status_code=400, detail="Uploaded Excel file is empty or invalid.")
+                except Exception as e:
+                    raise HTTPException(status_code=400, detail=f"Error reading Excel file: {str(e)}")
 
-        # ------------------------------
-        # Step 5: Prepare question rows
-        # ------------------------------
-        question_rows = []
-        with get_db() as conn:
-            with conn.cursor() as cursor:
+                # Validate required columns
+                required_columns = ["Question_Type", "Question_Text"]
+                missing_columns = [col for col in required_columns if col not in df.columns]
+                if missing_columns:
+                    raise HTTPException(status_code=400, detail=f"Missing required columns: {', '.join(missing_columns)}")
+
+                # ------------------------------
+                # Step 5: Prepare question rows
+                # ------------------------------
+                question_rows = []
+                question_types_cache = {}  # Cache for question types
+                
                 for index, row in df.iterrows():
+                    # Skip empty rows
+                    if pd.isna(row.get("Question_Type")) or pd.isna(row.get("Question_Text")):
+                        continue
+                        
                     q_type = str(row["Question_Type"]).strip().lower()
 
-                    cursor.execute(
-                        "SELECT question_type_id FROM question_type WHERE question_type=%s",
-                        (q_type,)
-                    )
-                    q_type_row = cursor.fetchone()
-                    if not q_type_row:
-                        raise HTTPException(status_code=400, detail=f"Invalid question type: {q_type}")
-                    q_type_id = q_type_row["question_type_id"]
+                    # Cache question types to reduce database queries
+                    if q_type not in question_types_cache:
+                        cursor.execute(
+                            "SELECT question_type_id FROM question_type WHERE question_type=%s",
+                            (q_type,)
+                        )
+                        q_type_row = cursor.fetchone()
+                        if not q_type_row:
+                            raise HTTPException(status_code=400, detail=f"Invalid question type: {q_type}")
+                        question_types_cache[q_type] = q_type_row["question_type_id"]
+                    
+                    q_type_id = question_types_cache[q_type]
 
                     # Build question data JSON
                     qd = {}
                     if q_type == "mcq":
                         qd = {
-                            "options": [row.get("Option_A"), row.get("Option_B"), row.get("Option_C"), row.get("Option_D")],
+                            "options": [
+                                row.get("Option_A"), 
+                                row.get("Option_B"), 
+                                row.get("Option_C"), 
+                                row.get("Option_D")
+                            ],
                             "correct_answer": row.get("Correct_Answer"),
                         }
                     elif q_type == "fill_blank":
                         qd = {
                             "sentence": row.get("Question_Text"),
-                            "correct_answers": [x.strip() for x in str(row.get("Correct_Answer", "")).split(",")],
+                            "correct_answers": [x.strip() for x in str(row.get("Correct_Answer", "")).split(",") if x.strip()],
                         }
                     elif q_type == "match":
                         qd = {
-                            "column_a": str(row.get("Option_A", "")).split(";"),
-                            "column_b": str(row.get("Option_B", "")).split(";"),
+                            "column_a": [x.strip() for x in str(row.get("Option_A", "")).split(";") if x.strip()],
+                            "column_b": [x.strip() for x in str(row.get("Option_B", "")).split(";") if x.strip()],
                             "correct_pairs": dict(
-                                pair.split("-") for pair in str(row.get("Correct_Answer", "")).split(",") if "-" in pair
+                                pair.split("-") for pair in str(row.get("Correct_Answer", "")).split(",") 
+                                if "-" in pair and len(pair.split("-")) == 2
                             ),
                         }
                     elif q_type == "own_response":
-                        qd = {"expected_keywords": str(row.get("Extra_Data", "")).split(",")}
+                        qd = {
+                            "expected_keywords": [x.strip() for x in str(row.get("Extra_Data", "")).split(",") if x.strip()]
+                        }
                     elif q_type == "true_false":
                         qd = {
                             "statement": row.get("Question_Text"),
-                            "correct_answer": str(row.get("Correct_Answer")).lower() in ["true", "1"],
+                            "correct_answer": str(row.get("Correct_Answer", "")).lower() in ["true", "1", "yes"],
                         }
                     elif q_type == "one_word":
                         qd = {
@@ -215,28 +260,31 @@ async def create_test(
                             ref_id,
                             q_type_id,
                             row.get("Question_Text"),
-                            json.dumps(qd),
-                            row.get("Marks", 1),
-                            row.get("Order_No", index + 1),
+                            json.dumps(qd) if qd else "{}",
+                            float(row.get("Marks", 1)),
+                            int(row.get("Order_No", index + 1)),
                         )
                     )
 
                 # ------------------------------
                 # Step 6: Bulk insert questions
                 # ------------------------------
-                cursor.executemany(
-                    """
-                    INSERT INTO questions
-                    (test_scope, reference_id, question_type_id, question_text, question_data, marks, order_no, created_at, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-                    """,
-                    question_rows,
-                )
+                if question_rows:
+                    cursor.executemany(
+                        """
+                        INSERT INTO questions
+                        (test_scope, reference_id, question_type_id, question_text, question_data, marks, order_no, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                        """,
+                        question_rows,
+                    )
+
+                # Commit the transaction
                 conn.commit()
 
         return {
             "status": "success",
-            "message": f"{test_scope.capitalize()} created successfully with {len(question_rows)} questions.",
+            "message": f"{test_scope.replace('_', ' ').title()} created successfully with {len(question_rows)} questions.",
             "reference_id": ref_id,
             "file_info": {
                 "original_name": file.filename,
@@ -246,9 +294,17 @@ async def create_test(
         }
 
     except HTTPException:
+        # Clean up uploaded file if operation failed
+        if os.path.exists(file_path):
+            os.remove(file_path)
         raise
     except Exception as e:
+        # Clean up uploaded file if operation failed
+        if os.path.exists(file_path):
+            os.remove(file_path)
         raise HTTPException(status_code=500, detail=f"Error creating test: {str(e)}")
+
+
 
 
 
@@ -489,12 +545,13 @@ async def delete_assignment(assignment_id: int):
     - Deletes related questions
     - Deletes uploaded file from disk (if exists)
     """
+    conn = None
     try:
         with get_db() as conn:
-            with conn.cursor(dictionary=True) as cursor:
+            with conn.cursor() as cursor:
                 # ✅ Step 1: Get assignment info (to delete file)
                 cursor.execute(
-                    "SELECT file_path, file_name FROM assignments WHERE assignment_id = %s",
+                    "SELECT file_path, file_name, assignment_number FROM assignments WHERE assignment_id = %s",
                     (assignment_id,)
                 )
                 assignment = cursor.fetchone()
@@ -504,6 +561,7 @@ async def delete_assignment(assignment_id: int):
 
                 file_path = assignment.get("file_path")
                 file_name = assignment.get("file_name")
+                assignment_number = assignment.get("assignment_number")
 
                 # ✅ Step 2: Delete related questions first
                 cursor.execute(
@@ -517,37 +575,43 @@ async def delete_assignment(assignment_id: int):
                     "DELETE FROM assignments WHERE assignment_id = %s",
                     (assignment_id,)
                 )
+                
+                if cursor.rowcount == 0:
+                    raise HTTPException(status_code=404, detail="Assignment not found or already deleted")
+                
                 conn.commit()
 
         # ✅ Step 4: Delete file (after DB commit)
+        file_deleted = False
         if file_path and os.path.exists(file_path):
             try:
                 os.remove(file_path)
+                file_deleted = True
             except Exception as file_err:
                 print(f"⚠️ Warning: Could not delete file {file_path}: {file_err}")
-
-        elif file_path:
-            # Optional: handle relative path case
-            alt_path = os.path.join("uploads/tests/assignment", os.path.basename(file_path))
-            if os.path.exists(alt_path):
-                try:
-                    os.remove(alt_path)
-                except Exception as file_err:
-                    print(f"⚠️ Warning: Could not delete alternate file {alt_path}: {file_err}")
+                # Don't fail the whole request if file deletion fails
 
         return {
             "status": "success",
             "message": (
-                f"Assignment ID {assignment_id} deleted successfully! "
-                f"Removed {questions_deleted} related questions."
+                f"Assignment '{assignment_number}' (ID: {assignment_id}) deleted successfully!"
             ),
+            "deleted_assignment": {
+                "assignment_id": assignment_id,
+                "assignment_number": assignment_number,
+                "file_name": file_name
+            },
             "deleted_questions": questions_deleted,
-            "deleted_file": file_name or None,
+            "file_deleted": file_deleted,
         }
 
     except HTTPException:
+        if conn:
+            conn.rollback()
         raise
     except Exception as e:
+        if conn:
+            conn.rollback()
         print("❌ Error deleting assignment:", e)
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Internal server error")

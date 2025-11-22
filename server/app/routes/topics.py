@@ -50,58 +50,98 @@ async def get_topic_subtopic(department_id : int):
 
 @router.get("/get-topic-with-subtopics")
 async def get_topic_with_subtopics():
-    """Fetch all topics with their subtopics and question counts"""
+    """Fetch all topics with their subtopics and question counts (global topics)"""
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
-                # 1️⃣ Fetch all topics
+                # 1️⃣ Fetch all active topics (global - no department/college context)
                 cursor.execute("""
-                    SELECT topic_id, topic_name, topic_number, department_id 
+                    SELECT 
+                        topic_id, 
+                        topic_name, 
+                        topic_number
                     FROM topics 
                     WHERE is_active = TRUE
                     ORDER BY topic_number
                 """)
                 topics = cursor.fetchall()
-                topic_ids = [t['topic_id'] for t in topics]
-
-                if not topic_ids:
+                
+                if not topics:
                     return {"status": "success", "count": 0, "data": []}
+
+                topic_ids = [t['topic_id'] for t in topics]
 
                 # 2️⃣ Fetch all subtopics for these topics
                 cursor.execute(f"""
-                    SELECT sub_topic_id, topic_id, sub_topic_name, sub_topic_order, overview_video_url,
-                           file_name, test_file,
-                           CASE WHEN overview_content IS NOT NULL THEN TRUE ELSE FALSE END as has_document,
-                           is_active, created_at
+                    SELECT 
+                        sub_topic_id, 
+                        topic_id, 
+                        sub_topic_name, 
+                        sub_topic_order, 
+                        overview_video_url,
+                        file_name, 
+                        test_file,
+                        CASE 
+                            WHEN overview_content IS NOT NULL AND LENGTH(TRIM(overview_content)) > 0 
+                            THEN TRUE 
+                            ELSE FALSE 
+                        END as has_document
                     FROM sub_topics
-                    WHERE topic_id IN ({','.join(['%s']*len(topic_ids))}) AND is_active = TRUE
-                    ORDER BY sub_topic_order
+                    WHERE topic_id IN ({','.join(['%s']*len(topic_ids))}) 
+                    AND is_active = TRUE
+                    ORDER BY topic_id, sub_topic_order
                 """, tuple(topic_ids))
                 subtopics_all = cursor.fetchall()
 
-                subtopic_ids = [st['sub_topic_id'] for st in subtopics_all]
-
-                # 3️⃣ Fetch question counts for all subtopics at once
+                # 3️⃣ Fetch question counts for subtopics
                 question_counts = {}
-                if subtopic_ids:
+                if subtopics_all:
+                    subtopic_ids = [st['sub_topic_id'] for st in subtopics_all]
+                    
                     cursor.execute(f"""
-                        SELECT reference_id, COUNT(*) as total_questions
+                        SELECT 
+                            reference_id, 
+                            COUNT(*) as total_questions,
+                            SUM(marks) as total_marks
                         FROM questions
-                        WHERE test_scope = 'sub_topic' AND reference_id IN ({','.join(['%s']*len(subtopic_ids))})
+                        WHERE test_scope = 'sub_topic' 
+                        AND reference_id IN ({','.join(['%s']*len(subtopic_ids))})
                         GROUP BY reference_id
                     """, tuple(subtopic_ids))
+                    
                     for row in cursor.fetchall():
-                        question_counts[row['reference_id']] = row['total_questions']
+                        question_counts[row['reference_id']] = {
+                            'total_questions': row['total_questions'],
+                            'total_marks': row['total_marks'] or 0
+                        }
 
-                # 4️⃣ Map subtopics and counts to topics
-                topic_dict = {t['topic_id']: t for t in topics}
+                # 4️⃣ Map subtopics to topics
+                topic_dict = {}
+                for topic in topics:
+                    topic_dict[topic['topic_id']] = {
+                        **topic,
+                        'sub_topics': [],
+                        'total_questions': 0,
+                        'total_marks': 0,
+                        'sub_topics_count': 0
+                    }
+
                 for st in subtopics_all:
-                    st['total_questions'] = question_counts.get(st['sub_topic_id'], 0)
-                    topic_dict[st['topic_id']].setdefault('sub_topics', []).append(st)
+                    question_info = question_counts.get(st['sub_topic_id'], {'total_questions': 0, 'total_marks': 0})
+                    
+                    subtopic_data = {
+                        **st,
+                        'total_questions': question_info['total_questions'],
+                        'total_marks': question_info['total_marks']
+                    }
+                    
+                    topic_dict[st['topic_id']]['sub_topics'].append(subtopic_data)
 
-                # 5️⃣ Calculate total questions per topic
-                for t in topic_dict.values():
-                    t['total_questions'] = sum(st['total_questions'] for st in t.get('sub_topics', []))
+                # 5️⃣ Calculate totals
+                for topic in topic_dict.values():
+                    topic['total_questions'] = sum(st['total_questions'] for st in topic['sub_topics'])
+                    topic['total_marks'] = sum(st['total_marks'] for st in topic['sub_topics'])
+                    topic['sub_topics_count'] = len(topic['sub_topics'])
 
                 return {
                     "status": "success",
@@ -115,15 +155,15 @@ async def get_topic_with_subtopics():
 
 @router.get("/all-topics")
 async def get_all_topics():
-    """Fetch all active topics"""
+    """Fetch all active global topics (no department association)"""
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
-                    SELECT topic_id, topic_name, topic_number, department_id 
+                    SELECT topic_id, topic_name, topic_number
                     FROM topics 
                     WHERE is_active = TRUE
-                    ORDER BY topic_number
+                    ORDER BY topic_name
                 """)
                 topics = cursor.fetchall()
                 return {
@@ -139,7 +179,7 @@ async def get_all_topics():
 class AssignTopicsRequest(BaseModel):
     college_name: str
     department_name: str
-    topics: List[str]  # List of topic names
+    topics: List[str]  
 
 # @router.post("/assign-topics")
 # async def assign_topics_to_college_department(payload: AssignTopicsRequest):
@@ -222,77 +262,91 @@ class AssignTopicsRequest(BaseModel):
 @router.post("/assign-topics")
 async def assign_topics_to_college_department(payload: AssignTopicsRequest):
     """
-    Assign topics to a given department (via department_topic_map).
-    Does NOT modify the main topics table.
+    Create topics for a specific college + department.
+    Topics are fully isolated per college + department.
     """
-    skipped_topics = []
-    assigned_count = 0
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
+
                 # 1️⃣ Get college ID
                 cursor.execute(
-                    "SELECT college_id FROM colleges WHERE name = %s",
+                    "SELECT college_id FROM colleges WHERE name = %s AND is_active = 1",
                     (payload.college_name,)
                 )
                 college = cursor.fetchone()
                 if not college:
                     raise HTTPException(status_code=404, detail="College not found")
+
                 college_id = college["college_id"]
 
-                # 2️⃣ Get department ID
+                # 2️⃣ Get department ID (must belong to this college)
                 cursor.execute("""
                     SELECT d.department_id 
                     FROM departments d
                     JOIN college_departments cd ON cd.department_id = d.department_id
-                    WHERE d.department_name = %s AND cd.college_id = %s AND d.is_active = 1
+                    WHERE d.department_name = %s 
+                      AND cd.college_id = %s
+                      AND d.is_active = 1
                 """, (payload.department_name, college_id))
+
                 department = cursor.fetchone()
                 if not department:
-                    raise HTTPException(status_code=404, detail=f"Department '{payload.department_name}' not found for college '{payload.college_name}'")
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Department '{payload.department_name}' not found under '{payload.college_name}'"
+                    )
+
                 department_id = department["department_id"]
 
-                # 3️⃣ Assign topics using mapping table
+                assigned_topics = []
+                skipped_topics = []
+
+                # 3️⃣ Loop through topics provided by frontend
                 for topic_name in payload.topics:
-                    cursor.execute(
-                        "SELECT topic_id FROM topics WHERE topic_name = %s",
-                        (topic_name,)
-                    )
-                    topic = cursor.fetchone()
-                    if not topic:
-                        skipped_topics.append(topic_name)
-                        continue
-                    topic_id = topic["topic_id"]
 
-                    # Avoid duplicates
-                    cursor.execute(
-                        "SELECT 1 FROM department_topic_map WHERE department_id = %s AND topic_id = %s",
-                        (department_id, topic_id)
-                    )
-                    if cursor.fetchone():
-                        skipped_topics.append(topic_name)
-                        continue
+                    # Check if topic already exists for this college+department
+                    cursor.execute("""
+                        SELECT topic_id FROM topics 
+                        WHERE topic_name = %s
+                          AND college_id = %s
+                          AND department_id = %s
+                    """, (topic_name, college_id, department_id))
 
-                    # Insert new mapping
-                    cursor.execute(
-                        "INSERT INTO department_topic_map (department_id, topic_id, created_at) VALUES (%s, %s, NOW())",
-                        (department_id, topic_id)
-                    )
-                    assigned_count += 1
+                    exists = cursor.fetchone()
+
+                    if exists:
+                        skipped_topics.append(topic_name)
+                        continue  # skip duplicates
+
+                    # 4️⃣ Insert a brand new topic
+                    cursor.execute("""
+                        INSERT INTO topics 
+                        (topic_name, topic_number, total_sub_topics, college_id, department_id, is_active, created_at)
+                        VALUES (%s, NULL, 0, %s, %s, 1, NOW())
+                    """, (topic_name, college_id, department_id))
+
+                    assigned_topics.append(topic_name)
 
                 conn.commit()
 
-                message = f"Assigned {assigned_count} topic(s) to {payload.department_name}"
-                if skipped_topics:
-                    message += f". Skipped existing or missing: {', '.join(skipped_topics)}"
-
-                return {"status": "success", "message": message, "assigned_count": assigned_count}
+                return {
+                    "status": "success",
+                    "message": f"Assigned {len(assigned_topics)} topic(s) to {payload.department_name} at {payload.college_name}",
+                    "created_topics": assigned_topics,
+                    "skipped_topics": skipped_topics,
+                    "college_id": college_id,
+                    "department_id": department_id
+                }
 
     except HTTPException:
         raise
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
-    
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}"
+        )
 
 
 
@@ -620,17 +674,33 @@ async def create_topic(data: TopicCreate):
 @router.get("/overall-report/{college_id}/{department_id}")
 async def get_overall_report(college_id: int, department_id: int):
     """
-    Fetch overall average marks across all topics for each student
+    Fetch overall average marks across all topics for each STUDENT ONLY
     in a given college and department.
     """
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
-                cursor.execute("""
+
+                query = """
                     SELECT 
+                        u.user_id,
                         u.username AS student_name,
                         u.full_name,
-                        u.last_login,              
+                        u.last_login,
+                        
+                        -- Total obtained marks (subtopics + assignments)
+                        (
+                            COALESCE(SUM(stm.marks_obtained), 0) +
+                            COALESCE(SUM(am.marks_obtained), 0)
+                        ) AS total_obtained,
+
+                        -- Total maximum marks
+                        (
+                            COALESCE(SUM(stm.max_marks), 0) +
+                            COALESCE(SUM(am.max_marks), 0)
+                        ) AS total_max,
+
+                        -- Final percentage
                         ROUND(
                             (
                                 COALESCE(SUM(stm.marks_obtained), 0) +
@@ -641,55 +711,71 @@ async def get_overall_report(college_id: int, department_id: int):
                                     COALESCE(SUM(stm.max_marks), 0) +
                                     COALESCE(SUM(am.max_marks), 0)
                                 ), 0
-                            ) * 100, 2
-                        ) AS overall_average
+                            ) * 100, 
+                            2
+                        ) AS overall_percentage
                     FROM users u
-                    LEFT JOIN sub_topic_marks stm ON stm.student_id = u.user_id
-                    LEFT JOIN assignment_marks am ON am.student_id = u.user_id
+                    LEFT JOIN sub_topic_marks stm 
+                        ON stm.student_id = u.user_id  
+                        AND stm.college_id = %s
+                        AND stm.department_id = %s
+                    LEFT JOIN assignment_marks am 
+                        ON am.student_id = u.user_id
+                    LEFT JOIN assignments a
+                        ON a.assignment_id = am.assignment_id
+                        AND a.college_id = %s
+                        AND a.department_id = %s
                     WHERE u.college_id = %s 
                       AND u.department_id = %s
-                    GROUP BY u.username, u.full_name
+                      AND u.role_id = '5'        -- 🔥 FIX: Only include students
+                    GROUP BY u.user_id, u.username, u.full_name, u.last_login
                     ORDER BY u.username ASC;
-                """, (college_id, department_id))
+                """
 
-                data = cursor.fetchall()
+                cursor.execute(query, (
+                    college_id, department_id,
+                    college_id, department_id,
+                    college_id, department_id
+                ))
 
-                if not data:
-                    return {"status": "error", "message": "No students found for this department"}
+                rows = cursor.fetchall()
 
-                return {"status": "success", "data": data}
+                return {"status": "success", "data": rows}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    
+        raise HTTPException(status_code=500, detail=f"Error fetching overall report: {str(e)}")
 
 
 
 
 @router.get("/topic-with-department")
 async def get_all_topics():
-    """Fetch all active topics with associated department and college (via department_topic_map)"""
+    """
+    Fetch all topics with the college + department they belong to.
+    Works for the NEW schema where topics are NOT global anymore.
+    """
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
+
                 query = """
                     SELECT 
                         t.topic_id,
                         t.topic_name,
                         t.topic_number,
+                        t.total_sub_topics,
                         d.department_id,
                         d.department_name,
                         c.college_id,
                         c.name AS college_name,
-                        dtm.created_at AS assigned_at
-                    FROM department_topic_map dtm
-                    JOIN topics t ON dtm.topic_id = t.topic_id
-                    JOIN departments d ON dtm.department_id = d.department_id
-                    JOIN college_departments cd ON cd.department_id = d.department_id
-                    JOIN colleges c ON cd.college_id = c.college_id
+                        t.created_at
+                    FROM topics t
+                    JOIN departments d ON t.department_id = d.department_id
+                    JOIN colleges c ON t.college_id = c.college_id
                     WHERE t.is_active = TRUE
-                    ORDER BY c.name, d.department_name, t.topic_number
+                    ORDER BY c.name, d.department_name, t.topic_name
                 """
+
                 cursor.execute(query)
                 topics = cursor.fetchall()
 
@@ -700,74 +786,83 @@ async def get_all_topics():
                 }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching topics: {str(e)}")
-    
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error fetching topics: {str(e)}"
+        )
+
 
 
 @router.put("/update/{topic_id}")
-async def update_topic_assignment(topic_id: int, topic_name: str = Form(...)):
-    """
-    Update a topic assignment for a department — only change topic reference,
-    ensuring no duplicate topic is assigned to the same department.
-    """
+async def update_topic_assignment(
+    topic_id: int,
+    college_id: int = Form(...),
+    department_id: int = Form(...),
+    new_topic_name: str = Form(...)
+):
     try:
-        with get_db() as conn:
-            with conn.cursor() as cursor:
-                # 1️⃣ Get current mapping info
-                cursor.execute("""
-                    SELECT m.map_id, m.department_id, t.topic_name
-                    FROM department_topic_map m
-                    JOIN topics t ON m.topic_id = t.topic_id
-                    WHERE t.topic_id = %s
-                """, (topic_id,))
-                current = cursor.fetchone()
+        with get_db() as conn, conn.cursor() as cursor:
 
-                if not current:
-                    raise HTTPException(status_code=404, detail="Mapping not found for given topic")
+            # Check mapping
+            cursor.execute("""
+                SELECT cdt.college_id, cdt.department_id, t.topic_name
+                FROM college_department_topics cdt
+                JOIN topics t ON cdt.topic_id = t.topic_id
+                WHERE cdt.college_id = %s
+                  AND cdt.department_id = %s
+                  AND cdt.topic_id = %s
+            """, (college_id, department_id, topic_id))
+            
+            current_mapping = cursor.fetchone()
+            if not current_mapping:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Mapping not found for this college, department, and topic"
+                )
 
-                department_id = current["department_id"]
+            # Find new topic
+            cursor.execute("""
+                SELECT topic_id 
+                FROM topics 
+                WHERE topic_name = %s AND is_active = TRUE
+            """, (new_topic_name,))
+            new_topic = cursor.fetchone()
+            if not new_topic:
+                raise HTTPException(status_code=404, detail="New topic not found")
 
-                # 2️⃣ Find the new topic_id by topic_name
-                cursor.execute("SELECT topic_id FROM topics WHERE topic_name = %s", (topic_name,))
-                new_topic = cursor.fetchone()
-                if not new_topic:
-                    raise HTTPException(status_code=404, detail="New topic not found")
+            new_topic_id = new_topic["topic_id"]
 
-                new_topic_id = new_topic["topic_id"]
+            # Prevent duplicate assignment
+            cursor.execute("""
+                SELECT 1 
+                FROM college_department_topics
+                WHERE college_id = %s AND department_id = %s AND topic_id = %s
+            """, (college_id, department_id, new_topic_id))
+            if cursor.fetchone():
+                raise HTTPException(
+                    status_code=400,
+                    detail="Topic already assigned to this college and department"
+                )
 
-                # 3️⃣ Check if this topic is already assigned to same department
-                cursor.execute("""
-                    SELECT * FROM department_topic_map
-                    WHERE department_id = %s AND topic_id = %s
-                """, (department_id, new_topic_id))
-                existing = cursor.fetchone()
+            # Update
+            cursor.execute("""
+                UPDATE college_department_topics
+                SET topic_id = %s, created_at = NOW()
+                WHERE college_id = %s AND department_id = %s AND topic_id = %s
+            """, (new_topic_id, college_id, department_id, topic_id))
 
-                if existing:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="This topic is already assigned to the same department."
-                    )
+            conn.commit()
 
-                # 4️⃣ Update mapping to point to the new topic
-                cursor.execute("""
-                    UPDATE department_topic_map
-                    SET topic_id = %s, created_at = %s
-                    WHERE department_id = %s AND topic_id = %s
-                """, (new_topic_id, datetime.now(), department_id, topic_id))
+            return {"status": "success", "message": "Topic updated"}
 
-                conn.commit()
-
-                return {
-                    "status": "success",
-                    "message": f"Topic assignment updated successfully to '{topic_name}'"
-                }
-
-    except HTTPException as e:
-        raise e
+    except HTTPException:
+        raise
     except Exception as e:
-        print("Error updating topic assignment:", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
-    
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal error: {str(e)}"
+        )
+
     
     
 @router.delete("/delete/{topic_id}")

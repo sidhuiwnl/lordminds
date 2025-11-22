@@ -53,20 +53,25 @@ async def create_department(
 
 @router.get("/{department_id}/topics")
 async def get_department_topics(department_id: int):
-    """Fetch topics for a specific department using department_topic_map"""
+    """
+    Fetch topics directly from topics table 
+    (since topics now belong to a specific department)
+    """
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
+
                 query = """
                     SELECT 
-                        t.topic_id,
-                        t.topic_name,
-                        t.created_at
-                    FROM department_topic_map dtm
-                    INNER JOIN topics t ON dtm.topic_id = t.topic_id
-                    WHERE dtm.department_id = %s
-                    ORDER BY t.topic_name ASC
+                        topic_id,
+                        topic_name,
+                        created_at
+                    FROM topics
+                    WHERE department_id = %s
+                      AND is_active = 1
+                    ORDER BY topic_name ASC
                 """
+
                 cursor.execute(query, (department_id,))
                 topics = cursor.fetchall()
 
@@ -77,7 +82,10 @@ async def get_department_topics(department_id: int):
                 }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching topics: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching topics: {str(e)}"
+        )
 
 
     

@@ -175,6 +175,9 @@ async def upload_assignment(
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
+
+
+
 @router.get("/get-all")
 async def get_assignments():
     """Get all assignments with file info"""
@@ -197,6 +200,8 @@ async def get_assignments():
                 return cursor.fetchall()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
 
 
 @router.get("/get/{assignment_id}/questions")
@@ -223,16 +228,19 @@ async def get_assignment_questions(assignment_id: int):
 
 
 
-@router.get("/assignment-marks/{department_id}")
-async def get_assignment_marks(department_id: int = None):
+
+
+@router.get("/assignment-marks/{college_id}/{department_id}")
+async def get_assignment_marks(college_id: int, department_id: int):
     """
-    Fetch total marks obtained for each student across all assignments,
-    optionally filtered by department.
+    Fetch total assignment marks for each student filtered by
+    specific college and department. Uses assignments table 
+    (which stores the correct college_id + department_id).
     """
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
-                # Base query
+
                 query = """
                     SELECT 
                         u.user_id,
@@ -242,41 +250,42 @@ async def get_assignment_marks(department_id: int = None):
                         SUM(am.marks_obtained) AS total_marks_obtained,
                         SUM(am.max_marks) AS total_max_marks
                     FROM assignment_marks am
-                    JOIN users u ON am.student_id = u.user_id
-                    JOIN departments d ON u.department_id = d.department_id
+                    JOIN assignments a 
+                        ON am.assignment_id = a.assignment_id
+                    JOIN users u 
+                        ON am.student_id = u.user_id
+                    JOIN departments d 
+                        ON u.department_id = d.department_id
+                    WHERE a.college_id = %s
+                      AND a.department_id = %s
+                    GROUP BY 
+                        u.user_id, u.username, u.full_name, d.department_name
+                    ORDER BY 
+                        total_marks_obtained DESC
                 """
 
-                params = []
-                if department_id:
-                    query += " WHERE u.department_id = %s"
-                    params.append(department_id)
-
-                query += """
-                    GROUP BY u.user_id, u.username, d.department_name
-                    ORDER BY total_marks_obtained DESC
-                """
-
-                cursor.execute(query, tuple(params))
-                data = cursor.fetchall()
-
-                
+                cursor.execute(query, (college_id, department_id))
+                rows = cursor.fetchall()
 
                 result = [
                     {
+                        "student_id": row["user_id"],
                         "student_name": row["student_name"],
                         "full_name": row["full_name"],
                         "department_name": row["department_name"],
-                        "total_marks_obtained": row["total_marks_obtained"],
-                        "total_max_marks": row["total_max_marks"],
+                        "total_marks_obtained": float(row["total_marks_obtained"]),
+                        "total_max_marks": float(row["total_max_marks"]),
                         "average_percentage": round(
                             (row["total_marks_obtained"] / row["total_max_marks"]) * 100, 2
                         ) if row["total_max_marks"] else 0
                     }
-                    for row in data
+                    for row in rows
                 ]
 
                 return {
                     "status": "success",
+                    "college_id": college_id,
+                    "department_id": department_id,
                     "count": len(result),
                     "data": result
                 }
@@ -288,78 +297,129 @@ async def get_assignment_marks(department_id: int = None):
         )
 
     
-@router.get("/topic-averages/{department_id}")
-async def get_topic_average_marks(department_id: int = None):
+@router.get("/topic-averages/{college_id}/{department_id}")
+async def get_topic_average_marks(college_id: int, department_id: int):
     """
-    Fetch student-wise topic average marks (aggregating all sub-topic marks under each topic),
-    optionally filtered by department. Uses department_topic_map for proper topic-department relationships.
+    Fetch student-wise topic-wise average marks for a specific 
+    college and department. Topics belong directly to the given 
+    college_id + department_id (Option-A model).
     """
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
-                # Base query with department_topic_map join
+
+                # 1️⃣ Validate department exists under this college
+                cursor.execute("""
+                    SELECT d.department_name
+                    FROM departments d
+                    JOIN college_departments cd 
+                        ON cd.department_id = d.department_id
+                    WHERE d.department_id = %s
+                      AND cd.college_id = %s
+                      AND d.is_active = 1
+                """, (department_id, college_id))
+
+                department = cursor.fetchone()
+
+                if not department:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Department not found for this college."
+                    )
+
+                # 2️⃣ FINAL QUERY USING NEW TABLE STRUCTURE (NO mapping table)
                 query = """
                     SELECT 
+                        u.user_id,
                         u.username AS student_name,
                         u.full_name,
-                        d.department_name AS department_name,
-                        t.topic_name AS topic_name,
+
+                        t.topic_id,
+                        t.topic_name,
+
                         ROUND(SUM(stm.marks_obtained) / SUM(stm.max_marks) * 100, 2) AS average_percentage,
                         SUM(stm.marks_obtained) AS total_obtained,
                         SUM(stm.max_marks) AS total_max
+
                     FROM sub_topic_marks stm
-                    JOIN users u ON stm.student_id = u.user_id
-                    JOIN departments d ON u.department_id = d.department_id
-                    JOIN sub_topics st ON stm.sub_topic_id = st.sub_topic_id
-                    JOIN topics t ON st.topic_id = t.topic_id
-                    JOIN department_topic_map dtm ON (
-                        d.department_id = dtm.department_id 
-                        AND t.topic_id = dtm.topic_id
-                    )
+
+                    JOIN users u 
+                        ON stm.student_id = u.user_id
+
+                    JOIN departments d
+                        ON u.department_id = d.department_id
+
+                    JOIN sub_topics st 
+                        ON stm.sub_topic_id = st.sub_topic_id
+
+                    JOIN topics t 
+                        ON st.topic_id = t.topic_id
+                       AND t.college_id = %s        -- IMPORTANT
+                       AND t.department_id = %s     -- IMPORTANT
+
+                    WHERE stm.marks_obtained IS NOT NULL
+                      AND stm.max_marks > 0
+                      AND u.department_id = %s
+
+                    GROUP BY 
+                        u.user_id, 
+                        u.username, 
+                        u.full_name,
+                        t.topic_id,
+                        t.topic_name
+
+                    HAVING total_max > 0
+
+                    ORDER BY 
+                        u.username,
+                        t.topic_name;
                 """
 
-                params = []
-                if department_id:
-                    query += " WHERE u.department_id = %s"
-                    params.append(department_id)
+                cursor.execute(query, (college_id, department_id, department_id))
+                rows = cursor.fetchall()
 
-                query += """
-                    GROUP BY u.username, u.full_name, d.department_name, t.topic_name
-                    ORDER BY u.username, t.topic_name
-                """
+                # 3️⃣ Group result by student
+                student_map = {}
 
-                cursor.execute(query, tuple(params))
-                results = cursor.fetchall()
+                for r in rows:
+                    uid = r["user_id"]
 
-                # Group data by student
-                student_data = {}
-                for row in results:
-                    name = row["student_name"]
-                    if name not in student_data:
-                        student_data[name] = {
-                            "student_name": name,
-                            "full_name": row["full_name"],
-                            "department_name": row["department_name"],
+                    if uid not in student_map:
+                        student_map[uid] = {
+                            "student_id": uid,
+                            "student_name": r["student_name"],
+                            "full_name": r["full_name"],
                             "topics": []
                         }
-                    student_data[name]["topics"].append({
-                        "topic_name": row["topic_name"],
-                        "total_obtained": float(row["total_obtained"]),
-                        "total_max": float(row["total_max"]),
-                        "average_percentage": float(row["average_percentage"])
+
+                    student_map[uid]["topics"].append({
+                        "topic_id": r["topic_id"],
+                        "topic_name": r["topic_name"],
+                        "average_percentage": float(r["average_percentage"]),
+                        "total_obtained": float(r["total_obtained"]),
+                        "total_max": float(r["total_max"]),
                     })
+
+                final = list(student_map.values())
 
                 return {
                     "status": "success",
-                    "count": len(student_data),
-                    "data": list(student_data.values())
+                    "college_id": college_id,
+                    "department_id": department_id,
+                    "department_name": department["department_name"],
+                    "student_count": len(final),
+                    "data": final
                 }
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Error fetching topic averages: {str(e)}"
         )
+
+
 
 @router.get("/total-duration/{department_id}")
 async def get_total_session_duration(department_id: int = None):

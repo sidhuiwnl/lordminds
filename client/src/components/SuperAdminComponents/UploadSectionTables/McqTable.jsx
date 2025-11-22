@@ -1,13 +1,10 @@
 import React, { useState, useMemo } from "react";
-import ActionButtons from "./common/ActionButton";
 import { toast } from "react-toastify";
 
 const McqTable = ({
   data,
   page,
   rowsPerPage,
-  total,
-  totalPages,
   onPrev,
   onNext,
   onPageChange,
@@ -18,16 +15,33 @@ const McqTable = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  console.log("MCQ Table Data:", data);
+  /* ---------------- Flatten Data Structure ---------------- */
+  const flattenedData = useMemo(() => {
+    return data.flatMap(topic => 
+      topic.sub_topics.map(subTopic => ({
+        topic_id: topic.topic_id,
+        topic_name: topic.topic_name,
+        sub_topic_id: subTopic.sub_topic_id,
+        sub_topic_name: subTopic.sub_topic_name,
+        total_questions: subTopic.total_questions,
+        file_name: subTopic.file_name,
+        test_file: subTopic.test_file,
+        total_marks: subTopic.total_marks,
+        has_document: subTopic.has_document
+      }))
+    );
+  }, [data]);
+
+  console.log("Flattened MCQ Data:", flattenedData);
 
   /* ---------------- Search Filter ---------------- */
   const filteredData = useMemo(() => {
-    return data.filter((row) =>
+    return flattenedData.filter((row) =>
       `${row.topic_name} ${row.sub_topic_name}`
         .toLowerCase()
         .includes(searchQuery.toLowerCase())
     );
-  }, [data, searchQuery]);
+  }, [flattenedData, searchQuery]);
 
   const filteredTotal = filteredData.length;
   const filteredTotalPages = Math.ceil(filteredTotal / rowsPerPage);
@@ -74,7 +88,6 @@ const McqTable = ({
       const formData = new FormData();
       formData.append("file", newFile);
 
-      // ✅ Correct backend route for sub_topic update
       const response = await fetch(
         `${import.meta.env.VITE_BACKEND_API_URL}/tests/update-file/subtopic/${selectedMcq.sub_topic_id}`,
         {
@@ -136,7 +149,7 @@ const McqTable = ({
           <tbody className="divide-y divide-gray-300">
             {paginated.length > 0 ? (
               paginated.map((row, idx) => (
-                <tr key={idx}>
+                <tr key={`${row.topic_id}-${row.sub_topic_id}`}>
                   <td className="px-4 py-3 border border-gray-400 text-sm">{startIdx + idx}</td>
                   <td className="px-4 py-3 border border-gray-400 text-sm">{row.topic_name}</td>
                   <td className="px-4 py-3 border border-gray-400 text-sm">{row.sub_topic_name}</td>
@@ -264,7 +277,7 @@ const McqTable = ({
               </div>
               <div>
                 <p className="block text-sm font-medium text-gray-700">Current File:</p>
-                <p className="mt-1 font-medium text-blue-600">{selectedMcq.file_name}</p>
+                <p className="mt-1 font-medium text-blue-600">{selectedMcq.file_name || 'No file uploaded'}</p>
               </div>
 
               <div>

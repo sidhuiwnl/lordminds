@@ -7,6 +7,7 @@ import { AdminTable } from "./AccessCreationTables/AdministratorTable";
 import { TeacherTable } from "./AccessCreationTables/TeacherTable";
 import { TopicTable } from "./AccessCreationTables/TopicTable";
 
+
 const SearchableDropdown = ({
   options,
   value,
@@ -65,22 +66,21 @@ const SearchableDropdown = ({
   return (
     <div className="relative dropdown-container w-full">
       <div className="relative">
-                  <input
-                    type="text"
-                    readOnly
-                    value={selectedOption ? selectedOption[labelKey] : ""}
-                    onClick={handleToggle}
-                    className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 h-[42px] ${            disabled
-              ? "bg-gray-100 cursor-not-allowed"
-              : "focus:ring-blue-500 border-gray-200 cursor-pointer hover:border-gray-300"
-          }`}
+        <input
+          type="text"
+          readOnly
+          value={selectedOption ? selectedOption[labelKey] : ""}
+          onClick={handleToggle}
+          className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 h-[42px] ${disabled
+            ? "bg-gray-100 cursor-not-allowed"
+            : "focus:ring-blue-500 border-gray-200 cursor-pointer hover:border-gray-300"
+            }`}
           placeholder={placeholder}
           disabled={disabled}
         />
         <svg
-          className={`absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-transform ${
-            isOpen ? "rotate-180" : ""
-          } ${disabled ? "text-gray-400" : "text-gray-500"}`}
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""
+            } ${disabled ? "text-gray-400" : "text-gray-500"}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -119,6 +119,7 @@ const SearchableDropdown = ({
 
 const SuperAdminAccessCreation = () => {
   const [selectedAccessType, setSelectedAccessType] = useState("college-onboarding");
+  const [topicInput, setTopicInput] = useState("");
 
   const [formData, setFormData] = useState({
     collegeName: "",
@@ -131,7 +132,9 @@ const SuperAdminAccessCreation = () => {
     college: "",
     givenAccess: "",
     selectedTopics: [],
+    newTopics: [], // THIS WAS MISSING — NOW FIXED
   });
+
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileName, setFileName] = useState('');
   const [message, setMessage] = useState({ type: "", text: "" });
@@ -332,6 +335,26 @@ const SuperAdminAccessCreation = () => {
     setFileName(file ? file.name : '');
   };
 
+  const handleTopicInputKey = (e) => {
+    if (e.key === "Enter" && topicInput.trim() !== "") {
+      e.preventDefault();
+
+      setFormData(prev => ({
+        ...prev,
+        newTopics: [...prev.newTopics, topicInput.trim()]
+      }));
+
+      setTopicInput("");
+    }
+  };
+
+  const handleRemoveTopic = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      newTopics: prev.newTopics.filter((_, i) => i !== index)
+    }));
+  };
+
   const clearMessage = () => {
     setTimeout(() => setMessage({ type: "", text: "" }), 5000);
   };
@@ -341,19 +364,19 @@ const SuperAdminAccessCreation = () => {
       setMessage({ type: "error", text: "Please select a file to upload" });
       return;
     }
-  
+
     const college = colleges.find(c => c.college_id === formData.college);
     if (!college || !formData.department) {
       setMessage({ type: "error", text: "Please select college and department first" });
       return;
     }
-  
+
     const uploadFormData = new FormData();
     uploadFormData.append("file", selectedFile);
     uploadFormData.append("role", "student");
     uploadFormData.append("college_name", college.name);
     uploadFormData.append("department_name", formData.department);
-  
+
     try {
       setLoading(true);
       setBulkErrors([]);
@@ -361,34 +384,34 @@ const SuperAdminAccessCreation = () => {
         method: "POST",
         body: uploadFormData
       });
-  
+
       const result = await res.json();
-  
+
       if (!res.ok) {
         setBulkErrors(result.errors || [result.detail] || ["An unknown error occurred."]);
       } else {
         setBulkErrors(result.errors || []);
       }
-  
+
       let messageType = "error";
       let messageText = result.message || result.detail || "Bulk upload failed";
-  
+
       if (res.ok && result.status === "success") {
         messageType = "success";
-        messageText = `✅ Successfully created ${result.created_count} students in ${college.name} - ${formData.department}`;
+        messageText = `Successfully created ${result.created_count} students in ${college.name} - ${formData.department}`;
       } else if (res.ok && result.status === "partial") {
         messageType = "warning";
-        messageText = `⚠️ Created ${result.created_count} students in ${college.name} - ${formData.department}. ${result.errors?.length || 0} rows had errors.`;
+        messageText = `Created ${result.created_count} students in ${college.name} - ${formData.department}. ${result.errors?.length || 0} rows had errors.`;
       } else if (res.ok && result.status === "error") {
         messageType = "error";
         messageText = result.message || "No valid students were created";
       }
-  
+
       setMessage({ type: messageType, text: messageText });
       setSelectedFile(null);
       setFileName('');
       await fetchStudents();
-  
+
       if (bulkErrors.length > 0) {
         setShowBulkErrorsModal(true);
       }
@@ -456,11 +479,9 @@ const SuperAdminAccessCreation = () => {
 
       else if (selectedAccessType === "student") {
         if (selectedFile) {
-          // Bulk upload
           await handleBulkUpload();
         } else {
           const college = colleges.find(c => c.college_id === formData.college);
-          // Single student creation
           const payload = {
             role: "student",
             college_name: college.name,
@@ -484,30 +505,41 @@ const SuperAdminAccessCreation = () => {
       }
 
       else if (selectedAccessType === "topic") {
+        if (!formData.college || !formData.department || formData.newTopics.length === 0) {
+          setMessage({ type: "error", text: "Select college, department and add at least one topic" });
+          setLoading(false);
+          return;
+        }
+
         const college = colleges.find(c => c.college_id === formData.college);
-        // Assign topics
-        if (!formData.college || !formData.department || formData.selectedTopics.length === 0) {
-          setMessage({ type: "error", text: "Select college, department, and at least one topic" });
-        } else {
-          const payload = {
-            college_name: college.name,
-            department_name: formData.department,
-            topics: formData.selectedTopics,
-          };
-          const res = await fetch(`${API_BASE}/topics/assign-topics`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-          const result = await res.json();
-          setMessage({ type: res.ok ? "success" : "error", text: res.ok ? result.message : result.detail || "Topic assignment failed" });
-          if (res.ok) setFormData(prev => ({ ...prev, college: "", department: "", selectedTopics: [] }));
+
+const payload = {
+  college_name: college.name,
+  department_name: formData.department,
+  topics: formData.newTopics
+};
+
+        const res = await fetch(`${API_BASE}/topics/assign-topics`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const result = await res.json();
+
+        setMessage({
+          type: res.ok ? "success" : "error",
+          text: result.message,
+        });
+
+        if (res.ok) {
+          setFormData(prev => ({ ...prev, college: "", department: "", newTopics: [] }));
+          setTopicInput("");
         }
       }
 
       else {
         const college = colleges.find(c => c.college_id === formData.college);
-        // Single user creation: teacher/admin
         const roleMap = { teacher: "teacher", admin: "administrator" };
         const payload = {
           role: roleMap[selectedAccessType],
@@ -527,7 +559,7 @@ const SuperAdminAccessCreation = () => {
         setMessage({ type: res.ok ? "success" : "error", text: res.ok ? result.message : result.detail || "User creation failed" });
         if (res.ok) {
           setFormData({
-            collegeName: "", collegeAddress: "", selectedDepartments: [], name: "", department: "", username: "", password: "", college: "", selectedTopics: []
+            collegeName: "", collegeAddress: "", selectedDepartments: [], name: "", department: "", username: "", password: "", college: "", selectedTopics: [], newTopics: []
           });
           const fetchFunc = selectedAccessType === 'teacher' ? fetchTeachers : fetchAdmins;
           await fetchFunc();
@@ -560,31 +592,39 @@ const SuperAdminAccessCreation = () => {
         <>
           <div className="flex flex-col lg:flex-row items-start gap-4">
             <ToastContainer />
-            <label className="w-full lg:w-36 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">College Name</label>
+            <label className="w-full lg:w-36 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">
+              College Name <span className="text-red-500">*</span>
+            </label>
             <input
               type="text"
               name="collegeName"
               value={formData.collegeName}
               onChange={handleInputChange}
               placeholder="College name"
+              required
               className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
             />
           </div>
 
           <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">College Address</label>
+            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">
+              College Address <span className="text-red-500">*</span>
+            </label>
             <input
               type="text"
               name="collegeAddress"
               value={formData.collegeAddress}
               onChange={handleInputChange}
               placeholder="College address"
+              required
               className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
             />
           </div>
 
           <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">Department</label>
+            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">
+              Department <span className="text-red-500">*</span>
+            </label>
             <div className="flex flex-1 gap-2 w-full">
               <Select
                 isMulti
@@ -595,25 +635,26 @@ const SuperAdminAccessCreation = () => {
                 placeholder="Select departments"
                 isClearable
                 closeMenuOnSelect={false}
+                required
                 styles={{
-                  control: (base) => ({
+                  control: (base, state) => ({
                     ...base,
                     minHeight: '42px',
                     padding: '0 8px',
-                    fontSize: '0.875rem', // text-sm
-                    borderColor: 'rgb(229 231 235)', // border-gray-200
+                    fontSize: '0.875rem',
+                    borderColor: state.hasValue && formData.selectedDepartments.length > 0 ? 'rgb(229 231 235)' : 'rgb(239 68 68)',
                     '&:hover': {
-                      borderColor: 'rgb(209 213 219)', // hover:border-gray-300
+                      borderColor: state.hasValue && formData.selectedDepartments.length > 0 ? 'rgb(209 213 219)' : 'rgb(239 68 68)',
                     },
-                    boxShadow: 'none', // Remove default focus shadow
+                    boxShadow: 'none',
                     '&:focus': {
                       outline: 'none',
-                      boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.5)', // focus:ring-2 focus:ring-blue-500
+                      boxShadow: state.hasValue && formData.selectedDepartments.length > 0 ? '0 0 0 2px rgba(59, 130, 246, 0.5)' : '0 0 0 2px rgba(239, 68, 68, 0.5)',
                     },
                   }),
                   multiValue: (base) => ({
                     ...base,
-                    backgroundColor: 'rgb(224 242 254)', // light blue background for selected items
+                    backgroundColor: 'rgb(224 242 254)',
                   }),
                 }}
               />
@@ -637,31 +678,31 @@ const SuperAdminAccessCreation = () => {
           <div className="flex flex-col lg:flex-row items-start gap-4">
             <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">1. College Name</label>
             <div className="flex-1 w-full">
-            <SearchableDropdown
-              name="college"
-              value={formData.college}
-              onChange={handleInputChange}
-              options={colleges}
-              valueKey="college_id"
-              labelKey="name"
-              placeholder="Select College"
-            />
+              <SearchableDropdown
+                name="college"
+                value={formData.college}
+                onChange={handleInputChange}
+                options={colleges}
+                valueKey="college_id"
+                labelKey="name"
+                placeholder="Select College"
+              />
             </div>
           </div>
 
           <div className="flex flex-col lg:flex-row items-start gap-4">
             <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">2. Department</label>
             <div className="flex-1 w-full">
-            <SearchableDropdown
-              name="department"
-              value={formData.department}
-              onChange={handleInputChange}
-              options={formDepartments}
-              valueKey="department_name"
-              labelKey="department_name"
-              placeholder="Select Department"
-              disabled={!formData.college}
-            />
+              <SearchableDropdown
+                name="department"
+                value={formData.department}
+                onChange={handleInputChange}
+                options={formDepartments}
+                valueKey="department_name"
+                labelKey="department_name"
+                placeholder="Select Department"
+                disabled={!formData.college}
+              />
             </div>
           </div>
 
@@ -709,72 +750,78 @@ const SuperAdminAccessCreation = () => {
     } else if (selectedAccessType === "topic") {
       return (
         <>
-          <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">1. College Name</label>
-            <div className="flex-1 w-full">
-            <SearchableDropdown
-              name="college"
-              value={formData.college}
-              onChange={handleInputChange}
-              options={colleges}
-              valueKey="college_id"
-              labelKey="name"
-              placeholder="Select College"
-            />
-            </div>
-          </div>
+          <div className="flex flex-col gap-4">
 
-          <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">2. Department</label>
-            <div className="flex-1 w-full">
-            <SearchableDropdown
-              name="department"
-              value={formData.department}
-              onChange={handleInputChange}
-              options={formDepartments}
-              valueKey="department_name"
-              labelKey="department_name"
-              placeholder="Select Department"
-              disabled={!formData.college}
-            />
+            <div className="flex flex-col lg:flex-row items-start gap-4">
+              <label className="w-full lg:w-40 text-sm font-medium text-gray-700 lg:pt-2">
+                1. College Name
+              </label>
+              <div className="flex-1 w-full">
+                <SearchableDropdown
+                  name="college"
+                  value={formData.college}
+                  onChange={handleInputChange}
+                  options={colleges}
+                  valueKey="college_id"
+                  labelKey="name"
+                  placeholder="Select College"
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">3. Topics</label>
-            <div className="flex flex-1 gap-2 w-full">
-              <Select
-                isMulti
-                options={topics.map(topic => ({ value: topic.topic_name || topic.name, label: topic.topic_name || topic.name }))}
-                value={formData.selectedTopics.map(topicName => ({ value: topicName, label: topicName }))}
-                onChange={(options) => handleSelectChange(options, "selectedTopics")}
-                className="flex-1"
-                placeholder="Select topics"
-                isClearable
-                closeMenuOnSelect={false}
-                styles={{
-                  control: (base) => ({
-                    ...base,
-                    minHeight: '42px',
-                    padding: '0 8px',
-                    fontSize: '0.875rem', // text-sm
-                    borderColor: 'rgb(229 231 235)', // border-gray-200
-                    '&:hover': {
-                      borderColor: 'rgb(209 213 219)', // hover:border-gray-300
-                    },
-                    boxShadow: 'none', // Remove default focus shadow
-                    '&:focus': {
-                      outline: 'none',
-                      boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.5)', // focus:ring-2 focus:ring-blue-500
-                    },
-                  }),
-                  multiValue: (base) => ({
-                    ...base,
-                    backgroundColor: 'rgb(224 242 254)', // light blue background for selected items
-                  }),
-                }}
-              />
+            <div className="flex flex-col lg:flex-row items-start gap-4">
+              <label className="w-full lg:w-40 text-sm font-medium text-gray-700 lg:pt-2">
+                2. Department
+              </label>
+              <div className="flex-1 w-full">
+                <SearchableDropdown
+                  name="department"
+                  value={formData.department}
+                  onChange={handleInputChange}
+                  options={formDepartments}
+                  valueKey="department_name"
+                  labelKey="department_name"
+                  placeholder="Select Department"
+                  disabled={!formData.college}
+                />
+              </div>
             </div>
+
+            <div className="flex flex-col lg:flex-row items-start gap-4">
+              <label className="w-full lg:w-40 text-sm font-medium text-gray-700 lg:pt-2">
+                3. Topics
+              </label>
+
+              <div className="flex-1">
+                <div className="border border-gray-300 rounded-lg p-2 min-h-[50px] flex flex-wrap gap-2">
+                  {formData.newTopics.map((topic, idx) => (
+                    <div key={idx} className="flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
+                      <span>{topic}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTopic(idx)}
+                        className="text-red-600 font-bold"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+
+                  <input
+                    type="text"
+                    value={topicInput}
+                    onChange={(e) => setTopicInput(e.target.value)}
+                    onKeyDown={handleTopicInputKey}
+                    className="flex-1 min-w-[120px] px-2 py-1 outline-none text-sm"
+                    placeholder="Type topic & press Enter"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Press <b>Enter</b> to add topic.
+                </p>
+              </div>
+            </div>
+
           </div>
         </>
       );
@@ -785,18 +832,18 @@ const SuperAdminAccessCreation = () => {
           <div className="flex flex-col lg:flex-row items-start gap-4">
             <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">1. College Name</label>
             <div className="flex-1 w-full">
-            <SearchableDropdown
-              name="college"
-              value={formData.college}
-              onChange={handleInputChange}
-              options={colleges}
-              valueKey="college_id"
-              labelKey="name"
-              placeholder="Select College"
-            />
+              <SearchableDropdown
+                name="college"
+                value={formData.college}
+                onChange={handleInputChange}
+                options={colleges}
+                valueKey="college_id"
+                labelKey="name"
+                placeholder="Select College"
+              />
             </div>
           </div>
-          
+
           <div className="flex flex-col lg:flex-row items-start gap-4">
             <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">Full Name</label>
             <input
@@ -813,16 +860,16 @@ const SuperAdminAccessCreation = () => {
             <div className="flex flex-col lg:flex-row items-start gap-4">
               <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">Department</label>
               <div className="flex-1 w-full">
-              <SearchableDropdown
-                name="department"
-                value={formData.department}
-                onChange={handleInputChange}
-                options={formDepartments}
-                valueKey="department_name"
-                labelKey="department_name"
-                placeholder="Select Department"
-                disabled={!formData.college}
-              />
+                <SearchableDropdown
+                  name="department"
+                  value={formData.department}
+                  onChange={handleInputChange}
+                  options={formDepartments}
+                  valueKey="department_name"
+                  labelKey="department_name"
+                  placeholder="Select Department"
+                  disabled={!formData.college}
+                />
               </div>
             </div>
           )}
@@ -923,17 +970,35 @@ const SuperAdminAccessCreation = () => {
             <div
               key={type.id}
               className={`flex items-center gap-2 px-3 py-2 lg:px-6 lg:py-4 bg-white rounded-lg border-2 shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md flex-shrink-0 min-w-[140px] lg:min-w-0 ${selectedAccessType === type.id
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200'
+                ? 'border-blue-500 bg-blue-50'
+                : 'border-gray-200'
                 }`}
-              onClick={() => setSelectedAccessType(type.id)}
+              onClick={() => {
+                setSelectedAccessType(type.id);
+                setTopicInput("");
+                setSelectedFile(null);
+                setFileName('');
+                setFormData({
+                  collegeName: "",
+                  collegeAddress: "",
+                  selectedDepartments: [],
+                  name: "",
+                  department: "",
+                  username: "",
+                  password: "",
+                  college: "",
+                  givenAccess: "",
+                  selectedTopics: [],
+                  newTopics: [], // Reset on tab change
+                });
+              }}
             >
               <input
                 type="radio"
                 id={type.id}
                 name="accessType"
                 checked={selectedAccessType === type.id}
-                onChange={() => setSelectedAccessType(type.id)}
+                onChange={() => { }}
                 className="w-4 h-4 lg:w-5 lg:h-5 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 focus:ring-2"
               />
               <label htmlFor={type.id} className="text-xs lg:text-sm font-medium text-gray-700 cursor-pointer">
@@ -971,8 +1036,8 @@ const SuperAdminAccessCreation = () => {
                     <button
                       type="button"
                       className={`px-5 py-2 rounded-lg font-medium text-sm shadow-md transition-shadow flex items-center gap-1 ${!formData.college || !formData.department
-                          ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-                          : "bg-blue-500 text-white hover:shadow-lg"
+                        ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                        : "bg-blue-500 text-white hover:shadow-lg"
                         }`}
                       onClick={() => selectedFile && handleBulkUpload()}
                     >
