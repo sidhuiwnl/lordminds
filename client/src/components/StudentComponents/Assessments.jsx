@@ -45,16 +45,16 @@ const Assessments = () => {
     const checkTestCompletion = async () => {
       try {
         const response = await fetch(
-          `${API_URL}/check-test-completion/${userId}/sub_topic/${subtopic}`
+          `${API_URL}/${userId}/test-attempt-status/sub_topic/${subtopic}`
         );
         const data = await response.json();
-        
-        if (data.data.is_completed) {
+
+        if (data?.data?.has_completed) {
           setTestCompleted(true);
           setExistingResults(data.data.attempt_data);
           toast.info("You have already completed this test. Redirecting to results...");
           setTimeout(() => {
-            navigate(`/student/subtopic/${subtopic}/results`);
+            navigate(`/student/studenthome`);
           }, 2000);
         }
       } catch (error) {
@@ -66,6 +66,129 @@ const Assessments = () => {
       checkTestCompletion();
     }
   }, [userId, subtopic, API_URL, navigate]);
+
+
+  useEffect(() => {
+    /* -----------------------------------------------
+       1. Prevent PrintScreen (Clear Clipboard)
+    ------------------------------------------------ */
+    const handlePrintScreen = async (e) => {
+      if (e.key === "PrintScreen") {
+        e.preventDefault();
+        try {
+          await navigator.clipboard.writeText("");
+        } catch (_) { }
+        toast.error("⚠️ Screenshot attempt blocked!");
+        document.body.style.filter = "blur(50px)";
+        setTimeout(() => (document.body.style.filter = "none"), 1500);
+      }
+    };
+
+    /* -----------------------------------------------
+       2. Disable Copy / Cut / Select
+    ------------------------------------------------ */
+    const preventCopy = (e) => {
+      e.preventDefault();
+      toast.error("⚠️ Copying is disabled.");
+    };
+
+    const preventSelect = (e) => {
+      e.preventDefault();
+      toast.error("⚠️ Text selection is disabled.");
+      return false;
+    };
+
+    /* -----------------------------------------------
+       3. Disable Right Click
+    ------------------------------------------------ */
+    const preventRightClick = (e) => {
+      e.preventDefault();
+      toast.error("⚠️ Right-click disabled.");
+    };
+
+    /* -----------------------------------------------
+       4. Block Dangerous Keyboard Shortcuts
+    ------------------------------------------------ */
+    const blockKeys = (e) => {
+      const key = e.key.toLowerCase();
+
+      // Ctrl + P/U/S and DevTools
+      if (
+        (e.ctrlKey && ["p", "u", "s"].includes(key)) ||
+        (e.ctrlKey && e.shiftKey && ["i", "j", "c"].includes(key))
+      ) {
+        e.preventDefault();
+        toast.error("⚠️ This action is disabled.");
+      }
+    };
+
+    /* -----------------------------------------------
+       5. Detect Tab Switching / Window Blur
+    ------------------------------------------------ */
+    const onBlur = () => {
+      document.body.style.filter = "blur(50px)";
+      toast.error("⚠️ Stay on the assignment window!");
+    };
+
+    const onFocus = () => {
+      document.body.style.filter = "none";
+    };
+
+    /* -----------------------------------------------
+       6. Detect Screen Capture Tools (Snipping Tool)
+    ------------------------------------------------ */
+    const snipDetection = setInterval(() => {
+      if (document.hidden || !document.hasFocus()) {
+        document.body.style.filter = "blur(50px)";
+        toast.error("⚠️ Screen capturing detected!");
+      }
+    }, 500);
+
+    /* -----------------------------------------------
+       7. Add all listeners once
+    ------------------------------------------------ */
+    window.addEventListener("keyup", handlePrintScreen);
+    window.addEventListener("keydown", blockKeys);
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
+
+    document.addEventListener("copy", preventCopy);
+    document.addEventListener("cut", preventCopy);
+    document.addEventListener("selectstart", preventSelect);
+    document.addEventListener("contextmenu", preventRightClick);
+
+    /* -----------------------------------------------
+       Cleanup listeners on unmount
+    ------------------------------------------------ */
+    return () => {
+      window.removeEventListener("keyup", handlePrintScreen);
+      window.removeEventListener("keydown", blockKeys);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
+
+      document.removeEventListener("copy", preventCopy);
+      document.removeEventListener("cut", preventCopy);
+      document.removeEventListener("selectstart", preventSelect);
+      document.removeEventListener("contextmenu", preventRightClick);
+
+      clearInterval(snipDetection);
+    };
+  }, []);
+
+  useEffect(() => {
+    const enterFullscreen = () => document.documentElement.requestFullscreen();
+    enterFullscreen();
+
+    const onFSChange = () => {
+      if (!document.fullscreenElement) {
+        toast.error("⚠️ Fullscreen required! Exiting exam...");
+        navigate("/student/studenthome");
+      }
+    };
+
+    document.addEventListener("fullscreenchange", onFSChange);
+    return () => document.removeEventListener("fullscreenchange", onFSChange);
+  }, []);
 
   // 🧭 Fetch Questions + Subtopic
   useEffect(() => {
@@ -90,7 +213,7 @@ const Assessments = () => {
             question_data: JSON.parse(q.question_data || "{}"),
           }));
           setQuestions(parsed);
-          
+
           // Initialize attempt counts and showCorrectAnswer state
           const initialAttempts = {};
           const initialShowAnswer = {};
@@ -197,7 +320,7 @@ const Assessments = () => {
 
       const result = await res.json();
       const qid = currentQuestion.question_id;
-      
+
       // Increment attempt count for this question
       const newAttemptCount = (attemptCounts[qid] || 0) + 1;
       setAttemptCounts(prev => ({
@@ -226,7 +349,7 @@ const Assessments = () => {
 
       // ✅ Evaluate correctness with fuzzy matching
       const isCorrect = checkAnswerCorrectness(transcript, expectedAnswer);
-      
+
       if (isCorrect) {
         setFeedback("✅ Correct Answer!");
         setAnalysisResults((prev) => ({
@@ -235,10 +358,10 @@ const Assessments = () => {
         }));
         setAnswers((prev) => ({ ...prev, [`completed-${qid}`]: true }));
         speechSynthesis.speak(new SpeechSynthesisUtterance("Correct answer"));
-        
+
         // Mark question as completed and show next button
         setAnswers(prev => ({ ...prev, [`show-next-${qid}`]: true }));
-        
+
       } else {
         // Wrong answer logic
         if (newAttemptCount >= 2) {
@@ -269,23 +392,23 @@ const Assessments = () => {
   // Fuzzy matching for answer correctness
   const checkAnswerCorrectness = (transcript, expectedAnswer) => {
     if (!expectedAnswer) return false;
-    
+
     // Exact match
     if (transcript.includes(expectedAnswer)) return true;
-    
+
     // Common variations
     const variations = {
       "present": ["present tense"],
-      "past": ["past tense"], 
+      "past": ["past tense"],
       "future": ["future tense"],
       "continuous": ["continuous tense", "progressive"],
       "perfect": ["perfect tense"]
     };
-    
+
     if (variations[expectedAnswer]) {
       return variations[expectedAnswer].some(variant => transcript.includes(variant));
     }
-    
+
     return false;
   };
 
@@ -323,7 +446,7 @@ const Assessments = () => {
 
   const handleSubmitTest = async () => {
     const score = calculateScore();
-    
+
     // Confirm submission
     if (!window.confirm("Are you sure you want to submit? You cannot re-attempt this test.")) {
       return;
@@ -342,7 +465,7 @@ const Assessments = () => {
       });
 
       const data = await res.json();
-      
+
       if (data.status === "success") {
         if (data.data.already_completed) {
           toast.info("Test was already completed previously.");
@@ -352,7 +475,7 @@ const Assessments = () => {
             `✅ Test Completed! You scored ${score.marks_obtained}/${score.max_marks}`
           );
           // Navigate to results page
-          navigate(`/student/subtopic/${subtopic}/results`);
+          navigate("/student/studenthome");
         }
       } else {
         throw new Error(data.message || "Submission failed");
@@ -372,7 +495,7 @@ const Assessments = () => {
           <p className="text-gray-600 mb-4">
             You have already completed this subtopic test.
           </p>
-          <button 
+          <button
             onClick={() => navigate(`/student/subtopic/${subtopic}/results`)}
             className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600"
           >
@@ -398,7 +521,7 @@ const Assessments = () => {
   return (
     <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
       <ToastContainer />
-      
+
       {/* Test Header */}
       <div className="bg-white rounded-2xl shadow-sm p-4 lg:p-6 border-t-4 border-r-4 border-[#1b65a6] mb-6">
         <div className="flex justify-between items-center mb-4">
@@ -410,7 +533,7 @@ const Assessments = () => {
 
         {/* Progress Bar */}
         <div className="w-full bg-gray-200 rounded-full h-2 mb-6">
-          <div 
+          <div
             className="bg-blue-500 h-2 rounded-full transition-all duration-300"
             style={{ width: `${(currentStep / totalSteps) * 100}%` }}
           ></div>
@@ -430,9 +553,8 @@ const Assessments = () => {
               return (
                 <label
                   key={index}
-                  className={`flex items-center space-x-3 cursor-pointer p-3 border rounded-lg transition-colors ${
-                    isSelected ? "bg-yellow-100 border-yellow-400" : "hover:bg-gray-50"
-                  } ${isNavigationDisabled || showNextButton ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`flex items-center space-x-3 cursor-pointer p-3 border rounded-lg transition-colors ${isSelected ? "bg-yellow-100 border-yellow-400" : "hover:bg-gray-50"
+                    } ${isNavigationDisabled || showNextButton ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <input
                     type="radio"
@@ -482,13 +604,12 @@ const Assessments = () => {
 
           {feedback && (
             <p
-              className={`mt-2 text-base font-semibold ${
-                feedback.includes("✅")
-                  ? "text-green-600"
-                  : feedback.includes("❌")
+              className={`mt-2 text-base font-semibold ${feedback.includes("✅")
+                ? "text-green-600"
+                : feedback.includes("❌")
                   ? "text-red-600"
                   : "text-yellow-600"
-              }`}
+                }`}
             >
               {feedback}
             </p>
@@ -523,15 +644,15 @@ const Assessments = () => {
             const isActive = currentStep === qNum;
             const correctness = analysisResults[qId]?.correctness;
             const showNext = answers[`show-next-${qId}`];
-            
+
             const color =
               correctness === "correct"
                 ? "bg-green-400"
                 : showNext && correctness === "wrong"
-                ? "bg-orange-400"
-                : showNext
-                ? "bg-blue-400"
-                : "bg-gray-300";
+                  ? "bg-orange-400"
+                  : showNext
+                    ? "bg-blue-400"
+                    : "bg-gray-300";
 
             return (
               <button
@@ -543,9 +664,8 @@ const Assessments = () => {
                   }
                 }}
                 disabled={isNavigationDisabled || !answers[`show-next-${qId}`]}
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${
-                  isActive ? "ring-2 ring-yellow-400" : ""
-                } ${color} ${isNavigationDisabled || !answers[`show-next-${qId}`] ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${isActive ? "ring-2 ring-yellow-400" : ""
+                  } ${color} ${isNavigationDisabled || !answers[`show-next-${qId}`] ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
               >
                 {qNum}
               </button>
@@ -567,11 +687,10 @@ const Assessments = () => {
             <button
               onClick={handleSubmitTest}
               disabled={isNavigationDisabled}
-              className={`px-6 py-3 rounded-lg transition font-medium ${
-                !isNavigationDisabled
-                  ? "bg-green-500 text-white hover:bg-green-600 cursor-pointer"
-                  : "bg-gray-300 text-gray-500 cursor-not-allowed"
-              }`}
+              className={`px-6 py-3 rounded-lg transition font-medium ${!isNavigationDisabled
+                ? "bg-green-500 text-white hover:bg-green-600 cursor-pointer"
+                : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                }`}
             >
               Submit Test
             </button>

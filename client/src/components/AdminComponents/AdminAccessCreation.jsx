@@ -1,12 +1,124 @@
 import React, { useState, useEffect } from "react";
 import Select from 'react-select';
-import { ToastContainer} from 'react-toastify';
+import { ToastContainer } from 'react-toastify';
 import { CollegeTable } from "../SuperAdminComponents/AccessCreationTables/CollegeOnboardTable";
 import { StudentTable } from "../SuperAdminComponents/AccessCreationTables/StudentTable";
 import { TeacherTable } from "../SuperAdminComponents/AccessCreationTables/TeacherTable";
+import { AdminTable } from "../SuperAdminComponents/AccessCreationTables/AdministratorTable";
+import { TopicTable } from "../SuperAdminComponents/AccessCreationTables/TopicTable";
+
+const SearchableDropdown = ({
+  options,
+  value,
+  onChange,
+  placeholder,
+  disabled = false,
+  name,
+  valueKey = "value",
+  labelKey = "label",
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const selectedOption = options.find((o) => o[valueKey] === value);
+
+  const filteredOptions = options.filter((o) =>
+    o[labelKey].toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleToggle = () => {
+    if (!disabled) {
+      setIsOpen(!isOpen);
+      if (!isOpen) setSearch("");
+    }
+  };
+
+  const handleSelect = (opt) => {
+    onChange({ target: { name, value: opt[valueKey] } });
+    setIsOpen(false);
+    setSearch("");
+  };
+
+  const handleSearchChange = (e) => setSearch(e.target.value);
+
+  const handleClose = () => {
+    setIsOpen(false);
+    setSearch("");
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (isOpen && !e.target.closest(".dropdown-container")) {
+        handleClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen]);
+
+  return (
+    <div className="relative dropdown-container w-full">
+      <div className="relative">
+        <input
+          type="text"
+          readOnly
+          value={selectedOption ? selectedOption[labelKey] : ""}
+          onClick={handleToggle}
+          className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 h-[42px] ${disabled
+            ? "bg-gray-100 cursor-not-allowed"
+            : "focus:ring-blue-500 border-gray-200 cursor-pointer hover:border-gray-300"
+            }`}
+          placeholder={placeholder}
+          disabled={disabled}
+        />
+        <svg
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""
+            } ${disabled ? "text-gray-400" : "text-gray-500"}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+      {isOpen && (
+        <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto mt-1">
+          <input
+            type="text"
+            autoFocus
+            value={search}
+            onChange={handleSearchChange}
+            placeholder="Search..."
+            className="w-full px-3 py-2 border-b border-gray-300 text-sm focus:outline-none"
+          />
+          {filteredOptions.length === 0 ? (
+            <div className="px-3 py-2 text-gray-500 text-sm">No options found</div>
+          ) : (
+            filteredOptions.map((opt, index) => (
+              <div
+                key={index}
+                onClick={() => handleSelect(opt)}
+                className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm border-b border-gray-100 last:border-b-0"
+              >
+                {opt[labelKey]}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const AdminAccessCreation = () => {
   const [selectedAccessType, setSelectedAccessType] = useState("college-onboarding");
+  const [topicInput, setTopicInput] = useState("");
 
   const [formData, setFormData] = useState({
     collegeName: "",
@@ -19,7 +131,9 @@ const AdminAccessCreation = () => {
     college: "",
     givenAccess: "",
     selectedTopics: [],
+    newTopics: [], // THIS WAS MISSING — NOW FIXED
   });
+
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileName, setFileName] = useState('');
   const [message, setMessage] = useState({ type: "", text: "" });
@@ -36,11 +150,13 @@ const AdminAccessCreation = () => {
   const [selectedCollegeFilter, setSelectedCollegeFilter] = useState('');
   const [selectedDepartmentFilter, setSelectedDepartmentFilter] = useState('');
   const [studentDepartments, setStudentDepartments] = useState([]);
+  const [formDepartments, setFormDepartments] = useState([]);
+  const [bulkErrors, setBulkErrors] = useState([]);
+  const [showBulkErrorsModal, setShowBulkErrorsModal] = useState(false);
 
   const rowsPerPage = 10;
 
-  const API_BASE = import.meta.env.VITE_BACKEND_API_URL; // Adjust to your FastAPI server URL
-
+  const API_BASE = import.meta.env.VITE_BACKEND_API_URL;
 
   const accessTypes = [
     { id: "college-onboarding", label: "College Onboarding" },
@@ -137,9 +253,9 @@ const AdminAccessCreation = () => {
     }
   };
 
-  const fetchStudentDepartments = async (collegeId) => {
+  const fetchStudentDepartments = async (collegeId, setter = setStudentDepartments) => {
     if (!collegeId) {
-      setStudentDepartments([]);
+      setter([]);
       return;
     }
     try {
@@ -155,10 +271,10 @@ const AdminAccessCreation = () => {
       }
 
       const data = await response.json();
-      setStudentDepartments(data.data || []);
+      setter(data.data || []);
     } catch (error) {
       console.error(error);
-      setStudentDepartments([]);
+      setter([]);
     }
   };
 
@@ -182,6 +298,19 @@ const AdminAccessCreation = () => {
     }
   }, [selectedCollegeFilter, colleges]);
 
+  useEffect(() => {
+    if ((selectedAccessType === "student" || selectedAccessType === "teacher" || selectedAccessType === "topic") && formData.college) {
+      const college = colleges.find((c) => c.college_id === formData.college);
+      if (college && college.college_id) {
+        fetchStudentDepartments(college.college_id, setFormDepartments);
+      } else {
+        setFormDepartments([]);
+      }
+    } else {
+      setFormDepartments([]);
+    }
+  }, [formData.college, selectedAccessType, colleges]);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (name === "selectedDepartments") {
@@ -193,9 +322,9 @@ const AdminAccessCreation = () => {
   };
 
   const handleSelectChange = (selectedOptions, fieldName) => {
-    setFormData(prev => ({ 
-      ...prev, 
-      [fieldName]: selectedOptions ? selectedOptions.map(option => option.value || option.department_name || option.topic_name) : [] 
+    setFormData(prev => ({
+      ...prev,
+      [fieldName]: selectedOptions ? selectedOptions.map(option => option.value || option.department_name || option.topic_name) : []
     }));
   };
 
@@ -205,8 +334,91 @@ const AdminAccessCreation = () => {
     setFileName(file ? file.name : '');
   };
 
+  const handleTopicInputKey = (e) => {
+    if (e.key === "Enter" && topicInput.trim() !== "") {
+      e.preventDefault();
+
+      setFormData(prev => ({
+        ...prev,
+        newTopics: [...prev.newTopics, topicInput.trim()]
+      }));
+
+      setTopicInput("");
+    }
+  };
+
+  const handleRemoveTopic = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      newTopics: prev.newTopics.filter((_, i) => i !== index)
+    }));
+  };
+
   const clearMessage = () => {
     setTimeout(() => setMessage({ type: "", text: "" }), 5000);
+  };
+
+  const handleBulkUpload = async () => {
+    if (!selectedFile) {
+      setMessage({ type: "error", text: "Please select a file to upload" });
+      return;
+    }
+
+    const college = colleges.find(c => c.college_id === formData.college);
+    if (!college || !formData.department) {
+      setMessage({ type: "error", text: "Please select college and department first" });
+      return;
+    }
+
+    const uploadFormData = new FormData();
+    uploadFormData.append("file", selectedFile);
+    uploadFormData.append("role", "student");
+    uploadFormData.append("college_name", college.name);
+    uploadFormData.append("department_name", formData.department);
+
+    try {
+      setLoading(true);
+      setBulkErrors([]);
+      const res = await fetch(`${API_BASE}/users/bulk`, {
+        method: "POST",
+        body: uploadFormData
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        setBulkErrors(result.errors || [result.detail] || ["An unknown error occurred."]);
+      } else {
+        setBulkErrors(result.errors || []);
+      }
+
+      let messageType = "error";
+      let messageText = result.message || result.detail || "Bulk upload failed";
+
+      if (res.ok && result.status === "success") {
+        messageType = "success";
+        messageText = `Successfully created ${result.created_count} students in ${college.name} - ${formData.department}`;
+      } else if (res.ok && result.status === "partial") {
+        messageType = "warning";
+        messageText = `Created ${result.created_count} students in ${college.name} - ${formData.department}. ${result.errors?.length || 0} rows had errors.`;
+      } else if (res.ok && result.status === "error") {
+        messageType = "error";
+        messageText = result.message || "No valid students were created";
+      }
+
+      setMessage({ type: messageType, text: messageText });
+      setSelectedFile(null);
+      setFileName('');
+      await fetchStudents();
+
+      if (bulkErrors.length > 0) {
+        setShowBulkErrorsModal(true);
+      }
+    } catch (error) {
+      setMessage({ type: "error", text: "Network error: " + error.message });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCreateDept = async () => {
@@ -264,73 +476,76 @@ const AdminAccessCreation = () => {
         }
       }
 
-      else if (selectedAccessType === "student" && selectedFile) {
-        const form = new FormData();
-        form.append("file", selectedFile);
-        form.append("role", "student");
-        const res = await fetch(`${API_BASE}/users/bulk`, { method: "POST", body: form });
-        if(res.ok){
-          
-        }
-        const result = await res.json();
-        setMessage({ type: res.ok ? "success" : "error", text: res.ok ? result.message : result.detail || "Bulk creation failed" });
-        if (res.ok) {
-          setSelectedFile(null);
-          setFileName('');
-          await fetchStudents();
-        }
-      } else if (selectedAccessType === "student") {
-        // Single student creation
-        const payload = {
-          role: "student",
-          college_name: formData.college,
-          full_name: formData.name,
-          department_name: formData.department,
-          username: formData.username,
-          password: formData.password,
-        };
-        const res = await fetch(`${API_BASE}/users`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const result = await res.json();
-        setMessage({ type: res.ok ? "success" : "error", text: res.ok ? result.message : result.detail || "User creation failed" });
-        if (res.ok) {
-          setFormData(prev => ({ ...prev, name: "", department: "", username: "", password: "", college: "" }));
-          await fetchStudents();
-        }
-      }
-
-      else if (selectedAccessType === "topic") {
-        // Assign topics
-        if (!formData.college || !formData.department || formData.selectedTopics.length === 0) {
-          setMessage({ type: "error", text: "Select college, department, and at least one topic" });
+      else if (selectedAccessType === "student") {
+        if (selectedFile) {
+          await handleBulkUpload();
         } else {
+          const college = colleges.find(c => c.college_id === formData.college);
           const payload = {
-            college_name: formData.college,
+            role: "student",
+            college_name: college.name,
+            full_name: formData.name,
             department_name: formData.department,
-            topics: formData.selectedTopics,
+            username: formData.username,
+            password: formData.password,
           };
-          const res = await fetch(`${API_BASE}/topics/assign-topics`, {
+          const res = await fetch(`${API_BASE}/users`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           });
           const result = await res.json();
-          setMessage({ type: res.ok ? "success" : "error", text: res.ok ? result.message : result.detail || "Topic assignment failed" });
-          if (res.ok) setFormData(prev => ({ ...prev, college: "", department: "", selectedTopics: [] }));
+          setMessage({ type: res.ok ? "success" : "error", text: res.ok ? result.message : result.detail || "User creation failed" });
+          if (res.ok) {
+            setFormData(prev => ({ ...prev, name: "", department: "", username: "", password: "", college: "" }));
+            await fetchStudents();
+          }
+        }
+      }
+
+      else if (selectedAccessType === "topic") {
+        if (!formData.college || !formData.department || formData.newTopics.length === 0) {
+          setMessage({ type: "error", text: "Select college, department and add at least one topic" });
+          setLoading(false);
+          return;
+        }
+
+        const college = colleges.find(c => c.college_id === formData.college);
+
+        const payload = {
+          college_name: college.name,
+          department_name: formData.department,
+          topics: formData.newTopics
+        };
+
+        const res = await fetch(`${API_BASE}/topics/assign-topics`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const result = await res.json();
+
+        setMessage({
+          type: res.ok ? "success" : "error",
+          text: result.message,
+        });
+
+        if (res.ok) {
+          setFormData(prev => ({ ...prev, college: "", department: "", newTopics: [] }));
+          setTopicInput("");
         }
       }
 
       else {
-        // Single user creation: teacher/admin
+        const college = colleges.find(c => c.college_id === formData.college);
         const roleMap = { teacher: "teacher", admin: "administrator" };
         const payload = {
           role: roleMap[selectedAccessType],
-          college_name: formData.college,
+          college_name: college.name,
           username: formData.username,
           password: formData.password,
+          full_name: formData.name
         };
         if (["teacher"].includes(selectedAccessType)) payload.department_name = formData.department;
 
@@ -343,7 +558,7 @@ const AdminAccessCreation = () => {
         setMessage({ type: res.ok ? "success" : "error", text: res.ok ? result.message : result.detail || "User creation failed" });
         if (res.ok) {
           setFormData({
-            collegeName: "", collegeAddress: "", selectedDepartments: [], name: "", department: "", username: "", password: "", college: "", selectedTopics: []
+            collegeName: "", collegeAddress: "", selectedDepartments: [], name: "", department: "", username: "", password: "", college: "", selectedTopics: [], newTopics: []
           });
           const fetchFunc = selectedAccessType === 'teacher' ? fetchTeachers : fetchAdmins;
           await fetchFunc();
@@ -375,53 +590,82 @@ const AdminAccessCreation = () => {
       return (
         <>
           <div className="flex flex-col lg:flex-row items-start gap-4">
-          <ToastContainer/>
-            <label className="w-full lg:w-36 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">College Name</label>
-            <input 
-              type="text" 
-              name="collegeName" 
-              value={formData.collegeName} 
+            <ToastContainer />
+            <label className="w-full lg:w-36 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">
+              College Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              name="collegeName"
+              value={formData.collegeName}
               onChange={handleInputChange}
               placeholder="College name"
+              required
               className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
             />
           </div>
 
           <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">College Address</label>
-            <input 
-              type="text" 
-              name="collegeAddress" 
-              value={formData.collegeAddress} 
+            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">
+              College Address <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              name="collegeAddress"
+              value={formData.collegeAddress}
               onChange={handleInputChange}
               placeholder="College address"
+              required
               className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
             />
           </div>
 
           <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">Department</label>
-            <div className="flex flex-1 gap-2 w-full">
-              <Select
-                isMulti
-                options={departments.map(dept => ({ value: dept.department_name || dept.name, label: dept.department_name || dept.name }))}
-                value={formData.selectedDepartments.map(deptName => ({ value: deptName, label: deptName }))}
-                onChange={(options) => handleSelectChange(options, "selectedDepartments")}
-                className="flex-1"
-                placeholder="Select departments"
-                isClearable
-                closeMenuOnSelect={false}
-              />
-              <button
-                type="button"
-                onClick={() => setShowAddDeptModal(true)}
-                className="bg-green-500 text-white px-3 py-2 rounded text-sm font-medium hover:bg-green-600 flex items-center gap-1 whitespace-nowrap"
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add
-              </button>
+            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 lg:pt-2">
+              Departments <span className="text-red-500">*</span>
+            </label>
+
+            <div className="flex-1">
+              <div className="border border-gray-300 rounded-lg p-2 min-h-[50px] flex flex-wrap gap-2">
+                {formData.selectedDepartments.map((dept, idx) => (
+                  <div key={idx} className="flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
+                    <span>{dept}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          selectedDepartments: prev.selectedDepartments.filter((_, i) => i !== idx)
+                        }))
+                      }}
+                      className="text-red-600 font-bold"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+
+                <input
+                  type="text"
+                  value={deptForm.name}
+                  onChange={(e) => setDeptForm(prev => ({ ...prev, name: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && deptForm.name.trim() !== "") {
+                      e.preventDefault();
+                      setFormData(prev => ({
+                        ...prev,
+                        selectedDepartments: [...prev.selectedDepartments, deptForm.name.trim()]
+                      }));
+                      setDeptForm({ name: "" });
+                    }
+                  }}
+                  className="flex-1 min-w-[120px] px-2 py-1 outline-none text-sm"
+                  placeholder="Type department & press Enter"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Press <b>Enter</b> to add department.
+              </p>
             </div>
           </div>
         </>
@@ -431,121 +675,152 @@ const AdminAccessCreation = () => {
         <>
           <div className="flex flex-col lg:flex-row items-start gap-4">
             <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">1. College Name</label>
-            <select 
-              name="college" 
-              value={formData.college} 
-              onChange={handleInputChange}
-              className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
-            >
-              <option value="">Select College</option>
-              {colleges.map((college) => (
-                <option key={college.college_id || college.id} value={college.name}>{college.name}</option>
-              ))}
-            </select>
+            <div className="flex-1 w-full">
+              <SearchableDropdown
+                name="college"
+                value={formData.college}
+                onChange={handleInputChange}
+                options={colleges}
+                valueKey="college_id"
+                labelKey="name"
+                placeholder="Select College"
+              />
+            </div>
           </div>
 
           <div className="flex flex-col lg:flex-row items-start gap-4">
             <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">2. Department</label>
-            <select 
-              name="department" 
-              value={formData.department} 
-              onChange={handleInputChange}
-              className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
-            >
-              <option value="">Select Department</option>
-              {departments.map((dept) => (
-                <option key={dept.department_id || dept.id} value={dept.department_name || dept.name}>{dept.department_name || dept.name}</option>
-              ))}
-            </select>
+            <div className="flex-1 w-full">
+              <SearchableDropdown
+                name="department"
+                value={formData.department}
+                onChange={handleInputChange}
+                options={formDepartments}
+                valueKey="department_name"
+                labelKey="department_name"
+                placeholder="Select Department"
+                disabled={!formData.college}
+              />
+            </div>
           </div>
 
-          <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">3. Student Name</label>
-            <input 
-              type="text" 
-              name="name" 
-              value={formData.name} 
-              onChange={handleInputChange}
-              placeholder="Student name"
-              className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
-            />
-          </div>
+          {!selectedFile && (
+            <>
+              <div className="flex flex-col lg:flex-row items-start gap-4">
+                <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">3. Student Name</label>
+                <input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  placeholder="Student name"
+                  className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
+                />
+              </div>
 
-          <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">4. Username</label>
-            <input 
-              type="text" 
-              name="username" 
-              value={formData.username} 
-              onChange={handleInputChange}
-              placeholder="Username"
-              className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
-            />
-          </div>
+              <div className="flex flex-col lg:flex-row items-start gap-4">
+                <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">4. Username</label>
+                <input
+                  type="text"
+                  name="username"
+                  value={formData.username}
+                  onChange={handleInputChange}
+                  placeholder="Username"
+                  className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
+                />
+              </div>
 
-          <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">5. Password</label>
-            <input 
-              type="password" 
-              name="password" 
-              value={formData.password} 
-              onChange={handleInputChange}
-              placeholder="Password"
-              className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
-            />
-          </div>
+              <div className="flex flex-col lg:flex-row items-start gap-4">
+                <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">5. Password</label>
+                <input
+                  type="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  placeholder="Password"
+                  className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
+                />
+              </div>
+            </>
+          )}
         </>
       );
     } else if (selectedAccessType === "topic") {
       return (
         <>
-          <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">1. College Name</label>
-            <select 
-              name="college" 
-              value={formData.college} 
-              onChange={handleInputChange}
-              className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
-            >
-              <option value="">Select College</option>
-              {colleges.map((college) => (
-                <option key={college.college_id || college.id} value={college.name}>{college.name}</option>
-              ))}
-            </select>
-          </div>
+          <div className="flex flex-col gap-4">
 
-          <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">2. Department</label>
-            <select 
-              name="department" 
-              value={formData.department} 
-              onChange={handleInputChange}
-              className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
-            >
-              <option value="">Select Department</option>
-              {departments.map((dept) => (
-                <option key={dept.department_id || dept.id} value={dept.department_name || dept.name}>{dept.department_name || dept.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">3. Topics</label>
-            <div className="flex flex-1 gap-2 w-full">
-              <Select
-                isMulti
-                options={topics.map(topic => ({ value: topic.topic_name || topic.name, label: topic.topic_name || topic.name }))}
-                value={formData.selectedTopics.map(topicName => ({ value: topicName, label: topicName }))}
-                onChange={(options) => handleSelectChange(options, "selectedTopics")}
-                className="flex-1"
-                placeholder="Select topics"
-                isClearable
-                closeMenuOnSelect={false}
-              />
+            <div className="flex flex-col lg:flex-row items-start gap-4">
+              <label className="w-full lg:w-40 text-sm font-medium text-gray-700 lg:pt-2">
+                1. College Name
+              </label>
+              <div className="flex-1 w-full">
+                <SearchableDropdown
+                  name="college"
+                  value={formData.college}
+                  onChange={handleInputChange}
+                  options={colleges}
+                  valueKey="college_id"
+                  labelKey="name"
+                  placeholder="Select College"
+                />
+              </div>
             </div>
-          </div>
 
-          
+            <div className="flex flex-col lg:flex-row items-start gap-4">
+              <label className="w-full lg:w-40 text-sm font-medium text-gray-700 lg:pt-2">
+                2. Department
+              </label>
+              <div className="flex-1 w-full">
+                <SearchableDropdown
+                  name="department"
+                  value={formData.department}
+                  onChange={handleInputChange}
+                  options={formDepartments}
+                  valueKey="department_name"
+                  labelKey="department_name"
+                  placeholder="Select Department"
+                  disabled={!formData.college}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col lg:flex-row items-start gap-4">
+              <label className="w-full lg:w-40 text-sm font-medium text-gray-700 lg:pt-2">
+                3. Topics
+              </label>
+
+              <div className="flex-1">
+                <div className="border border-gray-300 rounded-lg p-2 min-h-[50px] flex flex-wrap gap-2">
+                  {formData.newTopics.map((topic, idx) => (
+                    <div key={idx} className="flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
+                      <span>{topic}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTopic(idx)}
+                        className="text-red-600 font-bold"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+
+                  <input
+                    type="text"
+                    value={topicInput}
+                    onChange={(e) => setTopicInput(e.target.value)}
+                    onKeyDown={handleTopicInputKey}
+                    className="flex-1 min-w-[120px] px-2 py-1 outline-none text-sm"
+                    placeholder="Type topic & press Enter"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Press <b>Enter</b> to add topic.
+                </p>
+              </div>
+            </div>
+
+          </div>
         </>
       );
     } else {
@@ -554,25 +829,55 @@ const AdminAccessCreation = () => {
         <>
           <div className="flex flex-col lg:flex-row items-start gap-4">
             <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">1. College Name</label>
-            <select 
-              name="college" 
-              value={formData.college} 
-              onChange={handleInputChange}
-              className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
-            >
-              <option value="">Select College</option>
-              {colleges.map((college) => (
-                <option key={college.college_id || college.id} value={college.name}>{college.name}</option>
-              ))}
-            </select>
+            <div className="flex-1 w-full">
+              <SearchableDropdown
+                name="college"
+                value={formData.college}
+                onChange={handleInputChange}
+                options={colleges}
+                valueKey="college_id"
+                labelKey="name"
+                placeholder="Select College"
+              />
+            </div>
           </div>
 
           <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">2. Username</label>
-            <input 
-              type="text" 
-              name="username" 
-              value={formData.username} 
+            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">Full Name</label>
+            <input
+              type="text"
+              name="name"
+              value={formData.name}
+              onChange={handleInputChange}
+              placeholder="Full Name"
+              className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
+            />
+          </div>
+
+          {selectedAccessType === "teacher" && (
+            <div className="flex flex-col lg:flex-row items-start gap-4">
+              <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">Department</label>
+              <div className="flex-1 w-full">
+                <SearchableDropdown
+                  name="department"
+                  value={formData.department}
+                  onChange={handleInputChange}
+                  options={formDepartments}
+                  valueKey="department_name"
+                  labelKey="department_name"
+                  placeholder="Select Department"
+                  disabled={!formData.college}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col lg:flex-row items-start gap-4">
+            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">{selectedAccessType === "teacher" ? "3." : "2."} Username</label>
+            <input
+              type="text"
+              name="username"
+              value={formData.username}
               onChange={handleInputChange}
               placeholder="Username"
               className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
@@ -580,11 +885,11 @@ const AdminAccessCreation = () => {
           </div>
 
           <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">3. Password</label>
-            <input 
-              type="password" 
-              name="password" 
-              value={formData.password} 
+            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">{selectedAccessType === "teacher" ? "4." : "3."} Password</label>
+            <input
+              type="password"
+              name="password"
+              value={formData.password}
               onChange={handleInputChange}
               placeholder="Password"
               className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
@@ -598,9 +903,9 @@ const AdminAccessCreation = () => {
   const getSubmitButtonText = () => {
     const texts = {
       "college-onboarding": "Onboard College",
-      student: "Create Access",
-      teacher: "Create Access",
-      admin: "Create Access",
+      student: selectedFile ? "Bulk Upload Students" : "Create Student",
+      teacher: "Create Teacher",
+      admin: "Create Admin",
       topic: "Assign Topics"
     };
     return texts[selectedAccessType];
@@ -609,10 +914,19 @@ const AdminAccessCreation = () => {
   const renderMessage = () => {
     if (!message.text) return null;
     return (
-      <div className={`mt-4 p-3 rounded-lg text-sm font-medium ${
-        message.type === "success" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-      }`}>
+      <div className={`mt-4 p-3 rounded-lg text-sm font-medium ${message.type === "success" ? "bg-green-100 text-green-800" : message.type === "warning" ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"
+        }`}>
         {message.text}
+        {bulkErrors.length > 0 && message.type !== "success" && (
+          <div className="mt-2">
+            <button
+              onClick={() => setShowBulkErrorsModal(true)}
+              className="text-blue-600 hover:underline text-sm"
+            >
+              View {bulkErrors.length} error{bulkErrors.length > 1 ? 's' : ''}
+            </button>
+          </div>
+        )}
       </div>
     );
   };
@@ -639,7 +953,7 @@ const AdminAccessCreation = () => {
       case "admin":
         return <AdminTable admins={admins} rowsPerPage={rowsPerPage} />;
       case "topic":
-        return <TopicTable topics={topics} rowsPerPage={rowsPerPage} />  
+        return <TopicTable topics={topics} rowsPerPage={rowsPerPage} />
       default:
         return null;
     }
@@ -651,21 +965,38 @@ const AdminAccessCreation = () => {
         {/* Radio Tabs - Centered */}
         <div className="flex justify-center gap-2 lg:gap-4 mb-6 overflow-x-auto pb-2">
           {accessTypes.map((type) => (
-            <div 
-              key={type.id} 
-              className={`flex items-center gap-2 px-3 py-2 lg:px-6 lg:py-4 bg-white rounded-lg border-2 shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md flex-shrink-0 min-w-[140px] lg:min-w-0 ${
-                selectedAccessType === type.id 
-                  ? 'border-blue-500 bg-blue-50' 
-                  : 'border-gray-200'
-              }`}
-              onClick={() => setSelectedAccessType(type.id)}
+            <div
+              key={type.id}
+              className={`flex items-center gap-2 px-3 py-2 lg:px-6 lg:py-4 bg-white rounded-lg border-2 shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md flex-shrink-0 min-w-[140px] lg:min-w-0 ${selectedAccessType === type.id
+                ? 'border-blue-500 bg-blue-50'
+                : 'border-gray-200'
+                }`}
+              onClick={() => {
+                setSelectedAccessType(type.id);
+                setTopicInput("");
+                setSelectedFile(null);
+                setFileName('');
+                setFormData({
+                  collegeName: "",
+                  collegeAddress: "",
+                  selectedDepartments: [],
+                  name: "",
+                  department: "",
+                  username: "",
+                  password: "",
+                  college: "",
+                  givenAccess: "",
+                  selectedTopics: [],
+                  newTopics: [], // Reset on tab change
+                });
+              }}
             >
               <input
                 type="radio"
                 id={type.id}
                 name="accessType"
                 checked={selectedAccessType === type.id}
-                onChange={() => setSelectedAccessType(type.id)}
+                onChange={() => { }}
                 className="w-4 h-4 lg:w-5 lg:h-5 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 focus:ring-2"
               />
               <label htmlFor={type.id} className="text-xs lg:text-sm font-medium text-gray-700 cursor-pointer">
@@ -681,50 +1012,51 @@ const AdminAccessCreation = () => {
             <div className="flex justify-between items-center mb-6 lg:mb-8">
               <h2 className="font-bold text-lg lg:text-xl text-gray-800">Fill the details to create {getFormTitle()}</h2>
               {selectedAccessType === "student" && (
-                 <div className="flex gap-3">
-                <a 
-                 download
-                 href="/sample_students.xlsx"
-                  className="bg-gray-500 text-white px-5 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow flex items-center gap-1"
-                  onClick={() => {
-                    // Implement download template logic, e.g., generate and download Excel
-                    console.log("Download template clicked");
-                  }}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Download Template
-                </a>
-                <div className="relative">
-                  <input 
-                    type="file" 
-                    accept=".xlsx,.xls" 
-                    onChange={handleFileChange}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                  <button 
-                    type="button" 
-                    className="bg-blue-500 text-white px-5 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow flex items-center gap-1"
+                <div className="flex gap-3">
+                  <a
+                    download
+                    href="/sample_students.xlsx"
+                    className="bg-gray-500 text-white px-5 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow flex items-center gap-1"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 20l-5.5-5.5M15 20l5.5-5.5" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    Upload Excel
-                  </button>
-                </div>
-                {fileName && (
-                  <div className="mt-2 text-sm text-green-600 flex items-center gap-1">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Selected: {fileName}
+                    Download Template
+                  </a>
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={handleFileChange}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      disabled={!formData.college || !formData.department}
+                    />
+                    <button
+                      type="button"
+                      className={`px-5 py-2 rounded-lg font-medium text-sm shadow-md transition-shadow flex items-center gap-1 ${!formData.college || !formData.department
+                        ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                        : "bg-blue-500 text-white hover:shadow-lg"
+                        }`}
+                      onClick={() => selectedFile && handleBulkUpload()}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 20l-5.5-5.5M15 20l5.5-5.5" />
+                      </svg>
+                      {fileName ? 'Upload Now' : 'Upload Excel'}
+                    </button>
                   </div>
-                )}
-              </div>
+                  {fileName && (
+                    <div className="text-sm text-green-600 flex items-center gap-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      {fileName}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-            
+
             <div className="space-y-4">
               {renderFormFields()}
             </div>
@@ -733,9 +1065,9 @@ const AdminAccessCreation = () => {
           </div>
 
           <div className="flex justify-center mt-6">
-            <button 
-              type="submit" 
-              disabled={loading}
+            <button
+              type="submit"
+              disabled={loading || (selectedAccessType === "student" && selectedFile)}
               className="bg-yellow-400 text-gray-800 px-6 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? "Processing..." : getSubmitButtonText()}
@@ -747,52 +1079,93 @@ const AdminAccessCreation = () => {
 
         {/* Add Department Modal */}
         {showAddDeptModal && (
-         <div
+          <div
             className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center p-4 z-50"
             onClick={() => setShowAddDeptModal(false)}
           >
-            <div 
-              className="bg-white rounded-lg p-6 w-full max-w-md relative" 
+            <div
+              className="bg-white rounded-lg p-6 w-full max-w-md relative"
               onClick={(e) => e.stopPropagation()}
             >
               <h3 className="text-lg font-semibold mb-4">Add New Department</h3>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Department Name</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={deptForm.name}
                     onChange={(e) => setDeptForm(prev => ({ ...prev, name: e.target.value }))}
                     placeholder="Enter department name"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6] h-[42px]"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Department Code</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={deptForm.code}
                     onChange={(e) => setDeptForm(prev => ({ ...prev, code: e.target.value }))}
                     placeholder="Enter department code"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6] h-[42px]"
                   />
                 </div>
               </div>
               <div className="flex justify-end gap-3 mt-6">
-                <button 
+                <button
                   type="button"
                   onClick={() => setShowAddDeptModal(false)}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
                 >
                   Cancel
                 </button>
-                <button 
+                <button
                   type="button"
                   onClick={handleCreateDept}
                   disabled={!deptForm.name || !deptForm.code}
                   className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Create Department
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bulk Errors Modal */}
+        {showBulkErrorsModal && (
+          <div
+            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+            onClick={() => setShowBulkErrorsModal(false)}
+          >
+            <div
+              className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold mb-4 text-red-800">Bulk Upload Errors</h3>
+              <table className="w-full text-sm text-left text-gray-500">
+                <thead className="text-xs text-gray-700 uppercase bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3">#</th>
+                    <th scope="col" className="px-6 py-3">Error</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bulkErrors.map((err, index) => (
+                    <tr key={index} className="bg-white border-b">
+                      <td className="px-6 py-4 font-medium text-gray-900">{index + 1}</td>
+                      <td className="px-6 py-4">{typeof err === 'object' ? JSON.stringify(err) : err}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="flex justify-end mt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkErrorsModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                >
+                  Close
                 </button>
               </div>
             </div>

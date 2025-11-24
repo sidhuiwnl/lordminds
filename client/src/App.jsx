@@ -4,7 +4,7 @@ import LoginPage from "./pages/LoginPage";
 
 
 import StudentHomePage from "./pages/StudentPages/StudentHomePage";
-
+import ViewTest from "./pages/StudentPages/ViewTest";
 import LessonsOverviewPage from "./pages/StudentPages/LessonsOverviewPage";
 import AssessmentPage from "./pages/StudentPages/AssessmentPage";
 import CurrentMarksPage from "./pages/StudentPages/CurrentMarksPage";
@@ -12,7 +12,8 @@ import AssignmentMarksPage from "./pages/StudentPages/AssignmentMarksPage";
 import TotalDurationPage from "./pages/StudentPages/TotalDurationPage";
 import OverallResultPage from "./pages/StudentPages/OverallResultPage";
 import AssignmentPage from "./pages/StudentPages/AssignmentPage";
-
+import AssignmentViewTest from "./pages/StudentPages/AssignmentViewTest";
+import StudentRegistrationForm from "./pages/StudentPages/OnboardPage";
 
 import SuperAdminHomePage from "./pages/SuperAdminPages/SuperAdminHomePage";
 import SuperAdminReportsPage from "./pages/SuperAdminPages/SuperAdminReportsPage";
@@ -54,11 +55,14 @@ const App = () => {
        
         <Route path="/" element={<LoginPage />} />
 
-        
+        <Route path="/onboard" element = {<StudentRegistrationForm />} />
+
         <Route element={<ProtectedRoute allowedRoles={["student"]} />}>
           <Route path="/student/studenthome" element={<StudentHomePage />} />
           <Route path="/student/assignment/:assignment" element={<AssignmentPage />} />
           <Route path="/student/:topic/subtopics" element={<SubtopicsPage />} />
+          <Route path="/student/:sub_topic_id/view-test" element={<ViewTest />} />
+          <Route path="/student/assignment/:assignment_id/view-test" element={<AssignmentViewTest />} />
           <Route path="/student/:subtopic/lessonsoverview" element={<LessonsOverviewPage />} />
           <Route path="/student/:subtopic/assessments" element={<AssessmentPage />} />
           <Route path="/student/currentmarks" element={<CurrentMarksPage />} />

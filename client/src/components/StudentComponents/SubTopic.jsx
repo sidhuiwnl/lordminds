@@ -69,7 +69,7 @@ const SubtopicsComponent = () => {
   }
 
   return (
-    <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
+    <div className="p-4 lg:p-6 mt-20 bg-gray-50 min-h-screen">
       <h2 className="text-xl font-bold text-gray-800 mb-6">
         {topicName} - Subtopics
       </h2>
@@ -90,14 +90,23 @@ const SubtopicsComponent = () => {
                 </p>
               </div>
 
-              <a
-                href={`/student/${sub.sub_topic_id}/lessonsoverview`}
-                rel="noopener noreferrer"
-                className="bg-yellow-400 text-gray-900 px-3 lg:px-4 py-2 rounded-sm text-xs lg:text-sm font-medium hover:bg-yellow-500 transition-colors w-full sm:w-auto text-center"
-              >
-                Start
-              </a>
+              {sub.progress?.is_completed ? (
+                <a
+                  href={`/student/${sub.sub_topic_id}/view-test`}
+                  className="bg-green-600 text-white px-3 lg:px-4 py-2 rounded-sm text-xs lg:text-sm font-medium hover:bg-green-700 transition-colors w-full sm:w-auto text-center"
+                >
+                  View Test
+                </a>
+              ) : (
+                <a
+                  href={`/student/${sub.sub_topic_id}/lessonsoverview`}
+                  className="bg-yellow-400 text-gray-900 px-3 lg:px-4 py-2 rounded-sm text-xs lg:text-sm font-medium hover:bg-yellow-500 transition-colors w-full sm:w-auto text-center"
+                >
+                  Start Test
+                </a>
+              )}
             </div>
+
 
             {/* Progress bar */}
             <div className="mt-2">
@@ -122,4 +131,4 @@ const SubtopicsComponent = () => {
   );
 };
 
- export default SubtopicsComponent;
+export default SubtopicsComponent;

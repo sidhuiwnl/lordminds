@@ -24,105 +24,86 @@ class CollegeOnboard(BaseModel):
 
 @router.post("/onboard")
 async def onboard_college(data: CollegeOnboard):
-    """Onboard a new college and map it to existing departments"""
+    """
+    Onboard a new college and create college-specific departments
+    """
     conn = None
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
+
                 # Step 1: Check if the college already exists
-                cursor.execute(
-                    "SELECT college_id FROM colleges WHERE name = %s AND college_address = %s",
-                    (data.name, data.address)
-                )
-                existing_college = cursor.fetchone()
-                
-                if existing_college:
-                    college_id = existing_college["college_id"]
+                cursor.execute("""
+                    SELECT college_id FROM colleges 
+                    WHERE name = %s AND college_address = %s
+                """, (data.name, data.address))
+
+                existing = cursor.fetchone()
+
+                if existing:
+                    college_id = existing["college_id"]
                     college_action = "existing"
                 else:
-                    cursor.execute(
-                        """
+                    cursor.execute("""
                         INSERT INTO colleges (name, college_address, created_at)
-                        VALUES (%s, %s, %s)
-                        """,
-                        (data.name, data.address, datetime.now())
-                    )
+                        VALUES (%s, %s, NOW())
+                    """, (data.name, data.address))
+                    
                     college_id = cursor.lastrowid
                     college_action = "created"
 
-                mapped_depts = []
                 created_depts = []
-                
-                # Step 2: Process each department
-                for dept_name in data.departments:
-                    # Check if department exists globally
-                    cursor.execute(
-                        "SELECT department_id FROM departments WHERE department_name = %s",
-                        (dept_name,)
-                    )
-                    existing_dept = cursor.fetchone()
-                    
-                    if existing_dept:
-                        department_id = existing_dept["department_id"]
-                        # Map existing department to this college
-                        cursor.execute(
-                            """
-                            INSERT IGNORE INTO college_departments (college_id, department_id, created_at)
-                            VALUES (%s, %s, %s)
-                            """,
-                            (college_id, department_id, datetime.now())
-                        )
-                        mapped_depts.append(f"{dept_name} (mapped)")
-                    else:
-                        # Create new global department
-                        dept_code = generate_department_code(dept_name)
-                        cursor.execute(
-                            """
-                            INSERT INTO departments 
-                            (department_name, department_code, is_active, created_at, updated_at)
-                            VALUES (%s, %s, %s, %s, %s)
-                            """,
-                            (dept_name, dept_code, True, datetime.now(), datetime.now())
-                        )
-                        department_id = cursor.lastrowid
-                        
-                        # Map the new department to this college
-                        cursor.execute(
-                            """
-                            INSERT INTO college_departments (college_id, department_id, created_at)
-                            VALUES (%s, %s, %s)
-                            """,
-                            (college_id, department_id, datetime.now())
-                        )
-                        created_depts.append(f"{dept_name} (created & mapped)")
+                skipped = []
+
+                # Step 2: Create department PER college
+                for dept in data.departments:
+
+                    # Check if department already exists for this college
+                    cursor.execute("""
+                        SELECT department_id FROM departments 
+                        WHERE department_name = %s AND college_id = %s
+                    """, (dept, college_id))
+
+                    exists = cursor.fetchone()
+
+                    if exists:
+                        skipped.append(dept)
+                        continue
+
+                    dept_code = dept[:4].upper()
+
+                    cursor.execute("""
+                        INSERT INTO departments 
+                        (department_name, department_code, college_id, is_active, created_at, updated_at)
+                        VALUES (%s, %s, %s, 1, NOW(), NOW())
+                    """, (dept, dept_code, college_id))
+
+                    created_depts.append(dept)
 
                 conn.commit()
-                
+
                 return {
                     "status": "success",
-                    "message": f"College '{data.name}' ({college_action}) onboarded with {len(mapped_depts) + len(created_depts)} departments",
-                    "data": {
-                        "college_id": college_id,
-                        "college_name": data.name,
-                        "address": data.address,
-                        "mapped_departments": mapped_depts,
-                        "created_departments": created_depts,
-                        "total_departments": len(mapped_depts) + len(created_depts)
-                    }
+                    "message": f"College '{data.name}' onboarded. Created {len(created_depts)} departments.",
+                    "college_id": college_id,
+                    "created_departments": created_depts,
+                    "existing_departments": skipped
                 }
-                
+
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Error onboarding college: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
 def generate_department_code(dept_name: str) -> str:
     """Generate a department code based on department name"""
-    # Use first 3-4 letters of department name (uppercase)
     dept_prefix = dept_name[:4].upper().strip()
-    # Add timestamp for uniqueness
     timestamp_suffix = str(int(datetime.now().timestamp()))[-4:]
     return f"{dept_prefix}{timestamp_suffix}"
+
+
 
 
 
@@ -163,14 +144,15 @@ async def get_college_departments(college_id: int):
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
+
                 query = """
-                    SELECT d.department_id, d.department_name, d.department_code
-                    FROM departments d
-                    JOIN college_departments cd ON d.department_id = cd.department_id
-                    WHERE cd.college_id = %s
-                      AND d.is_active = 1
-                    ORDER BY d.department_name
+                    SELECT department_id, department_name, department_code
+                    FROM departments
+                    WHERE college_id = %s
+                      AND is_active = 1
+                    ORDER BY department_name;
                 """
+
                 cursor.execute(query, (college_id,))
                 departments = cursor.fetchall()
 
@@ -179,11 +161,13 @@ async def get_college_departments(college_id: int):
                     "count": len(departments),
                     "data": departments
                 }
+
     except Exception as e:
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail=f"Error fetching departments for college {college_id}: {str(e)}"
         )
+
 
 
 @router.get("/{college_id}/departments/{department_id}/topics")
@@ -232,41 +216,42 @@ async def get_topics_for_college_department(college_id: int, department_id: int)
     
 @router.get("/get-all-with-department")
 async def get_colleges():
-    """Fetch all active colleges with their departments from college_departments mapping table"""
+    """Fetch all active colleges with their own departments"""
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
 
                 # Fetch active colleges
-                cursor.execute(
-                    "SELECT college_id, name, college_address, created_at FROM colleges WHERE is_active = 1 ORDER BY name"
-                )
+                cursor.execute("""
+                    SELECT college_id, name, college_address, created_at
+                    FROM colleges
+                    WHERE is_active = 1
+                    ORDER BY name;
+                """)
                 colleges = cursor.fetchall()
 
-                # Fetch departments linked through college_departments mapping table
+                # Fetch departments directly linked to each college
                 cursor.execute("""
                     SELECT 
-                        d.department_id,
-                        d.department_name,
-                        cd.college_id
-                    FROM departments d
-                    JOIN college_departments cd ON cd.department_id = d.department_id
-                    JOIN colleges c ON c.college_id = cd.college_id
-                    WHERE d.is_active = 1 AND c.is_active = 1
-                    ORDER BY d.department_name
+                        department_id,
+                        department_name,
+                        college_id
+                    FROM departments
+                    WHERE is_active = 1
+                    ORDER BY department_name;
                 """)
                 departments = cursor.fetchall()
 
-                # Group departments by college_id
+                # Group departments by their college_id
                 dept_map = {}
                 for row in departments:
                     cid = row["college_id"]
                     if cid not in dept_map:
                         dept_map[cid] = []
-                    
+
                     dept_map[cid].append({
                         "department_id": row["department_id"],
-                        "name": row["department_name"]
+                        "name": row["department_name"],
                     })
 
                 # Attach departments to each college
@@ -285,7 +270,6 @@ async def get_colleges():
             status_code=500,
             detail=f"Error fetching colleges: {str(e)}"
         )
-
 
 
 

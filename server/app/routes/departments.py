@@ -18,7 +18,8 @@ async def get_departments():
                 }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching departments: {str(e)}")
-    
+
+
 
 @router.post("/create")
 async def create_department(
@@ -49,6 +50,8 @@ async def create_department(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating department: {str(e)}")
+
+ 
     
 
 @router.get("/{department_id}/topics")

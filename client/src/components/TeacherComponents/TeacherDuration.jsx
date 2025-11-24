@@ -17,6 +17,8 @@ const TeacherDuration = () => {
   const [durationData, setDurationData] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [selectedDepartment, setSelectedDepartment] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const [loading, setLoading] = useState({
     data: false,
     departments: false,
@@ -65,6 +67,7 @@ const TeacherDuration = () => {
   const fetchTotalDuration = async () => {
     if (!selectedDepartment) {
       setDurationData([]);
+      setCurrentPage(1);
       return;
     }
     setLoading((p) => ({ ...p, data: true }));
@@ -76,9 +79,12 @@ const TeacherDuration = () => {
         // Sort by total_duration_hours descending
         const sortedData = data.data.sort((a, b) => b.total_duration_hours - a.total_duration_hours);
         setDurationData(sortedData);
+      } else {
+        setDurationData([]);
       }
     } catch (error) {
       console.error("Error fetching total duration:", error);
+      setDurationData([]);
     } finally {
       setLoading((p) => ({ ...p, data: false }));
     }
@@ -92,7 +98,7 @@ const TeacherDuration = () => {
   const handleSearchChange = (e) => {
     const query = e.target.value;
     setSearchInput(query);
-    
+
     if (query === "") {
       setFilteredDepartments(departments);
     } else {
@@ -109,6 +115,7 @@ const TeacherDuration = () => {
     setSearchInput(dept.department_name);
     setShowDropdown(false);
     setFilteredDepartments(departments);
+    setCurrentPage(1);
   };
 
   // Clear search and reset when input is focused
@@ -149,7 +156,7 @@ const TeacherDuration = () => {
 
   // Filters section
   const renderFilters = () => (
-    <div className="mb-6 p-4 bg-white rounded-lg mt-30 shadow-sm border border-gray-200">
+    <div className="mb-6 p-4 bg-white rounded-lg shadow-sm border border-gray-200">
       <div className="flex-1">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Select Department
@@ -173,9 +180,8 @@ const TeacherDuration = () => {
                   <div
                     key={dept.department_id}
                     onClick={() => handleDepartmentSelect(dept)}
-                    className={`p-2 cursor-pointer hover:bg-blue-100 text-sm ${
-                      selectedDepartment === dept.department_id ? "bg-blue-50" : ""
-                    }`}
+                    className={`p-2 cursor-pointer hover:bg-blue-100 text-sm ${selectedDepartment === dept.department_id ? "bg-blue-50" : ""
+                      }`}
                   >
                     {dept.department_name}
                   </div>
@@ -195,36 +201,61 @@ const TeacherDuration = () => {
 
   // Duration chart
   const renderDuration = () => {
-    if (!selectedDepartment || loading.data) {
+    if (!selectedDepartment) {
       return (
-        <p className="text-gray-600 bg-white p-6 rounded-lg shadow text-center">
-          {loading.data ? "Loading total duration..." : "Please select a department to view total duration."}
-        </p>
+        <div className="bg-white rounded-lg shadow p-8 text-center">
+          <p className="text-gray-500 text-lg">Please select a department to view total duration.</p>
+        </div>
+      );
+    }
+
+    if (loading.data) {
+      return (
+        <div className="bg-white rounded-lg shadow p-8 text-center">
+          <div className="flex justify-center items-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-3 text-gray-600">Loading duration data...</span>
+          </div>
+        </div>
       );
     }
 
     if (!durationData.length) {
       return (
-        <p className="text-gray-600 bg-white p-6 rounded-lg shadow text-center">
-          No duration data available.
-        </p>
+        <div className="bg-white rounded-lg shadow p-8 text-center">
+          <p className="text-gray-500 text-lg">No duration data available for this department.</p>
+        </div>
       );
     }
+
+    // Sort by duration (same as before)
+    const sortedData = [...durationData].sort((a, b) => b.total_duration_hours - a.total_duration_hours);
+
+    // Pagination logic
+    const totalPages = Math.ceil(sortedData.length / itemsPerPage);
+    const startIdx = (currentPage - 1) * itemsPerPage;
+    const endIdx = startIdx + itemsPerPage;
+    const currentData = sortedData.slice(startIdx, endIdx);
 
     return (
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold text-gray-900">Total Duration</h2>
+          <div className="text-sm text-gray-500">
+            Page {currentPage} of {totalPages} • Showing {startIdx + 1}–{Math.min(endIdx, sortedData.length)} of {sortedData.length}
+          </div>
         </div>
-        <div className="relative h-96">
+
+        {/* Chart - Reduced height to make room for pagination */}
+        <div className="relative h-64 mb-6">
           <Bar
             data={{
-              labels: durationData.map((d, i) => `${i + 1}. ${d.student_name} - ${d.full_name}`),
+              labels: currentData.map((d, i) => `${startIdx + i + 1}. ${d.student_name} - ${d.full_name}`),
               datasets: [
                 {
                   label: "Total Hours",
-                  data: durationData.map((d) => d.total_duration_hours),
-                  backgroundColor: durationData.map((d) => getBarColor(d.total_duration_hours)),
+                  data: currentData.map((d) => d.total_duration_hours),
+                  backgroundColor: currentData.map((d) => getBarColor(d.total_duration_hours)),
                   borderWidth: 0,
                 },
               ],
@@ -234,51 +265,98 @@ const TeacherDuration = () => {
               responsive: true,
               maintainAspectRatio: false,
               plugins: {
-                legend: {
-                  display: false,
-                },
+                legend: { display: false },
+                tooltip: {
+                  callbacks: {
+                    label: (context) => `Total: ${context.parsed.x.toFixed(2)} hours`
+                  }
+                }
               },
               scales: {
                 x: {
                   beginAtZero: true,
-                  max: Math.max(...durationData.map(d => d.total_duration_hours)) + 2 || 20,
-                  title: {
-                    display: true,
-                    text: "Total Hours",
-                  },
+                  max: Math.max(...sortedData.map(d => d.total_duration_hours)) + 2 || 20,
+                  title: { display: true, text: "Total Hours" },
                 },
                 y: {
                   ticks: {
                     maxRotation: 0,
                     minRotation: 0,
+                    font: {
+                      size: 12
+                    }
                   },
                 },
               },
             }}
           />
         </div>
-        {/* Updated Custom Legend to match new color ranges */}
+
+        {/* Legend */}
         <div className="flex flex-wrap justify-center gap-4 mt-4 pt-4 border-t border-gray-200">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-red-500 rounded" style={{backgroundColor: "rgba(239, 68, 68, 0.8)"}}></div>
+            <div className="w-4 h-4 rounded" style={{ backgroundColor: "rgba(239, 68, 68, 0.8)" }}></div>
             <span className="text-xs text-gray-600">Less than 2 hours</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded" style={{backgroundColor: "rgba(249, 115, 22, 0.8)"}}></div>
+            <div className="w-4 h-4 rounded" style={{ backgroundColor: "rgba(249, 115, 22, 0.8)" }}></div>
             <span className="text-xs text-gray-600">Less than 4 hours</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded" style={{backgroundColor: "rgba(234, 179, 8, 0.8)"}}></div>
+            <div className="w-4 h-4 rounded" style={{ backgroundColor: "rgba(234, 179, 8, 0.8)" }}></div>
             <span className="text-xs text-gray-600">Less than 6 hours</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-blue-500 rounded" style={{backgroundColor: "rgba(59, 130, 246, 0.8)"}}></div>
+            <div className="w-4 h-4 rounded" style={{ backgroundColor: "rgba(59, 130, 246, 0.8)" }}></div>
             <span className="text-xs text-gray-600">Less than 10 hours</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-green-500 rounded" style={{backgroundColor: "rgba(34, 197, 94, 0.8)"}}></div>
+            <div className="w-4 h-4 rounded" style={{ backgroundColor: "rgba(34, 197, 94, 0.8)" }}></div>
             <span className="text-xs text-gray-600">10+ hours</span>
           </div>
+        </div>
+
+        {/* Pagination Controls - Always show when there's data */}
+        <div className="flex justify-center items-center gap-4 mt-6 pt-6 border-t border-gray-200">
+          <button
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className={`px-5 py-2 rounded-lg font-medium transition-colors duration-200 ${
+              currentPage === 1
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md'
+            }`}
+          >
+            ← Previous
+          </button>
+
+          <div className="flex gap-1">
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              <button
+                key={page}
+                onClick={() => setCurrentPage(page)}
+                className={`w-10 h-10 rounded-lg font-medium transition-colors duration-200 ${
+                  currentPage === page
+                    ? "bg-blue-600 text-white shadow-md"
+                    : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                }`}
+              >
+                {page}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+            className={`px-5 py-2 rounded-lg font-medium transition-colors duration-200 ${
+              currentPage === totalPages
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md'
+            }`}
+          >
+            Next →
+          </button>
         </div>
       </div>
     );

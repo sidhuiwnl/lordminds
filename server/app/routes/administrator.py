@@ -66,40 +66,50 @@ async def get_administrator_topics(user_id: int):
 @router.get("/get-administrator-details/{user_id}")
 async def get_administrator_details(user_id: int):
     """
-    Fetch administrator's college details and all departments under that college.
+    Fetch administrator's college details and active departments 
+    under that college. Uses new schema where departments contain college_id.
     """
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
-                # Step 1: Get the user's college details
+
+                # 1️⃣ Validate administrator and get college
                 user_query = """
                     SELECT 
                         u.user_id,
                         u.username,
                         u.full_name,
-                        c.college_id,
+                        u.college_id,
                         c.name AS college_name,
                         c.college_address
                     FROM users u
                     JOIN colleges c ON u.college_id = c.college_id
                     WHERE u.user_id = %s
+                      AND u.role_id = 3          -- administrator role
+                      AND u.is_active = 1        -- active user only
                 """
                 cursor.execute(user_query, (user_id,))
                 user_details = cursor.fetchone()
 
                 if not user_details:
-                    raise HTTPException(status_code=404, detail="Administrator not found")
+                    raise HTTPException(
+                        status_code=404, 
+                        detail="Active administrator not found"
+                    )
 
-                # Step 2: Fetch all departments for that college
+                college_id = user_details["college_id"]
+
+                # 2️⃣ Fetch ACTIVE departments under that college
                 dept_query = """
                     SELECT 
-                        d.department_id,
-                        d.department_name
-                    FROM college_departments cd
-                    JOIN departments d ON cd.department_id = d.department_id
-                    WHERE cd.college_id = %s
+                        department_id,
+                        department_name
+                    FROM departments
+                    WHERE college_id = %s
+                      AND is_active = 1
+                    ORDER BY department_name
                 """
-                cursor.execute(dept_query, (user_details["college_id"],))
+                cursor.execute(dept_query, (college_id,))
                 departments = cursor.fetchall()
 
                 return {
@@ -111,8 +121,10 @@ async def get_administrator_details(user_id: int):
                 }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching administrator details: {str(e)}")
-
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error fetching administrator details: {str(e)}"
+        )
 
 
 @router.put("/update/{user_id}")

@@ -1,39 +1,169 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import Select from 'react-select';
+import { ToastContainer } from 'react-toastify';
+import { CollegeTable } from "../SuperAdminComponents/AccessCreationTables/CollegeOnboardTable";
+import { StudentTable } from "../SuperAdminComponents/AccessCreationTables/StudentTable";
+import { TeacherTable } from "../SuperAdminComponents/AccessCreationTables/TeacherTable";
+import { AdminTable } from "../SuperAdminComponents/AccessCreationTables/AdministratorTable";
+import { TopicTable } from "../SuperAdminComponents/AccessCreationTables/TopicTable";
+
+const SearchableDropdown = ({
+  options,
+  value,
+  onChange,
+  placeholder,
+  disabled = false,
+  name,
+  valueKey = "value",
+  labelKey = "label",
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const selectedOption = options.find((o) => o[valueKey] === value);
+
+  const filteredOptions = options.filter((o) =>
+    o[labelKey].toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleToggle = () => {
+    if (!disabled) {
+      setIsOpen(!isOpen);
+      if (!isOpen) setSearch("");
+    }
+  };
+
+  const handleSelect = (opt) => {
+    onChange({ target: { name, value: opt[valueKey] } });
+    setIsOpen(false);
+    setSearch("");
+  };
+
+  const handleSearchChange = (e) => setSearch(e.target.value);
+
+  const handleClose = () => {
+    setIsOpen(false);
+    setSearch("");
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (isOpen && !e.target.closest(".dropdown-container")) {
+        handleClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen]);
+
+  return (
+    <div className="relative dropdown-container w-full">
+      <div className="relative">
+        <input
+          type="text"
+          readOnly
+          value={selectedOption ? selectedOption[labelKey] : ""}
+          onClick={handleToggle}
+          className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 h-[42px] ${disabled
+            ? "bg-gray-100 cursor-not-allowed"
+            : "focus:ring-blue-500 border-gray-200 cursor-pointer hover:border-gray-300"
+            }`}
+          placeholder={placeholder}
+          disabled={disabled}
+        />
+        <svg
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""
+            } ${disabled ? "text-gray-400" : "text-gray-500"}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+      {isOpen && (
+        <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto mt-1">
+          <input
+            type="text"
+            autoFocus
+            value={search}
+            onChange={handleSearchChange}
+            placeholder="Search..."
+            className="w-full px-3 py-2 border-b border-gray-300 text-sm focus:outline-none"
+          />
+          {filteredOptions.length === 0 ? (
+            <div className="px-3 py-2 text-gray-500 text-sm">No options found</div>
+          ) : (
+            filteredOptions.map((opt, index) => (
+              <div
+                key={index}
+                onClick={() => handleSelect(opt)}
+                className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm border-b border-gray-100 last:border-b-0"
+              >
+                {opt[labelKey]}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const AdministratorAccessCreation = () => {
-  const [selectedAccessType, setSelectedAccessType] = useState("student");
+  const [selectedAccessType, setSelectedAccessType] = useState("college-onboarding");
+  const [topicInput, setTopicInput] = useState("");
+
   const [formData, setFormData] = useState({
+    collegeName: "",
+    collegeAddress: "",
+    selectedDepartments: [],
     name: "",
     department: "",
     username: "",
     password: "",
     college: "",
+    givenAccess: "",
+    selectedTopics: [],
+    newTopics: [], // THIS WAS MISSING — NOW FIXED
   });
+
   const [selectedFile, setSelectedFile] = useState(null);
+  const [fileName, setFileName] = useState('');
   const [message, setMessage] = useState({ type: "", text: "" });
   const [loading, setLoading] = useState(false);
   const [colleges, setColleges] = useState([]);
+  const [collegesWithDepts, setCollegesWithDepts] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [topics, setTopics] = useState([]);
   const [students, setStudents] = useState([]);
   const [teachers, setTeachers] = useState([]);
-  const [studentPage, setStudentPage] = useState(1);
-  const [teacherPage, setTeacherPage] = useState(1);
+  const [admins, setAdmins] = useState([]);
+  const [showAddDeptModal, setShowAddDeptModal] = useState(false);
+  const [deptForm, setDeptForm] = useState({ name: "", code: "" });
   const [selectedCollegeFilter, setSelectedCollegeFilter] = useState('');
   const [selectedDepartmentFilter, setSelectedDepartmentFilter] = useState('');
   const [studentDepartments, setStudentDepartments] = useState([]);
-  
-  // Search states
-  const [studentSearchQuery, setStudentSearchQuery] = useState("");
-  const [teacherSearchQuery, setTeacherSearchQuery] = useState("");
+  const [formDepartments, setFormDepartments] = useState([]);
+  const [bulkErrors, setBulkErrors] = useState([]);
+  const [showBulkErrorsModal, setShowBulkErrorsModal] = useState(false);
 
   const rowsPerPage = 10;
 
   const API_BASE = import.meta.env.VITE_BACKEND_API_URL;
 
   const accessTypes = [
+    // { id: "college-onboarding", label: "College Onboarding" },
     { id: "student", label: "Student Access" },
     { id: "teacher", label: "Teacher Access" },
+    // { id: "admin", label: "Administrator Access" },
+    // { id: "topic", label: "Topic Assign" }
   ];
 
   const fetchColleges = async () => {
@@ -49,6 +179,18 @@ const AdministratorAccessCreation = () => {
     }
   };
 
+  const fetchCollegesWithDepts = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/colleges/get-all-with-department`);
+      if (res.ok) {
+        const data = await res.json();
+        setCollegesWithDepts(data.data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching colleges with departments:", error);
+    }
+  };
+
   const fetchDepartments = async () => {
     try {
       const deptsRes = await fetch(`${API_BASE}/departments/get-departments`);
@@ -59,6 +201,19 @@ const AdministratorAccessCreation = () => {
     } catch (error) {
       console.error("Error fetching departments:", error);
       setMessage({ type: "error", text: "Failed to load departments" });
+    }
+  };
+
+  const fetchTopics = async () => {
+    try {
+      const topicsRes = await fetch(`${API_BASE}/topics/all-topics`);
+      if (topicsRes.ok) {
+        const topicsData = await topicsRes.json();
+        setTopics(topicsData.data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching topics:", error);
+      setMessage({ type: "error", text: "Failed to load topics" });
     }
   };
 
@@ -86,9 +241,21 @@ const AdministratorAccessCreation = () => {
     }
   };
 
-  const fetchStudentDepartments = async (collegeId) => {
+  const fetchAdmins = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/users/get/administrators`);
+      if (res.ok) {
+        const data = await res.json();
+        setAdmins(data.data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching admins:", error);
+    }
+  };
+
+  const fetchStudentDepartments = async (collegeId, setter = setStudentDepartments) => {
     if (!collegeId) {
-      setStudentDepartments([]);
+      setter([]);
       return;
     }
     try {
@@ -104,16 +271,16 @@ const AdministratorAccessCreation = () => {
       }
 
       const data = await response.json();
-      setStudentDepartments(data.data || []);
+      setter(data.data || []);
     } catch (error) {
       console.error(error);
-      setStudentDepartments([]);
+      setter([]);
     }
   };
 
   useEffect(() => {
     const fetchData = async () => {
-      await Promise.all([fetchColleges(), fetchDepartments(), fetchStudents(), fetchTeachers()]);
+      await Promise.all([fetchColleges(), fetchCollegesWithDepts(), fetchDepartments(), fetchTopics(), fetchStudents(), fetchTeachers(), fetchAdmins()]);
     };
 
     fetchData();
@@ -131,26 +298,157 @@ const AdministratorAccessCreation = () => {
     }
   }, [selectedCollegeFilter, colleges]);
 
-  // Reset search when access type changes
   useEffect(() => {
-    setStudentSearchQuery("");
-    setTeacherSearchQuery("");
-    setStudentPage(1);
-    setTeacherPage(1);
-  }, [selectedAccessType]);
+    if ((selectedAccessType === "student" || selectedAccessType === "teacher" || selectedAccessType === "topic") && formData.college) {
+      const college = colleges.find((c) => c.college_id === formData.college);
+      if (college && college.college_id) {
+        fetchStudentDepartments(college.college_id, setFormDepartments);
+      } else {
+        setFormDepartments([]);
+      }
+    } else {
+      setFormDepartments([]);
+    }
+  }, [formData.college, selectedAccessType, colleges]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    if (name === "selectedDepartments") {
+      const options = Array.from(e.target.selectedOptions, (option) => option.value);
+      setFormData(prev => ({ ...prev, [name]: options }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleSelectChange = (selectedOptions, fieldName) => {
+    setFormData(prev => ({
+      ...prev,
+      [fieldName]: selectedOptions ? selectedOptions.map(option => option.value || option.department_name || option.topic_name) : []
+    }));
   };
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     setSelectedFile(file);
+    setFileName(file ? file.name : '');
+  };
+
+  const handleTopicInputKey = (e) => {
+    if (e.key === "Enter" && topicInput.trim() !== "") {
+      e.preventDefault();
+
+      setFormData(prev => ({
+        ...prev,
+        newTopics: [...prev.newTopics, topicInput.trim()]
+      }));
+
+      setTopicInput("");
+    }
+  };
+
+  const handleRemoveTopic = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      newTopics: prev.newTopics.filter((_, i) => i !== index)
+    }));
   };
 
   const clearMessage = () => {
     setTimeout(() => setMessage({ type: "", text: "" }), 5000);
+  };
+
+  const handleBulkUpload = async () => {
+    if (!selectedFile) {
+      setMessage({ type: "error", text: "Please select a file to upload" });
+      return;
+    }
+
+    const college = colleges.find(c => c.college_id === formData.college);
+    if (!college || !formData.department) {
+      setMessage({ type: "error", text: "Please select college and department first" });
+      return;
+    }
+
+    const uploadFormData = new FormData();
+    uploadFormData.append("file", selectedFile);
+    uploadFormData.append("role", "student");
+    uploadFormData.append("college_name", college.name);
+    uploadFormData.append("department_name", formData.department);
+
+    try {
+      setLoading(true);
+      setBulkErrors([]);
+      const res = await fetch(`${API_BASE}/users/bulk`, {
+        method: "POST",
+        body: uploadFormData
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        setBulkErrors(result.errors || [result.detail] || ["An unknown error occurred."]);
+      } else {
+        setBulkErrors(result.errors || []);
+      }
+
+      let messageType = "error";
+      let messageText = result.message || result.detail || "Bulk upload failed";
+
+      if (res.ok && result.status === "success") {
+        messageType = "success";
+        messageText = `Successfully created ${result.created_count} students in ${college.name} - ${formData.department}`;
+      } else if (res.ok && result.status === "partial") {
+        messageType = "warning";
+        messageText = `Created ${result.created_count} students in ${college.name} - ${formData.department}. ${result.errors?.length || 0} rows had errors.`;
+      } else if (res.ok && result.status === "error") {
+        messageType = "error";
+        messageText = result.message || "No valid students were created";
+      }
+
+      setMessage({ type: messageType, text: messageText });
+      setSelectedFile(null);
+      setFileName('');
+      await fetchStudents();
+
+      if (bulkErrors.length > 0) {
+        setShowBulkErrorsModal(true);
+      }
+    } catch (error) {
+      setMessage({ type: "error", text: "Network error: " + error.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateDept = async () => {
+    if (!deptForm.name || !deptForm.code) return;
+
+    const formDataDept = new FormData();
+    formDataDept.append("department_name", deptForm.name);
+    formDataDept.append("department_code", deptForm.code);
+
+    try {
+      const response = await fetch(`${API_BASE}/departments/create`, {
+        method: "POST",
+        body: formDataDept,
+      });
+
+      const result = await response.json();
+      if (response.ok) {
+        setMessage({ type: "success", text: result.message });
+        setShowAddDeptModal(false);
+        setDeptForm({ name: "", code: "" });
+        await fetchDepartments();
+        clearMessage();
+      } else {
+        setMessage({ type: "error", text: result.detail || "Department creation failed" });
+        clearMessage();
+      }
+    } catch (error) {
+      setMessage({ type: "error", text: "Network error: " + error.message });
+      clearMessage();
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -159,27 +457,97 @@ const AdministratorAccessCreation = () => {
     setMessage({ type: "", text: "" });
 
     try {
-      if (selectedAccessType === "student" && selectedFile) {
-        const form = new FormData();
-        form.append("file", selectedFile);
-        form.append("role", "student");
-        const res = await fetch(`${API_BASE}/users/bulk`, { method: "POST", body: form });
+      if (selectedAccessType === "college-onboarding") {
+        const payload = {
+          name: formData.collegeName,
+          address: formData.collegeAddress,
+          departments: formData.selectedDepartments,
+        };
+        const res = await fetch(`${API_BASE}/colleges/onboard`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
         const result = await res.json();
-        setMessage({ type: res.ok ? "success" : "error", text: res.ok ? result.message : result.detail || "Bulk creation failed" });
+        setMessage({ type: res.ok ? "success" : "error", text: res.ok ? result.message : result.detail || "College onboarding failed" });
         if (res.ok) {
-          setSelectedFile(null);
-          await fetchStudents();
+          setFormData(prev => ({ ...prev, collegeName: "", collegeAddress: "", selectedDepartments: [] }));
+          await fetchCollegesWithDepts();
         }
-      } else {
-        const roleMap = { student: "student", teacher: "teacher" };
+      }
+
+      else if (selectedAccessType === "student") {
+        if (selectedFile) {
+          await handleBulkUpload();
+        } else {
+          const college = colleges.find(c => c.college_id === formData.college);
+          const payload = {
+            role: "student",
+            college_name: college.name,
+            full_name: formData.name,
+            department_name: formData.department,
+            username: formData.username,
+            password: formData.password,
+          };
+          const res = await fetch(`${API_BASE}/users`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const result = await res.json();
+          setMessage({ type: res.ok ? "success" : "error", text: res.ok ? result.message : result.detail || "User creation failed" });
+          if (res.ok) {
+            setFormData(prev => ({ ...prev, name: "", department: "", username: "", password: "", college: "" }));
+            await fetchStudents();
+          }
+        }
+      }
+
+      else if (selectedAccessType === "topic") {
+        if (!formData.college || !formData.department || formData.newTopics.length === 0) {
+          setMessage({ type: "error", text: "Select college, department and add at least one topic" });
+          setLoading(false);
+          return;
+        }
+
+        const college = colleges.find(c => c.college_id === formData.college);
+
+        const payload = {
+          college_name: college.name,
+          department_name: formData.department,
+          topics: formData.newTopics
+        };
+
+        const res = await fetch(`${API_BASE}/topics/assign-topics`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const result = await res.json();
+
+        setMessage({
+          type: res.ok ? "success" : "error",
+          text: result.message,
+        });
+
+        if (res.ok) {
+          setFormData(prev => ({ ...prev, college: "", department: "", newTopics: [] }));
+          setTopicInput("");
+        }
+      }
+
+      else {
+        const college = colleges.find(c => c.college_id === formData.college);
+        const roleMap = { teacher: "teacher", admin: "administrator" };
         const payload = {
           role: roleMap[selectedAccessType],
-          college_name: formData.college,
+          college_name: college.name,
           username: formData.username,
           password: formData.password,
+          full_name: formData.name
         };
-        if (selectedAccessType === "student") payload.full_name = formData.name;
-        if (["student", "teacher"].includes(selectedAccessType)) payload.department_name = formData.department;
+        if (["teacher"].includes(selectedAccessType)) payload.department_name = formData.department;
 
         const res = await fetch(`${API_BASE}/users`, {
           method: "POST",
@@ -190,9 +558,9 @@ const AdministratorAccessCreation = () => {
         setMessage({ type: res.ok ? "success" : "error", text: res.ok ? result.message : result.detail || "User creation failed" });
         if (res.ok) {
           setFormData({
-            name: "", department: "", username: "", password: "", college: ""
+            collegeName: "", collegeAddress: "", selectedDepartments: [], name: "", department: "", username: "", password: "", college: "", selectedTopics: [], newTopics: []
           });
-          const fetchFunc = selectedAccessType === 'student' ? fetchStudents : fetchTeachers;
+          const fetchFunc = selectedAccessType === 'teacher' ? fetchTeachers : fetchAdmins;
           await fetchFunc();
         }
       }
@@ -208,107 +576,308 @@ const AdministratorAccessCreation = () => {
 
   const getFormTitle = () => {
     const titles = {
+      "college-onboarding": "College Onboarding",
       student: "Student Access",
       teacher: "Teachers Access",
+      admin: "Administrator Access",
+      topic: "Topic Creation"
     };
     return titles[selectedAccessType];
   };
 
   const renderFormFields = () => {
-    if (selectedAccessType === "student") {
+    if (selectedAccessType === "college-onboarding") {
+      return (
+        <>
+          <div className="flex flex-col lg:flex-row items-start gap-4">
+            <ToastContainer />
+            <label className="w-full lg:w-36 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">
+              College Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              name="collegeName"
+              value={formData.collegeName}
+              onChange={handleInputChange}
+              placeholder="College name"
+              required
+              className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
+            />
+          </div>
+
+          <div className="flex flex-col lg:flex-row items-start gap-4">
+            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">
+              College Address <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              name="collegeAddress"
+              value={formData.collegeAddress}
+              onChange={handleInputChange}
+              placeholder="College address"
+              required
+              className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
+            />
+          </div>
+
+          <div className="flex flex-col lg:flex-row items-start gap-4">
+            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 lg:pt-2">
+              Departments <span className="text-red-500">*</span>
+            </label>
+
+            <div className="flex-1">
+              <div className="border border-gray-300 rounded-lg p-2 min-h-[50px] flex flex-wrap gap-2">
+                {formData.selectedDepartments.map((dept, idx) => (
+                  <div key={idx} className="flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
+                    <span>{dept}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          selectedDepartments: prev.selectedDepartments.filter((_, i) => i !== idx)
+                        }))
+                      }}
+                      className="text-red-600 font-bold"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+
+                <input
+                  type="text"
+                  value={deptForm.name}
+                  onChange={(e) => setDeptForm(prev => ({ ...prev, name: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && deptForm.name.trim() !== "") {
+                      e.preventDefault();
+                      setFormData(prev => ({
+                        ...prev,
+                        selectedDepartments: [...prev.selectedDepartments, deptForm.name.trim()]
+                      }));
+                      setDeptForm({ name: "" });
+                    }
+                  }}
+                  className="flex-1 min-w-[120px] px-2 py-1 outline-none text-sm"
+                  placeholder="Type department & press Enter"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Press <b>Enter</b> to add department.
+              </p>
+            </div>
+          </div>
+        </>
+      );
+    } else if (selectedAccessType === "student") {
       return (
         <>
           <div className="flex flex-col lg:flex-row items-start gap-4">
             <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">1. College Name</label>
-            <select 
-              name="college" 
-              value={formData.college} 
-              onChange={handleInputChange}
-              className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
-            >
-              <option value="">Select College</option>
-              {colleges.map((college) => (
-                <option key={college.college_id || college.id} value={college.name}>{college.name}</option>
-              ))}
-            </select>
+            <div className="flex-1 w-full">
+              <SearchableDropdown
+                name="college"
+                value={formData.college}
+                onChange={handleInputChange}
+                options={colleges}
+                valueKey="college_id"
+                labelKey="name"
+                placeholder="Select College"
+              />
+            </div>
           </div>
 
           <div className="flex flex-col lg:flex-row items-start gap-4">
             <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">2. Department</label>
-            <select 
-              name="department" 
-              value={formData.department} 
-              onChange={handleInputChange}
-              className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
-            >
-              <option value="">Select Department</option>
-              {departments.map((dept) => (
-                <option key={dept.department_id || dept.id} value={dept.department_name || dept.name}>{dept.department_name || dept.name}</option>
-              ))}
-            </select>
+            <div className="flex-1 w-full">
+              <SearchableDropdown
+                name="department"
+                value={formData.department}
+                onChange={handleInputChange}
+                options={formDepartments}
+                valueKey="department_name"
+                labelKey="department_name"
+                placeholder="Select Department"
+                disabled={!formData.college}
+              />
+            </div>
           </div>
 
-          <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">3. Student Name</label>
-            <input 
-              type="text" 
-              name="name" 
-              value={formData.name} 
-              onChange={handleInputChange}
-              placeholder="Student name"
-              className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
-            />
-          </div>
+          {!selectedFile && (
+            <>
+              <div className="flex flex-col lg:flex-row items-start gap-4">
+                <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">3. Student Name</label>
+                <input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  placeholder="Student name"
+                  className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
+                />
+              </div>
 
-          <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">4. Username</label>
-            <input 
-              type="text" 
-              name="username" 
-              value={formData.username} 
-              onChange={handleInputChange}
-              placeholder="Username"
-              className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
-            />
-          </div>
+              <div className="flex flex-col lg:flex-row items-start gap-4">
+                <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">4. Username</label>
+                <input
+                  type="text"
+                  name="username"
+                  value={formData.username}
+                  onChange={handleInputChange}
+                  placeholder="Username"
+                  className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
+                />
+              </div>
 
-          <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">5. Password</label>
-            <input 
-              type="password" 
-              name="password" 
-              value={formData.password} 
-              onChange={handleInputChange}
-              placeholder="Password"
-              className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
-            />
+              <div className="flex flex-col lg:flex-row items-start gap-4">
+                <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">5. Password</label>
+                <input
+                  type="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  placeholder="Password"
+                  className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
+                />
+              </div>
+            </>
+          )}
+        </>
+      );
+    } else if (selectedAccessType === "topic") {
+      return (
+        <>
+          <div className="flex flex-col gap-4">
+
+            <div className="flex flex-col lg:flex-row items-start gap-4">
+              <label className="w-full lg:w-40 text-sm font-medium text-gray-700 lg:pt-2">
+                1. College Name
+              </label>
+              <div className="flex-1 w-full">
+                <SearchableDropdown
+                  name="college"
+                  value={formData.college}
+                  onChange={handleInputChange}
+                  options={colleges}
+                  valueKey="college_id"
+                  labelKey="name"
+                  placeholder="Select College"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col lg:flex-row items-start gap-4">
+              <label className="w-full lg:w-40 text-sm font-medium text-gray-700 lg:pt-2">
+                2. Department
+              </label>
+              <div className="flex-1 w-full">
+                <SearchableDropdown
+                  name="department"
+                  value={formData.department}
+                  onChange={handleInputChange}
+                  options={formDepartments}
+                  valueKey="department_name"
+                  labelKey="department_name"
+                  placeholder="Select Department"
+                  disabled={!formData.college}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col lg:flex-row items-start gap-4">
+              <label className="w-full lg:w-40 text-sm font-medium text-gray-700 lg:pt-2">
+                3. Topics
+              </label>
+
+              <div className="flex-1">
+                <div className="border border-gray-300 rounded-lg p-2 min-h-[50px] flex flex-wrap gap-2">
+                  {formData.newTopics.map((topic, idx) => (
+                    <div key={idx} className="flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
+                      <span>{topic}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTopic(idx)}
+                        className="text-red-600 font-bold"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+
+                  <input
+                    type="text"
+                    value={topicInput}
+                    onChange={(e) => setTopicInput(e.target.value)}
+                    onKeyDown={handleTopicInputKey}
+                    className="flex-1 min-w-[120px] px-2 py-1 outline-none text-sm"
+                    placeholder="Type topic & press Enter"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Press <b>Enter</b> to add topic.
+                </p>
+              </div>
+            </div>
+
           </div>
         </>
       );
     } else {
+      // For teacher and admin
       return (
         <>
           <div className="flex flex-col lg:flex-row items-start gap-4">
             <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">1. College Name</label>
-            <select 
-              name="college" 
-              value={formData.college} 
-              onChange={handleInputChange}
-              className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
-            >
-              <option value="">Select College</option>
-              {colleges.map((college) => (
-                <option key={college.college_id || college.id} value={college.name}>{college.name}</option>
-              ))}
-            </select>
+            <div className="flex-1 w-full">
+              <SearchableDropdown
+                name="college"
+                value={formData.college}
+                onChange={handleInputChange}
+                options={colleges}
+                valueKey="college_id"
+                labelKey="name"
+                placeholder="Select College"
+              />
+            </div>
           </div>
 
           <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">2. Username</label>
-            <input 
-              type="text" 
-              name="username" 
-              value={formData.username} 
+            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">Full Name</label>
+            <input
+              type="text"
+              name="name"
+              value={formData.name}
+              onChange={handleInputChange}
+              placeholder="Full Name"
+              className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
+            />
+          </div>
+
+          {selectedAccessType === "teacher" && (
+            <div className="flex flex-col lg:flex-row items-start gap-4">
+              <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">Department</label>
+              <div className="flex-1 w-full">
+                <SearchableDropdown
+                  name="department"
+                  value={formData.department}
+                  onChange={handleInputChange}
+                  options={formDepartments}
+                  valueKey="department_name"
+                  labelKey="department_name"
+                  placeholder="Select Department"
+                  disabled={!formData.college}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col lg:flex-row items-start gap-4">
+            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">{selectedAccessType === "teacher" ? "3." : "2."} Username</label>
+            <input
+              type="text"
+              name="username"
+              value={formData.username}
               onChange={handleInputChange}
               placeholder="Username"
               className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
@@ -316,11 +885,11 @@ const AdministratorAccessCreation = () => {
           </div>
 
           <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">3. Password</label>
-            <input 
-              type="password" 
-              name="password" 
-              value={formData.password} 
+            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">{selectedAccessType === "teacher" ? "4." : "3."} Password</label>
+            <input
+              type="password"
+              name="password"
+              value={formData.password}
               onChange={handleInputChange}
               placeholder="Password"
               className="flex-1 w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6]"
@@ -333,8 +902,11 @@ const AdministratorAccessCreation = () => {
 
   const getSubmitButtonText = () => {
     const texts = {
-      student: "Create Access",
-      teacher: "Create Access",
+      "college-onboarding": "Onboard College",
+      student: selectedFile ? "Bulk Upload Students" : "Create Student",
+      teacher: "Create Teacher",
+      admin: "Create Admin",
+      topic: "Assign Topics"
     };
     return texts[selectedAccessType];
   };
@@ -342,300 +914,89 @@ const AdministratorAccessCreation = () => {
   const renderMessage = () => {
     if (!message.text) return null;
     return (
-      <div className={`mt-4 p-3 rounded-lg text-sm font-medium ${
-        message.type === "success" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-      }`}>
+      <div className={`mt-4 p-3 rounded-lg text-sm font-medium ${message.type === "success" ? "bg-green-100 text-green-800" : message.type === "warning" ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"
+        }`}>
         {message.text}
+        {bulkErrors.length > 0 && message.type !== "success" && (
+          <div className="mt-2">
+            <button
+              onClick={() => setShowBulkErrorsModal(true)}
+              className="text-blue-600 hover:underline text-sm"
+            >
+              View {bulkErrors.length} error{bulkErrors.length > 1 ? 's' : ''}
+            </button>
+          </div>
+        )}
       </div>
     );
   };
 
-  function formatDate(dateStr) {
-    const date = new Date(dateStr);
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    return `${day}-${month}-${year}`;
-  }
-
-  // Filtered students with search
-  const filteredStudents = useMemo(() => 
-    students.filter(student => 
-      (!selectedCollegeFilter || student.college_name === selectedCollegeFilter) &&
-      (!selectedDepartmentFilter || student.department_name === selectedDepartmentFilter) &&
-      (studentSearchQuery === "" || 
-        student.full_name?.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
-        student.username?.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
-        student.college_name?.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
-        student.department_name?.toLowerCase().includes(studentSearchQuery.toLowerCase()))
-    ), 
-    [students, selectedCollegeFilter, selectedDepartmentFilter, studentSearchQuery]
-  );
-
-  // Filtered teachers with search
-  const filteredTeachers = useMemo(() => 
-    teachers.filter(teacher => 
-      teacherSearchQuery === "" || 
-      teacher.username?.toLowerCase().includes(teacherSearchQuery.toLowerCase()) ||
-      teacher.college_name?.toLowerCase().includes(teacherSearchQuery.toLowerCase()) ||
-      teacher.full_name?.toLowerCase().includes(teacherSearchQuery.toLowerCase())
-    ), 
-    [teachers, teacherSearchQuery]
-  );
-
-  const studentTotal = filteredStudents.length;
-  const studentTotalPages = Math.ceil(studentTotal / rowsPerPage);
-  const paginatedStudents = useMemo(() => 
-    filteredStudents.slice((studentPage - 1) * rowsPerPage, studentPage * rowsPerPage), 
-    [filteredStudents, studentPage]
-  );
-  const studentStartIdx = (studentPage - 1) * rowsPerPage + 1;
-  const studentEndIdx = Math.min(studentPage * rowsPerPage, studentTotal);
-
-  const handleStudentPrev = () => {
-    if (studentPage > 1) setStudentPage(studentPage - 1);
-  };
-
-  const handleStudentNext = () => {
-    if (studentPage < studentTotalPages) setStudentPage(studentPage + 1);
-  };
-
-  const teacherTotal = filteredTeachers.length;
-  const teacherTotalPages = Math.ceil(teacherTotal / rowsPerPage);
-  const paginatedTeachers = useMemo(() => 
-    filteredTeachers.slice((teacherPage - 1) * rowsPerPage, teacherPage * rowsPerPage), 
-    [filteredTeachers, teacherPage]
-  );
-  const teacherStartIdx = (teacherPage - 1) * rowsPerPage + 1;
-  const teacherEndIdx = Math.min(teacherPage * rowsPerPage, teacherTotal);
-
-  const handleTeacherPrev = () => {
-    if (teacherPage > 1) setTeacherPage(teacherPage - 1);
-  };
-
-  const handleTeacherNext = () => {
-    if (teacherPage < teacherTotalPages) setTeacherPage(teacherPage + 1);
-  };
-
-  const renderPagination = (currentPage, totalPages, startIdx, endIdx, total, prevHandler, nextHandler) => (
-    <div className="p-4 border-t  border-gray-200 bg-gray-50">
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-        <div className="text-sm text-gray-700">
-          Showing {startIdx} to {endIdx} of {total} entries
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={prevHandler}
-            disabled={currentPage <= 1}
-            className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-          >
-            Previous
-          </button>
-          <span className="text-sm text-gray-700">
-            Page {currentPage} of {totalPages}
-          </span>
-          <button
-            onClick={nextHandler}
-            disabled={currentPage >= totalPages}
-            className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-          >
-            Next
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
   const renderUserTable = () => {
-    if (selectedAccessType === "student") {
-      return (
-        <div className="bg-white rounded-lg shadow overflow-hidden mt-6">
-          <div className="p-4 bg-gray-50">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Filter by College</label>
-                <select
-                  value={selectedCollegeFilter}
-                  onChange={(e) => {
-                    setSelectedCollegeFilter(e.target.value);
-                    setSelectedDepartmentFilter('');
-                    setStudentPage(1);
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                >
-                  <option value="">All Colleges</option>
-                  {colleges.map((college) => (
-                    <option key={college.college_id || college.id} value={college.name}>{college.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Department</label>
-                <select
-                  value={selectedDepartmentFilter}
-                  onChange={(e) => {
-                    setSelectedDepartmentFilter(e.target.value);
-                    setStudentPage(1);
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  disabled={!selectedCollegeFilter}
-                >
-                  <option value="">All Departments</option>
-                  {studentDepartments.map((dept) => (
-                    <option key={dept.department_id} value={dept.department_name}>{dept.department_name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            
-            {/* Student Search Input */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Search Students</label>
-              <input
-                type="text"
-                placeholder="Search by name, username, college, or department..."
-                value={studentSearchQuery}
-                onChange={(e) => {
-                  setStudentSearchQuery(e.target.value);
-                  setStudentPage(1);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              />
-            </div>
-          </div>
-          
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 lg:p-6 border-b border-gray-200 gap-4">
-            <h2 className="text-lg lg:text-xl font-semibold text-gray-800">List of Students</h2>
-            <div className="text-sm text-gray-600">
-              {studentTotal} student(s) found
-            </div>
-          </div>
-          
-          <div className="overflow-x-auto max-h-96 overflow-y-auto">
-            <table className="w-full min-w-[800px] border-collapse">
-              <thead>
-                <tr className="bg-[#1b64a5] text-white sticky top-0">
-                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-l-0">S.NO</th>
-                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Full Name</th>
-                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Username</th>
-                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">College Name</th>
-                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Department Name</th>
-                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-r-0">Created At</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-500">
-                {paginatedStudents.length > 0 ? (
-                  paginatedStudents.map((student, index) => (
-                    <tr key={student.user_id}>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">
-                        {((studentPage - 1) * rowsPerPage + index + 1)}
-                      </td>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{student.full_name}</td>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{student.username}</td>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{student.college_name}</td>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{student.department_name}</td>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">{formatDate(student.created_at)}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="6" className="px-4 py-8 text-center text-gray-500 text-sm border border-gray-500">
-                      {studentSearchQuery || selectedCollegeFilter || selectedDepartmentFilter ? "No students match your search criteria." : "No students found."}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          {renderPagination(studentPage, studentTotalPages, studentStartIdx, studentEndIdx, studentTotal, handleStudentPrev, handleStudentNext)}
-        </div>
-      );
-    } else if (selectedAccessType === "teacher") {
-      return (
-        <div className="bg-white rounded-lg shadow overflow-hidden mt-6">
-          <div className="p-4 bg-gray-50">
-            {/* Teacher Search Input */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Search Teachers</label>
-              <input
-                type="text"
-                placeholder="Search by username, college, or name..."
-                value={teacherSearchQuery}
-                onChange={(e) => {
-                  setTeacherSearchQuery(e.target.value);
-                  setTeacherPage(1);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              />
-            </div>
-          </div>
-          
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 lg:p-6 border-b border-gray-200 gap-4">
-            <h2 className="text-lg lg:text-xl font-semibold text-gray-800">List of Teachers</h2>
-            <div className="text-sm text-gray-600">
-              {teacherTotal} teacher(s) found
-            </div>
-          </div>
-          
-          <div className="overflow-x-auto max-h-96 overflow-y-auto">
-            <table className="w-full min-w-[800px] border-collapse">
-              <thead>
-                <tr className="bg-[#1b64a5] text-white sticky top-0">
-                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-l-0">S.NO</th>
-                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">Username</th>
-                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0">College Name</th>
-                  <th className="px-2 sm:px-4 lg:px-6 py-3 text-left text-xs lg:text-sm font-semibold border border-gray-500 border-t-0 border-r-0">Created At</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-500">
-                {paginatedTeachers.length > 0 ? (
-                  paginatedTeachers.map((teacher, index) => (
-                    <tr key={teacher.user_id}>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-l-0">
-                        {((teacherPage - 1) * rowsPerPage + index + 1)}
-                      </td>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{teacher.username}</td>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0">{teacher.college_name}</td>
-                      <td className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 border border-gray-500 border-t-0 border-r-0">{formatDate(teacher.created_at)}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="4" className="px-4 py-8 text-center text-gray-500 text-sm border border-gray-500">
-                      {teacherSearchQuery ? "No teachers match your search criteria." : "No teachers found."}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          {renderPagination(teacherPage, teacherTotalPages, teacherStartIdx, teacherEndIdx, teacherTotal, handleTeacherPrev, handleTeacherNext)}
-        </div>
-      );
+    switch (selectedAccessType) {
+      case "college-onboarding":
+        return <CollegeTable collegesWithDepts={collegesWithDepts} rowsPerPage={rowsPerPage} />;
+      case "student":
+        return (
+          <StudentTable
+            students={students}
+            colleges={colleges}
+            studentDepartments={studentDepartments}
+            selectedCollegeFilter={selectedCollegeFilter}
+            setSelectedCollegeFilter={setSelectedCollegeFilter}
+            selectedDepartmentFilter={selectedDepartmentFilter}
+            setSelectedDepartmentFilter={setSelectedDepartmentFilter}
+            rowsPerPage={rowsPerPage}
+          />
+        );
+      case "teacher":
+        return <TeacherTable teachers={teachers} rowsPerPage={rowsPerPage} />;
+      case "admin":
+        return <AdminTable admins={admins} rowsPerPage={rowsPerPage} />;
+      case "topic":
+        return <TopicTable topics={topics} rowsPerPage={rowsPerPage} />
+      default:
+        return null;
     }
-    return null;
   };
 
   return (
-    <div className="p-4 lg:p-6 mt-30  min-h-screen">
-      <div className="space-y-4 lg:space-y-6 mt-30 mx-0 lg:mx-4">
+    <div className="p-4 lg:p-6 mt-30 min-h-screen">
+      <div className="space-y-4 lg:space-y-6 mx-0 lg:mx-4">
+        {/* Radio Tabs - Centered */}
         <div className="flex justify-center gap-2 lg:gap-4 mb-6 overflow-x-auto pb-2">
           {accessTypes.map((type) => (
-            <div 
-              key={type.id} 
-              className={`flex items-center gap-2 px-3 py-2 lg:px-6 lg:py-4 bg-white rounded-lg border-2 shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md flex-shrink-0 min-w-[140px] lg:min-w-0 ${
-                selectedAccessType === type.id 
-                  ? 'border-blue-500 bg-blue-50' 
-                  : 'border-gray-200'
-              }`}
-              onClick={() => setSelectedAccessType(type.id)}
+            <div
+              key={type.id}
+              className={`flex items-center gap-2 px-3 py-2 lg:px-6 lg:py-4 bg-white rounded-lg border-2 shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md flex-shrink-0 min-w-[140px] lg:min-w-0 ${selectedAccessType === type.id
+                ? 'border-blue-500 bg-blue-50'
+                : 'border-gray-200'
+                }`}
+              onClick={() => {
+                setSelectedAccessType(type.id);
+                setTopicInput("");
+                setSelectedFile(null);
+                setFileName('');
+                setFormData({
+                  collegeName: "",
+                  collegeAddress: "",
+                  selectedDepartments: [],
+                  name: "",
+                  department: "",
+                  username: "",
+                  password: "",
+                  college: "",
+                  givenAccess: "",
+                  selectedTopics: [],
+                  newTopics: [], // Reset on tab change
+                });
+              }}
             >
               <input
                 type="radio"
                 id={type.id}
                 name="accessType"
                 checked={selectedAccessType === type.id}
-                onChange={() => setSelectedAccessType(type.id)}
+                onChange={() => { }}
                 className="w-4 h-4 lg:w-5 lg:h-5 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 focus:ring-2"
               />
               <label htmlFor={type.id} className="text-xs lg:text-sm font-medium text-gray-700 cursor-pointer">
@@ -645,43 +1006,57 @@ const AdministratorAccessCreation = () => {
           ))}
         </div>
 
+        {/* Form */}
         <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
           <div className="bg-white rounded-2xl shadow-sm p-6 lg:p-8 border-t-4 border-r-4 border-[#1b65a6] rounded-bl-lg rounded-tr-lg">
             <div className="flex justify-between items-center mb-6 lg:mb-8">
               <h2 className="font-bold text-lg lg:text-xl text-gray-800">Fill the details to create {getFormTitle()}</h2>
               {selectedAccessType === "student" && (
-                 <div className="flex gap-3">
-                <a 
-                 download
-                 href="/sample_students.xlsx"
-                  className="bg-gray-500 text-white px-5 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow flex items-center gap-1"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Download Template
-                </a>
-                <div className="relative">
-                  <input 
-                    type="file" 
-                    accept=".xlsx,.xls" 
-                    onChange={handleFileChange}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                  <button 
-                    type="button" 
-                    className="bg-blue-500 text-white px-5 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow flex items-center gap-1"
+                <div className="flex gap-3">
+                  <a
+                    download
+                    href="/sample_students.xlsx"
+                    className="bg-gray-500 text-white px-5 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow flex items-center gap-1"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 20l-5.5-5.5M15 20l5.5-5.5" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    Upload Excel
-                  </button>
+                    Download Template
+                  </a>
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={handleFileChange}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      disabled={!formData.college || !formData.department}
+                    />
+                    <button
+                      type="button"
+                      className={`px-5 py-2 rounded-lg font-medium text-sm shadow-md transition-shadow flex items-center gap-1 ${!formData.college || !formData.department
+                        ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                        : "bg-blue-500 text-white hover:shadow-lg"
+                        }`}
+                      onClick={() => selectedFile && handleBulkUpload()}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 20l-5.5-5.5M15 20l5.5-5.5" />
+                      </svg>
+                      {fileName ? 'Upload Now' : 'Upload Excel'}
+                    </button>
+                  </div>
+                  {fileName && (
+                    <div className="text-sm text-green-600 flex items-center gap-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      {fileName}
+                    </div>
+                  )}
                 </div>
-              </div>
               )}
             </div>
-            
+
             <div className="space-y-4">
               {renderFormFields()}
             </div>
@@ -690,9 +1065,9 @@ const AdministratorAccessCreation = () => {
           </div>
 
           <div className="flex justify-center mt-6">
-            <button 
-              type="submit" 
-              disabled={loading}
+            <button
+              type="submit"
+              disabled={loading || (selectedAccessType === "student" && selectedFile)}
               className="bg-yellow-400 text-gray-800 px-6 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? "Processing..." : getSubmitButtonText()}
@@ -701,9 +1076,111 @@ const AdministratorAccessCreation = () => {
         </form>
 
         {renderUserTable()}
+
+        {/* Add Department Modal */}
+        {showAddDeptModal && (
+          <div
+            className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            onClick={() => setShowAddDeptModal(false)}
+          >
+            <div
+              className="bg-white rounded-lg p-6 w-full max-w-md relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold mb-4">Add New Department</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Department Name</label>
+                  <input
+                    type="text"
+                    value={deptForm.name}
+                    onChange={(e) => setDeptForm(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Enter department name"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6] h-[42px]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Department Code</label>
+                  <input
+                    type="text"
+                    value={deptForm.code}
+                    onChange={(e) => setDeptForm(prev => ({ ...prev, code: e.target.value }))}
+                    placeholder="Enter department code"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1b65a6] h-[42px]"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowAddDeptModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateDept}
+                  disabled={!deptForm.name || !deptForm.code}
+                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Create Department
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bulk Errors Modal */}
+        {showBulkErrorsModal && (
+          <div
+            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+            onClick={() => setShowBulkErrorsModal(false)}
+          >
+            <div
+              className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold mb-4 text-red-800">Bulk Upload Errors</h3>
+              <table className="w-full text-sm text-left text-gray-500">
+                <thead className="text-xs text-gray-700 uppercase bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3">#</th>
+                    <th scope="col" className="px-6 py-3">Error</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bulkErrors.map((err, index) => (
+                    <tr key={index} className="bg-white border-b">
+                      <td className="px-6 py-4 font-medium text-gray-900">{index + 1}</td>
+                      <td className="px-6 py-4">{typeof err === 'object' ? JSON.stringify(err) : err}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="flex justify-end mt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkErrorsModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
+
+
 export default AdministratorAccessCreation;
+
+
+
+
+

@@ -106,53 +106,80 @@ async def create_user(user_data: UserCreate):
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
-                # Step 1: Lookup college_id
-                cursor.execute("SELECT college_id FROM colleges WHERE name = %s", (user_data.college_name,))
-                college_res = cursor.fetchone()
-                if not college_res:
-                    raise HTTPException(status_code=400, detail=f"College '{user_data.college_name}' not found")
-                college_id = college_res['college_id']
 
-                # Step 2: Lookup department_id via college_departments mapping
+                # 1️⃣ Lookup college_id
+                cursor.execute("SELECT college_id FROM colleges WHERE name = %s AND is_active = 1",
+                               (user_data.college_name,))
+                college_res = cursor.fetchone()
+
+                if not college_res:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"College '{user_data.college_name}' not found"
+                    )
+
+                college_id = college_res["college_id"]
+
+                # 2️⃣ Lookup department_id directly from departments table (new schema)
                 department_id = None
                 if user_data.department_name:
                     cursor.execute("""
-                        SELECT d.department_id
-                        FROM departments d
-                        JOIN college_departments cd ON cd.department_id = d.department_id
-                        WHERE d.department_name = %s AND cd.college_id = %s
+                        SELECT department_id 
+                        FROM departments
+                        WHERE department_name = %s
+                          AND college_id = %s
+                          AND is_active = 1
                     """, (user_data.department_name, college_id))
-                    dept_res = cursor.fetchone()
-                    if not dept_res:
-                        raise HTTPException(status_code=400, detail=f"Department '{user_data.department_name}' not found for college '{user_data.college_name}'")
-                    department_id = dept_res['department_id']
 
-                # Step 3: Check username uniqueness
+                    dept_res = cursor.fetchone()
+
+                    if not dept_res:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Department '{user_data.department_name}' not found for college '{user_data.college_name}'"
+                        )
+
+                    department_id = dept_res["department_id"]
+
+                # 3️⃣ Check username uniqueness
                 cursor.execute("SELECT user_id FROM users WHERE username = %s", (user_data.username,))
                 if cursor.fetchone():
                     raise HTTPException(status_code=400, detail=f"Username '{user_data.username}' already exists")
 
-                # Step 4: Get role_id
+                # 4️⃣ Get role_id
                 role_id = ROLE_MAP.get(user_data.role)
                 if not role_id:
                     raise HTTPException(status_code=400, detail=f"Invalid role: {user_data.role}")
 
-                # Step 5: Hash password
-                password_hash = bcrypt.hashpw(user_data.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                # 5️⃣ Hash password
+                password_hash = bcrypt.hashpw(
+                    user_data.password.encode("utf-8"), bcrypt.gensalt()
+                ).decode("utf-8")
 
-                # Step 6: Insert user
+                # 6️⃣ Insert new user
                 cursor.execute("""
-                    INSERT INTO users (username, password_hash, full_name, college_id, department_id, role_id, created_at, updated_at)
+                    INSERT INTO users 
+                    (username, password_hash, full_name, college_id, department_id, role_id, created_at, updated_at)
                     VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW())
-                """, (user_data.username, password_hash, user_data.full_name, college_id, department_id, role_id))
+                """, (
+                    user_data.username,
+                    password_hash,
+                    user_data.full_name,
+                    college_id,
+                    department_id,
+                    role_id
+                ))
 
                 conn.commit()
+
                 return {
                     "status": "success",
                     "message": "User created successfully",
                     "data": {
                         "username": user_data.username,
-                        "role": user_data.role
+                        "role": user_data.role,
+                        "college_id": college_id,
+                        "department_id": department_id
                     }
                 }
 
@@ -160,10 +187,9 @@ async def create_user(user_data: UserCreate):
         raise
     except Exception as e:
         if conn:
-            try:
-                conn.rollback()
-            except:
-                pass
+            try: conn.rollback()
+            except: pass
+
         raise HTTPException(status_code=500, detail=f"Error creating user: {str(e)}")
 
     
@@ -457,29 +483,32 @@ async def get_user(user_id: int):
 
 @router.get("/colleges/{college_id}/departments/{department_id}/assignments")
 async def get_assignments_by_department(
-    college_id: int, 
+    college_id: int,
     department_id: int,
-    student_id: int = None  # Optional: to check student-specific completion
+    student_id: int = None
 ):
-    """Fetch assignments with comprehensive status information"""
+    """Fetch assignments with full status details (new schema version)."""
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
-                # Ensure the department belongs to this college
+
+                # 1️⃣ Validate department belongs to this college (new schema)
                 cursor.execute("""
-                    SELECT 1
-                    FROM college_departments
-                    WHERE college_id = %s AND department_id = %s
-                """, (college_id, department_id))
-                
-                relation = cursor.fetchone()
-                if not relation:
+                    SELECT department_name
+                    FROM departments
+                    WHERE department_id = %s
+                      AND college_id = %s
+                      AND is_active = 1
+                """, (department_id, college_id))
+
+                department = cursor.fetchone()
+                if not department:
                     raise HTTPException(
                         status_code=404,
                         detail=f"Department {department_id} does not belong to College {college_id}"
                     )
 
-                # Fetch assignments with comprehensive status
+                # 2️⃣ Fetch assignments safely + new schema
                 query = """
                     SELECT 
                         a.assignment_id,
@@ -491,74 +520,100 @@ async def get_assignments_by_department(
                         a.start_date,
                         a.end_date,
                         a.is_active,
+
                         d.department_name,
                         c.name AS college_name,
-                        
+
                         -- Time-based status
                         CASE 
-                            WHEN a.is_active = FALSE THEN 'inactive'
-                            WHEN NOW() < a.start_date THEN 'upcoming'
-                            WHEN NOW() > a.end_date THEN 'expired'
-                            WHEN NOW() BETWEEN a.start_date AND a.end_date THEN 'active'
-                            ELSE 'ongoing'
-                        END AS time_status,
-                        
-                        -- Student-specific completion status (if student_id provided)
-                        CASE WHEN %s IS NOT NULL THEN
-                            EXISTS (
-                                SELECT 1 FROM assignment_marks am 
-                                WHERE am.assignment_id = a.assignment_id 
-                                AND am.student_id = %s
-                            )
-                        ELSE NULL END AS student_has_submitted,
-                        
-                        -- Student's marks if submitted
-                        CASE WHEN %s IS NOT NULL THEN
-                            (SELECT am.marks_obtained FROM assignment_marks am 
-                             WHERE am.assignment_id = a.assignment_id 
-                             AND am.student_id = %s)
-                        ELSE NULL END AS student_marks_obtained,
-                        
-                        -- Overall submission count
-                        (SELECT COUNT(*) FROM assignment_marks am 
-                         WHERE am.assignment_id = a.assignment_id) AS total_submissions,
-                         
-                        -- Pass/fail status for student
-                        CASE WHEN %s IS NOT NULL THEN
-                            CASE WHEN EXISTS (
-                                SELECT 1 FROM assignment_marks am 
-                                WHERE am.assignment_id = a.assignment_id 
-                                AND am.student_id = %s
-                                AND am.marks_obtained >= a.passing_marks
-                            ) THEN 'passed'
-                            WHEN EXISTS (
-                                SELECT 1 FROM assignment_marks am 
-                                WHERE am.assignment_id = a.assignment_id 
-                                AND am.student_id = %s
-                                AND am.marks_obtained < a.passing_marks
-                            ) THEN 'failed'
-                            ELSE 'not_attempted' END
-                        ELSE 'unknown' END AS student_result
+                        WHEN a.is_active = 0 THEN 'inactive'
+                        WHEN NOW() < a.start_date THEN 'upcoming'
+                        WHEN a.end_date IS NULL THEN 'active'           -- No deadline = always active
+                        WHEN NOW() > a.end_date THEN 'expired'
+                        WHEN NOW() >= a.start_date AND NOW() <= a.end_date THEN 'active'
+                        ELSE 'unknown'
+                    END AS time_status,
+
+                        -- Student submitted?
+                        CASE 
+                            WHEN %s IS NOT NULL THEN
+                                EXISTS (
+                                    SELECT 1 FROM assignment_marks am 
+                                    JOIN users u2 ON am.student_id = u2.user_id
+                                    WHERE am.assignment_id = a.assignment_id
+                                      AND am.student_id = %s
+                                      AND u2.is_active = 1
+                                )
+                            ELSE NULL
+                        END AS student_has_submitted,
+
+                        -- Student marks obtained
+                        CASE 
+                            WHEN %s IS NOT NULL THEN
+                                (SELECT am.marks_obtained 
+                                 FROM assignment_marks am 
+                                 JOIN users u2 ON am.student_id = u2.user_id
+                                 WHERE am.assignment_id = a.assignment_id
+                                   AND am.student_id = %s
+                                   AND u2.is_active = 1
+                                 LIMIT 1)
+                            ELSE NULL
+                        END AS student_marks_obtained,
+
+                        -- Total submissions (only active students)
+                        (SELECT COUNT(*) FROM assignment_marks am
+                         JOIN users u3 ON am.student_id = u3.user_id
+                         WHERE am.assignment_id = a.assignment_id
+                           AND u3.is_active = 1) AS total_submissions,
+
+                        -- Student result
+                        CASE 
+                            WHEN %s IS NULL THEN 'unknown'
+                            ELSE
+                                CASE
+                                    WHEN EXISTS (
+                                        SELECT 1 FROM assignment_marks am 
+                                        JOIN users u4 ON am.student_id = u4.user_id
+                                        WHERE am.assignment_id = a.assignment_id
+                                          AND am.student_id = %s
+                                          AND am.marks_obtained >= a.passing_marks
+                                          AND u4.is_active = 1
+                                    ) THEN 'passed'
+                                    WHEN EXISTS (
+                                        SELECT 1 FROM assignment_marks am 
+                                        JOIN users u5 ON am.student_id = u5.user_id
+                                        WHERE am.assignment_id = a.assignment_id
+                                          AND am.student_id = %s
+                                          AND am.marks_obtained < a.passing_marks
+                                          AND u5.is_active = 1
+                                    ) THEN 'failed'
+                                    ELSE 'not_attempted'
+                                END
+                        END AS student_result
 
                     FROM assignments a
                     JOIN departments d ON a.department_id = d.department_id
-                    JOIN college_departments cd ON d.department_id = cd.department_id
-                    JOIN colleges c ON cd.college_id = c.college_id
-                    WHERE d.department_id = %s AND c.college_id = %s
+                    JOIN colleges c ON a.college_id = c.college_id
+
+                    WHERE a.college_id = %s
+                      AND a.department_id = %s
+                      AND d.is_active = 1
+                      AND a.is_active = 1   -- only active assignments
+
                     ORDER BY 
                         CASE 
-                            WHEN NOW() BETWEEN a.start_date AND a.end_date THEN 0  -- Active first
-                            WHEN NOW() < a.start_date THEN 1  -- Upcoming next
-                            ELSE 2  -- Expired last
+                            WHEN NOW() BETWEEN a.start_date AND a.end_date THEN 0
+                            WHEN NOW() < a.start_date THEN 1
+                            ELSE 2
                         END,
                         a.end_date ASC
                 """
-                
+
                 cursor.execute(query, (
-                    student_id, student_id,  # for student_has_submitted
-                    student_id, student_id,  # for student_marks_obtained  
-                    student_id, student_id, student_id,  # for student_result
-                    department_id, college_id
+                    student_id, student_id,
+                    student_id, student_id,
+                    student_id, student_id, student_id,
+                    college_id, department_id
                 ))
 
                 assignments = cursor.fetchall()
@@ -566,6 +621,7 @@ async def get_assignments_by_department(
                 return {
                     "status": "success",
                     "count": len(assignments),
+                    "department_name": department["department_name"],
                     "data": assignments
                 }
 
@@ -576,18 +632,97 @@ async def get_assignments_by_department(
             status_code=500,
             detail=f"Error fetching assignments: {str(e)}"
         )
-    
+
+
+
+@router.get("/{student_id}/topics-progress")
+async def get_student_topic_progress(student_id: int):
+
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+
+                query = """
+                    SELECT
+                        t.topic_id,
+                        t.topic_name,
+                        t.total_sub_topics,
+                        d.department_name,
+                        c.name AS college_name,
+
+                        stp.completed_sub_topics,
+                        stp.total_sub_topics,
+                        stp.progress_percent,
+                        stp.average_score,
+                        stp.status,
+                        stp.last_updated
+
+                    FROM topics t
+                    JOIN departments d 
+                        ON d.department_id = t.department_id
+                    JOIN colleges c
+                        ON c.college_id = t.college_id
+
+                    LEFT JOIN student_topic_progress stp
+                        ON stp.topic_id = t.topic_id
+                        AND stp.student_id = %s
+
+                    WHERE t.is_active = 1
+                        AND d.is_active = 1
+                        AND t.college_id = (
+                            SELECT college_id FROM users WHERE user_id = %s
+                        )
+                        AND t.department_id = (
+                            SELECT department_id FROM users WHERE user_id = %s
+                        )
+
+                    ORDER BY t.topic_name
+                """
+
+                cursor.execute(query, (student_id, student_id, student_id))
+                topics = cursor.fetchall() or []
+
+                return {
+                    "status": "success",
+                    "count": len(topics),
+                    "data": topics
+                }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
     
 
 @router.get("/colleges/{college_id}/departments/{department_id}/topics")
 async def get_topics_with_progress(college_id: int, department_id: int):
     """
-    Fetch all active topics for a given department in a specific college,
-    including average progress and average score for each topic.
+    Fetch all active topics for a given college + department,
+    including average progress and average score.
+    Uses the new schema (topics have college_id + department_id).
     """
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
+
+                # 1️⃣ Validate the department belongs to this college
+                cursor.execute("""
+                    SELECT department_name
+                    FROM departments
+                    WHERE department_id = %s
+                      AND college_id = %s
+                      AND is_active = 1
+                """, (department_id, college_id))
+
+                dept = cursor.fetchone()
+                if not dept:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Department not found under this college."
+                    )
+
+                # 2️⃣ Fetch topics with progress (new schema)
                 query = """
                     SELECT 
                         t.topic_id,
@@ -595,32 +730,47 @@ async def get_topics_with_progress(college_id: int, department_id: int):
                         t.total_sub_topics,
                         d.department_name,
                         c.name AS college_name,
+
                         ROUND(AVG(stp.progress_percent), 2) AS avg_progress_percent,
                         ROUND(AVG(stp.average_score), 2) AS avg_score
-                    FROM department_topic_map dtm
-                    INNER JOIN topics t 
-                        ON dtm.topic_id = t.topic_id
-                    INNER JOIN departments d 
-                        ON dtm.department_id = d.department_id
-                    INNER JOIN college_departments cd 
-                        ON d.department_id = cd.department_id
-                    INNER JOIN colleges c 
-                        ON cd.college_id = c.college_id
-                    LEFT JOIN student_topic_progress stp 
-                        ON t.topic_id = stp.topic_id
-                    WHERE d.department_id = %s
-                        AND c.college_id = %s
+
+                    FROM topics t
+                    JOIN departments d 
+                        ON t.department_id = d.department_id
+                    JOIN colleges c 
+                        ON t.college_id = c.college_id
+
+                    LEFT JOIN student_topic_progress stp
+                        ON stp.topic_id = t.topic_id
+                       AND stp.student_id IN (
+                            SELECT user_id 
+                            FROM users 
+                            WHERE college_id = %s 
+                              AND department_id = %s
+                              AND is_active = 1
+                        )
+
+                    WHERE 
+                        t.college_id = %s 
+                        AND t.department_id = %s
                         AND t.is_active = 1
+                        AND d.is_active = 1
+
                     GROUP BY 
-                        t.topic_id, 
-                        t.topic_name, 
+                        t.topic_id,
+                        t.topic_name,
                         t.total_sub_topics,
                         d.department_name,
                         c.name
+
                     ORDER BY t.topic_name ASC
                 """
 
-                cursor.execute(query, (department_id, college_id))
+                cursor.execute(query, (
+                    college_id, department_id,   # filter student progress
+                    college_id, department_id    # filter topics
+                ))
+
                 topics = cursor.fetchall() or []
 
                 return {
@@ -632,9 +782,8 @@ async def get_topics_with_progress(college_id: int, department_id: int):
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error fetching topics with progress for department {department_id} in college {college_id}: {str(e)}"
+            detail=f"Error fetching topics with progress: {str(e)}"
         )
-
 
 
 

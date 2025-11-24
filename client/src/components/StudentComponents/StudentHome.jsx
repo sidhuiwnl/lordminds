@@ -32,7 +32,7 @@ const StudentHome = () => {
 
       if (userData.college_id && userData.department_id) {
         await fetchAssignments(userData.college_id, userData.department_id, user.user_id);
-        await fetchTopics(userData.college_id, userData.department_id);
+        await fetchTopicsForStudent(user.user_id);
       } else {
         console.error("Missing college_id or department_id for user");
       }
@@ -60,7 +60,7 @@ const StudentHome = () => {
         const hasSubmitted = assignment.student_has_submitted === true;
         const isExpired = assignment.time_status === 'expired';
         const isActive = assignment.time_status === 'active';
-        
+
         // Determine if assignment is unlocked
         // First assignment is always unlocked
         // Subsequent assignments are unlocked if previous one is submitted or expired
@@ -79,8 +79,8 @@ const StudentHome = () => {
           isUnlocked = true;
         }
 
-        return { 
-          ...assignment, 
+        return {
+          ...assignment,
           isUnlocked,
           hasSubmitted,
           isExpired,
@@ -95,10 +95,10 @@ const StudentHome = () => {
   }
 
   // ✅ Fetch topics dynamically
-  async function fetchTopics(college_id, department_id) {
+  async function fetchTopicsForStudent(student_id) {
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_BACKEND_API_URL}/users/colleges/${college_id}/departments/${department_id}/topics`,
+        `${import.meta.env.VITE_BACKEND_API_URL}/users/${student_id}/topics-progress`,
         { method: "GET", headers: { "Content-Type": "application/json" } }
       );
 
@@ -106,65 +106,92 @@ const StudentHome = () => {
 
       const data = await response.json();
 
-      console.log("The topic data", data.data);
-      const formattedTopics = (data.data || []).map((topic) => ({
-        id: topic.topic_id,
-        title: topic.topic_name,
-        status: "Not Started",
-        icon: "📘",
-        progress: topic.avg_progress_percent || 0,
-        score: topic.avg_score || 0,
-        color: "gray",
-        department: topic.department_name,
-        college: topic.college_name,
-      }));
+      console.log("Student topic progress data", data.data);
+
+      const formattedTopics = (data.data || []).map((topic) => {
+        let status = "Not Started";
+
+        if (topic.avg_progress_percent > 0 && topic.avg_progress_percent < 100) {
+          status = "In Progress";
+        } else if (topic.avg_progress_percent === 100) {
+          status = "Completed";
+        }
+
+        return {
+          id: topic.topic_id,
+          title: topic.topic_name,
+          status: status,
+          icon: "📘",
+          progress: topic.avg_progress_percent || 0,
+          score: topic.avg_score || 0,
+          color: "gray",
+          department: topic.department_name,
+          college: topic.college_name,
+        };
+      });
+
 
       setTopics(formattedTopics);
+
     } catch (error) {
-      console.error("Error fetching topics:", error);
+      console.error("Error fetching student topics:", error);
     }
   }
+
 
   useEffect(() => {
     getUserDetails();
   }, []);
 
-  // Get button text and styling based on assignment status
+ 
   const getAssignmentButtonConfig = (assignment) => {
+    const user = JSON.parse(localStorage.getItem("user"));
+    const studentId = user?.user_id;
+
+    // ✅ If student completed test → show view test button
     if (assignment.hasSubmitted) {
       return {
-        text: "✅ View Results",
-        className: "bg-green-100 text-green-800 hover:bg-green-200",
+        text: "📘 View Test",
+        className: "bg-blue-100 text-blue-800 hover:bg-blue-200",
         disabled: false,
-        action: () => navigate(`/student/assignment/${assignment.assignment_id}/results`)
+        action: () => navigate(`/student/assignment/${assignment.assignment_id}/view-test`)
       };
-    } else if (assignment.isExpired) {
+    }
+
+    // ❌ Expired but not submitted → cannot start
+    if (assignment.isExpired) {
       return {
         text: "🔴 Time Expired",
         className: "bg-red-100 text-red-800 cursor-not-allowed",
         disabled: true
       };
-    } else if (assignment.isActive && assignment.isUnlocked) {
+    }
+
+    // 🟡 Active and unlocked → start assignment
+    if (assignment.isActive && assignment.isUnlocked) {
       return {
         text: "Start Assignment",
         className: "bg-yellow-400 text-gray-900 hover:bg-yellow-500",
         disabled: false,
         action: () => navigate(`/student/assignment/${assignment.assignment_id}`)
       };
-    } else if (!assignment.isUnlocked) {
+    }
+
+    // 🔒 Locked
+    if (!assignment.isUnlocked) {
       return {
         text: "🔒 Locked",
         className: "bg-gray-200 text-gray-500 cursor-not-allowed",
         disabled: true
       };
-    } else {
-      return {
-        text: "Cannot Start",
-        className: "bg-gray-200 text-gray-500 cursor-not-allowed",
-        disabled: true
-      };
     }
-  };
+
+    return {
+      text: "Cannot Start",
+      className: "bg-gray-200 text-gray-500 cursor-not-allowed",
+      disabled: true
+    };
+};
 
   // Get status badge text and styling
   const getStatusBadgeConfig = (assignment) => {
@@ -207,7 +234,7 @@ const StudentHome = () => {
 
   return (
     <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
-     
+
 
       {/* ===================== ASSIGNMENTS SECTION ===================== */}
       <h2 className="text-lg lg:text-xl font-bold text-gray-800 mb-4">
@@ -230,9 +257,8 @@ const StudentHome = () => {
               return (
                 <div
                   key={assignment.assignment_id}
-                  className={`min-w-[260px] lg:min-w-[500px] bg-white rounded-2xl shadow-sm p-4 lg:p-6 flex-shrink-0 transition-opacity ${
-                    !assignment.isUnlocked && !assignment.hasSubmitted ? "opacity-60" : ""
-                  }`}
+                  className={`min-w-[260px] lg:min-w-[500px] bg-white rounded-2xl shadow-sm p-4 lg:p-6 flex-shrink-0 transition-opacity ${!assignment.isUnlocked && !assignment.hasSubmitted ? "opacity-60" : ""
+                    }`}
                 >
                   <div className="flex justify-between items-start mb-3">
                     <h3 className="font-bold text-base lg:text-lg text-gray-800">
@@ -245,8 +271,17 @@ const StudentHome = () => {
                     </span>
                   </div>
 
-                  <p className="text-xs text-gray-500 mb-2">
-                    Due: {new Date(assignment.end_date).toLocaleDateString()}
+                  <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+
+                    {assignment.end_date ? (
+                      new Date(assignment.end_date).toLocaleDateString()
+                    ) : (
+                      <span className="text-emerald-600 font-medium">No Due Date • Ongoing</span>
+                    )}
                   </p>
 
                   {assignment.student_marks_obtained !== null && (

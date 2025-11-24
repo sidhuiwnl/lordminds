@@ -1,77 +1,73 @@
-// import React from "react";
-// import StudentHeader from "../components/StudentHeader";
-// import Sidebar from "../components/Sidebar";
-// import StudentHome from "../components/StudentHome";
-
-// const StudentHomePage = () => {
-//   return (
-//     <div className="flex h-screen bg-gray-50">
-//       {/* Sidebar - Full height */}
-//       <Sidebar />
-
-//       {/* Content Area */}
-//       <div className="flex-1 flex flex-col overflow-hidden">
-//         {/* Header */}
-//         <StudentHeader />
-
-//         {/* Main Content */}
-//         <main className="flex-1 overflow-y-auto p-6">
-//           <StudentHome />
-//         </main>
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default StudentHomePage;
-
-
-
-
-
-
-
-
-
-
 import React, { useState } from "react";
-import StudentHeader from "../../components/StudentComponents/StudentHeader";
 import Sidebar from "../../components/StudentComponents/Sidebar";
+import StudentHeader from "../../components/StudentComponents/StudentHeader";
 import StudentHome from "../../components/StudentComponents/StudentHome";
 
 const StudentHomePage = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
+    setIsMobileMenuOpen(prev => !prev);
   };
 
   return (
     <div className="flex h-screen bg-gray-50 lg:bg-white">
-      {/* Mobile Menu Overlay */}
+      {/* Mobile Overlay */}
       {isMobileMenuOpen && (
-        <div 
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden" 
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
           onClick={toggleMobileMenu}
         />
       )}
 
       {/* Sidebar */}
-      <Sidebar 
-        isOpen={isMobileMenuOpen} 
-        onClose={toggleMobileMenu} 
+      <Sidebar
+        isOpen={isMobileMenuOpen}
+        onClose={toggleMobileMenu}
         isMobile={true}
       />
 
-      {/* Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <StudentHeader onMenuToggle={toggleMobileMenu} />
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto">
-          <StudentHome />
-        </main>
+        {/* Floating Hamburger — Hidden when menu is open */}
+        <div
+          className={`lg:hidden fixed top-4 left-4 z-50 transition-all duration-300 ease-out ${
+            isMobileMenuOpen
+              ? "opacity-0 pointer-events-none scale-90"
+              : "opacity-100 scale-100"
+          }`}
+        >
+          <button
+            onClick={toggleMobileMenu}
+            className="p-3 bg-white rounded-xl shadow-lg 
+                       text-gray-700 hover:text-gray-900 hover:bg-gray-50 
+                       transition-all duration-200 border border-gray-200 
+                       active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-300"
+            aria-label="Open menu"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 12h16M4 18h16"
+              />
+            </svg>
+          </button>
+        </div>
+
+        {/* Header (Desktop) + Content */}
+        <div className="flex flex-col flex-1">
+          <StudentHeader onMenuToggle={toggleMobileMenu} />
+
+          {/* Main Content */}
+          <main className="flex-1 overflow-y-auto pt-20 lg:pt-0 bg-gray-50">
+            <div className="px-4 lg:px-0">
+              <StudentHome />
+            </div>
+          </main>
+        </div>
       </div>
     </div>
   );

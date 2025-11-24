@@ -11,32 +11,26 @@ router = APIRouter()
 async def get_department_topics_average_progress(college_id: int, department_id: int):
     """
     Fetch average progress and score for all topics under a specific department of a college.
-    Each topic shows overall completion percentage and average marks across all students.
     """
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
                 query = """
                     SELECT 
-                    t.topic_id,
-                    t.topic_name,
-                    COUNT(stp.student_id) AS total_students,
-                    ROUND(AVG(stp.progress_percent), 2) AS avg_progress_percent,
-                    ROUND(AVG(stp.average_score), 2) AS avg_score,
-                    SUM(CASE WHEN stp.status = 'Completed' THEN 1 ELSE 0 END) AS completed_students,
-                    SUM(CASE WHEN stp.status = 'Not Started' THEN 1 ELSE 0 END) AS not_started_students
-                FROM topics t
-                LEFT JOIN student_topic_progress stp 
-                    ON t.topic_id = stp.topic_id
-                INNER JOIN departments d 
-                    ON t.department_id = d.department_id
-                INNER JOIN college_departments cd 
-                    ON d.department_id = cd.department_id
-                INNER JOIN colleges c 
-                    ON cd.college_id = c.college_id
-                WHERE cd.department_id = %s AND cd.college_id = %s
-                GROUP BY t.topic_id, t.topic_name
-                ORDER BY t.topic_name ASC
+                        t.topic_id,
+                        t.topic_name,
+                        COUNT(stp.student_id) AS total_students,
+                        ROUND(AVG(stp.progress_percent), 2) AS avg_progress_percent,
+                        ROUND(AVG(stp.average_score), 2) AS avg_score,
+                        SUM(CASE WHEN stp.status = 'Completed' THEN 1 ELSE 0 END) AS completed_students,
+                        SUM(CASE WHEN stp.status = 'Not Started' THEN 1 ELSE 0 END) AS not_started_students
+                    FROM topics t
+                    LEFT JOIN student_topic_progress stp 
+                        ON t.topic_id = stp.topic_id
+                    WHERE t.department_id = %s 
+                      AND t.college_id = %s
+                    GROUP BY t.topic_id, t.topic_name
+                    ORDER BY t.topic_name ASC
                 """
 
                 cursor.execute(query, (department_id, college_id))
@@ -52,8 +46,6 @@ async def get_department_topics_average_progress(college_id: int, department_id:
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching topic progress: {str(e)}")
-    
-
 
 
 

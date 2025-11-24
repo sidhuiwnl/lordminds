@@ -513,11 +513,11 @@ const SuperAdminAccessCreation = () => {
 
         const college = colleges.find(c => c.college_id === formData.college);
 
-const payload = {
-  college_name: college.name,
-  department_name: formData.department,
-  topics: formData.newTopics
-};
+        const payload = {
+          college_name: college.name,
+          department_name: formData.department,
+          topics: formData.newTopics
+        };
 
         const res = await fetch(`${API_BASE}/topics/assign-topics`, {
           method: "POST",
@@ -622,52 +622,51 @@ const payload = {
           </div>
 
           <div className="flex flex-col lg:flex-row items-start gap-4">
-            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 mb-1 lg:mb-0 lg:pt-2 min-w-max">
-              Department <span className="text-red-500">*</span>
+            <label className="w-full lg:w-40 text-sm font-medium text-gray-700 lg:pt-2">
+              Departments <span className="text-red-500">*</span>
             </label>
-            <div className="flex flex-1 gap-2 w-full">
-              <Select
-                isMulti
-                options={departments.map(dept => ({ value: dept.department_name || dept.name, label: dept.department_name || dept.name }))}
-                value={formData.selectedDepartments.map(deptName => ({ value: deptName, label: deptName }))}
-                onChange={(options) => handleSelectChange(options, "selectedDepartments")}
-                className="flex-1"
-                placeholder="Select departments"
-                isClearable
-                closeMenuOnSelect={false}
-                required
-                styles={{
-                  control: (base, state) => ({
-                    ...base,
-                    minHeight: '42px',
-                    padding: '0 8px',
-                    fontSize: '0.875rem',
-                    borderColor: state.hasValue && formData.selectedDepartments.length > 0 ? 'rgb(229 231 235)' : 'rgb(239 68 68)',
-                    '&:hover': {
-                      borderColor: state.hasValue && formData.selectedDepartments.length > 0 ? 'rgb(209 213 219)' : 'rgb(239 68 68)',
-                    },
-                    boxShadow: 'none',
-                    '&:focus': {
-                      outline: 'none',
-                      boxShadow: state.hasValue && formData.selectedDepartments.length > 0 ? '0 0 0 2px rgba(59, 130, 246, 0.5)' : '0 0 0 2px rgba(239, 68, 68, 0.5)',
-                    },
-                  }),
-                  multiValue: (base) => ({
-                    ...base,
-                    backgroundColor: 'rgb(224 242 254)',
-                  }),
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowAddDeptModal(true)}
-                className="bg-green-500 text-white px-3 py-2 rounded text-sm font-medium hover:bg-green-600 flex items-center gap-1 whitespace-nowrap"
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add
-              </button>
+
+            <div className="flex-1">
+              <div className="border border-gray-300 rounded-lg p-2 min-h-[50px] flex flex-wrap gap-2">
+                {formData.selectedDepartments.map((dept, idx) => (
+                  <div key={idx} className="flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
+                    <span>{dept}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          selectedDepartments: prev.selectedDepartments.filter((_, i) => i !== idx)
+                        }))
+                      }}
+                      className="text-red-600 font-bold"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+
+                <input
+                  type="text"
+                  value={deptForm.name}
+                  onChange={(e) => setDeptForm(prev => ({ ...prev, name: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && deptForm.name.trim() !== "") {
+                      e.preventDefault();
+                      setFormData(prev => ({
+                        ...prev,
+                        selectedDepartments: [...prev.selectedDepartments, deptForm.name.trim()]
+                      }));
+                      setDeptForm({ name: "" });
+                    }
+                  }}
+                  className="flex-1 min-w-[120px] px-2 py-1 outline-none text-sm"
+                  placeholder="Type department & press Enter"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Press <b>Enter</b> to add department.
+              </p>
             </div>
           </div>
         </>

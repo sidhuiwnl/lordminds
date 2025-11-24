@@ -250,6 +250,7 @@ const SuperAdminUpload = () => {
       fetchAssignments();
       // reset partial fields
       setFormData((p) => ({ ...p, assignmentNo: "", assignmentTopic: "", file: null, startDate: "", endDate: "" }));
+      window.reload();
     } catch (err) {
       console.error(err);
       toast.error("Failed to upload assignment");
@@ -629,26 +630,16 @@ const SuperAdminUpload = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Sub-Topic Name
                 </label>
-                <Select
-                  options={mapOptions(
-                    getSubTopicsForTopic(formData.topicId),
-                    "sub_topic_id",
-                    "sub_topic_name"
-                  )}
-                  value={
-                    mapOptions(
-                      getSubTopicsForTopic(formData.topicId),
-                      "sub_topic_id",
-                      "sub_topic_name"
-                    ).find((o) => String(o.value) === String(formData.subTopicId)) || null
-                  }
-                  onChange={(opt) => {
-                    setField("subTopicId", opt?.value || "");
-                    setField("subTopicName", opt?.label || "");
+
+                <input
+                  type="text"
+                  value={formData.subTopicName || ""}
+                  onChange={(e) => {
+                    setField("subTopicName", e.target.value);
+                    setField("subTopicId", null); // Not using ID since it's manual
                   }}
-                  placeholder="Select Sub-Topic"
-                  isDisabled={!formData.topicId}
-                  isClearable
+                  placeholder="Enter Sub-Topic Name"
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
