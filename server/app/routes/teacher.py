@@ -120,6 +120,7 @@ async def get_student_average_for_topic(topic_id: int):
                 query = """
                     SELECT 
                         u.username AS student_name,
+                        u.full_name,
                         ROUND(SUM(stm.marks_obtained) / SUM(stm.max_marks) * 100, 2) AS average_score
                     FROM sub_topic_marks stm
                     JOIN sub_topics st ON st.sub_topic_id = stm.sub_topic_id
@@ -143,6 +144,7 @@ async def get_student_average_for_topic(topic_id: int):
                 data = [
                     {
                         "student_name": row["student_name"],
+                        "full_name": row["full_name"],
                         "average_score": float(row["average_score"]) if row["average_score"] is not None else 0.0
                     }
                     for row in results

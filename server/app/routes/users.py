@@ -487,12 +487,12 @@ async def get_assignments_by_department(
     department_id: int,
     student_id: int = None
 ):
-    """Fetch assignments with full status details (new schema version)."""
+    """Fetch assignments + submission + test completion status."""
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
 
-                # 1️⃣ Validate department belongs to this college (new schema)
+                # 1️⃣ Validate department belongs to this college
                 cursor.execute("""
                     SELECT department_name
                     FROM departments
@@ -508,15 +508,13 @@ async def get_assignments_by_department(
                         detail=f"Department {department_id} does not belong to College {college_id}"
                     )
 
-                # 2️⃣ Fetch assignments safely + new schema
+                # 2️⃣ SQL for assignments + student submission + test completion
                 query = """
                     SELECT 
                         a.assignment_id,
                         a.assignment_number,
                         a.assignment_topic,
                         a.description,
-                        a.total_marks,
-                        a.passing_marks,
                         a.start_date,
                         a.end_date,
                         a.is_active,
@@ -526,70 +524,57 @@ async def get_assignments_by_department(
 
                         -- Time-based status
                         CASE 
-                        WHEN a.is_active = 0 THEN 'inactive'
-                        WHEN NOW() < a.start_date THEN 'upcoming'
-                        WHEN a.end_date IS NULL THEN 'active'           -- No deadline = always active
-                        WHEN NOW() > a.end_date THEN 'expired'
-                        WHEN NOW() >= a.start_date AND NOW() <= a.end_date THEN 'active'
-                        ELSE 'unknown'
-                    END AS time_status,
+                            WHEN a.is_active = 0 THEN 'inactive'
+                            WHEN NOW() < a.start_date THEN 'upcoming'
+                            WHEN a.end_date IS NULL THEN 'active'
+                            WHEN NOW() > a.end_date THEN 'expired'
+                            WHEN NOW() BETWEEN a.start_date AND a.end_date THEN 'active'
+                            ELSE 'unknown'
+                        END AS time_status,
 
-                        -- Student submitted?
+                        -- Student submitted (assignment_marks)
                         CASE 
                             WHEN %s IS NOT NULL THEN
                                 EXISTS (
-                                    SELECT 1 FROM assignment_marks am 
-                                    JOIN users u2 ON am.student_id = u2.user_id
+                                    SELECT 1 
+                                    FROM assignment_marks am 
                                     WHERE am.assignment_id = a.assignment_id
                                       AND am.student_id = %s
-                                      AND u2.is_active = 1
                                 )
                             ELSE NULL
                         END AS student_has_submitted,
 
-                        -- Student marks obtained
+                        -- Student score
                         CASE 
                             WHEN %s IS NOT NULL THEN
                                 (SELECT am.marks_obtained 
                                  FROM assignment_marks am 
-                                 JOIN users u2 ON am.student_id = u2.user_id
                                  WHERE am.assignment_id = a.assignment_id
                                    AND am.student_id = %s
-                                   AND u2.is_active = 1
                                  LIMIT 1)
                             ELSE NULL
                         END AS student_marks_obtained,
 
-                        -- Total submissions (only active students)
-                        (SELECT COUNT(*) FROM assignment_marks am
-                         JOIN users u3 ON am.student_id = u3.user_id
+                        -- Total submissions
+                        (SELECT COUNT(*) 
+                         FROM assignment_marks am
                          WHERE am.assignment_id = a.assignment_id
-                           AND u3.is_active = 1) AS total_submissions,
+                        ) AS total_submissions,
 
-                        -- Student result
+                        -- ⭐ Test completed (student_test_attempts)
                         CASE 
-                            WHEN %s IS NULL THEN 'unknown'
-                            ELSE
-                                CASE
-                                    WHEN EXISTS (
-                                        SELECT 1 FROM assignment_marks am 
-                                        JOIN users u4 ON am.student_id = u4.user_id
-                                        WHERE am.assignment_id = a.assignment_id
-                                          AND am.student_id = %s
-                                          AND am.marks_obtained >= a.passing_marks
-                                          AND u4.is_active = 1
-                                    ) THEN 'passed'
-                                    WHEN EXISTS (
-                                        SELECT 1 FROM assignment_marks am 
-                                        JOIN users u5 ON am.student_id = u5.user_id
-                                        WHERE am.assignment_id = a.assignment_id
-                                          AND am.student_id = %s
-                                          AND am.marks_obtained < a.passing_marks
-                                          AND u5.is_active = 1
-                                    ) THEN 'failed'
-                                    ELSE 'not_attempted'
-                                END
-                        END AS student_result
+                            WHEN %s IS NULL THEN NULL
+                            ELSE (
+                                SELECT 
+                                    CASE WHEN is_completed = 1 THEN TRUE ELSE FALSE END
+                                FROM student_test_attempts sta
+                                WHERE sta.student_id = %s
+                                  AND sta.test_scope = 'assignment'
+                                  AND sta.reference_id = a.assignment_id
+                                  AND sta.is_completed = TRUE
+                                LIMIT 1
+                            )
+                        END AS test_completed
 
                     FROM assignments a
                     JOIN departments d ON a.department_id = d.department_id
@@ -598,7 +583,7 @@ async def get_assignments_by_department(
                     WHERE a.college_id = %s
                       AND a.department_id = %s
                       AND d.is_active = 1
-                      AND a.is_active = 1   -- only active assignments
+                      AND a.is_active = 1
 
                     ORDER BY 
                         CASE 
@@ -610,10 +595,10 @@ async def get_assignments_by_department(
                 """
 
                 cursor.execute(query, (
-                    student_id, student_id,
-                    student_id, student_id,
-                    student_id, student_id, student_id,
-                    college_id, department_id
+                    student_id, student_id,      # student_has_submitted
+                    student_id, student_id,      # student_marks_obtained
+                    student_id, student_id,      # test_completed
+                    college_id, department_id    # filters
                 ))
 
                 assignments = cursor.fetchall()
@@ -1147,6 +1132,7 @@ async def get_total_duration(user_id: int):
                     SELECT 
                         u.user_id,
                         u.username AS student_name,
+                        u.full_name,       
                         ROUND(SUM(us.duration_seconds) / 3600, 2) AS total_hours
                     FROM user_sessions us
                     JOIN users u ON us.user_id = u.user_id

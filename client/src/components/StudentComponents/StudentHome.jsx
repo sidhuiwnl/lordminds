@@ -57,36 +57,34 @@ const StudentHome = () => {
 
       // ✅ Process assignments with proper status
       const processedAssignments = assignments.map((assignment, index, arr) => {
-        const hasSubmitted = assignment.student_has_submitted === true;
-        const isExpired = assignment.time_status === 'expired';
-        const isActive = assignment.time_status === 'active';
+        const isCompleted = Boolean(assignment.test_completed);
+        const isExpired = assignment.time_status === "expired";
+        const isActive = assignment.time_status === "active";
 
-        // Determine if assignment is unlocked
-        // First assignment is always unlocked
-        // Subsequent assignments are unlocked if previous one is submitted or expired
+        // Unlock logic
         let isUnlocked = false;
         if (index === 0) {
-          isUnlocked = true; // First assignment always unlocked
+          isUnlocked = true;
         } else {
-          const previousAssignment = arr[index - 1];
-          const previousSubmitted = previousAssignment.student_has_submitted === true;
-          const previousExpired = previousAssignment.time_status === 'expired';
-          isUnlocked = previousSubmitted || previousExpired;
+          const previous = arr[index - 1];
+          const prevCompleted = previous.test_completed === true;
+          const prevExpired = previous.time_status === "expired";
+          isUnlocked = prevCompleted || prevExpired;
         }
 
-        // If current assignment is expired, it should be accessible for viewing results
-        if (isExpired && hasSubmitted) {
+        if (isExpired && isCompleted) {
           isUnlocked = true;
         }
 
         return {
           ...assignment,
           isUnlocked,
-          hasSubmitted,
+          isCompleted,
           isExpired,
-          isActive
+          isActive,
         };
       });
+
 
       setAssignmentData(processedAssignments);
     } catch (error) {
@@ -111,9 +109,12 @@ const StudentHome = () => {
       const formattedTopics = (data.data || []).map((topic) => {
         let status = "Not Started";
 
-        if (topic.avg_progress_percent > 0 && topic.avg_progress_percent < 100) {
+        const progress = topic.progress_percent ?? 0;
+        const score = topic.average_score ?? 0;
+
+        if (progress > 0 && progress < 100) {
           status = "In Progress";
-        } else if (topic.avg_progress_percent === 100) {
+        } else if (progress === 100) {
           status = "Completed";
         }
 
@@ -122,9 +123,9 @@ const StudentHome = () => {
           title: topic.topic_name,
           status: status,
           icon: "📘",
-          progress: topic.avg_progress_percent || 0,
-          score: topic.avg_score || 0,
-          color: "gray",
+          progress: progress,
+          score: score,
+          color: "yellow",
           department: topic.department_name,
           college: topic.college_name,
         };
@@ -143,13 +144,10 @@ const StudentHome = () => {
     getUserDetails();
   }, []);
 
- 
-  const getAssignmentButtonConfig = (assignment) => {
-    const user = JSON.parse(localStorage.getItem("user"));
-    const studentId = user?.user_id;
 
-    // ✅ If student completed test → show view test button
-    if (assignment.hasSubmitted) {
+  const getAssignmentButtonConfig = (assignment) => {
+    // ⭐ If test completed → show view test
+    if (assignment.isCompleted) {
       return {
         text: "📘 View Test",
         className: "bg-blue-100 text-blue-800 hover:bg-blue-200",
@@ -158,7 +156,7 @@ const StudentHome = () => {
       };
     }
 
-    // ❌ Expired but not submitted → cannot start
+    // ❌ Expired without completion
     if (assignment.isExpired) {
       return {
         text: "🔴 Time Expired",
@@ -167,7 +165,7 @@ const StudentHome = () => {
       };
     }
 
-    // 🟡 Active and unlocked → start assignment
+    // 🟡 Start normally
     if (assignment.isActive && assignment.isUnlocked) {
       return {
         text: "Start Assignment",
@@ -178,50 +176,31 @@ const StudentHome = () => {
     }
 
     // 🔒 Locked
-    if (!assignment.isUnlocked) {
-      return {
-        text: "🔒 Locked",
-        className: "bg-gray-200 text-gray-500 cursor-not-allowed",
-        disabled: true
-      };
-    }
-
     return {
-      text: "Cannot Start",
+      text: "🔒 Locked",
       className: "bg-gray-200 text-gray-500 cursor-not-allowed",
       disabled: true
     };
-};
-
-  // Get status badge text and styling
-  const getStatusBadgeConfig = (assignment) => {
-    if (assignment.hasSubmitted) {
-      return {
-        text: "✅ Submitted",
-        className: "bg-green-100 text-green-800"
-      };
-    } else if (assignment.isExpired) {
-      return {
-        text: "🔴 Expired",
-        className: "bg-red-100 text-red-800"
-      };
-    } else if (assignment.isActive && assignment.isUnlocked) {
-      return {
-        text: "🕒 Pending",
-        className: "bg-yellow-100 text-yellow-800"
-      };
-    } else if (!assignment.isUnlocked) {
-      return {
-        text: "🔒 Locked",
-        className: "bg-gray-100 text-gray-500"
-      };
-    } else {
-      return {
-        text: "Unknown",
-        className: "bg-gray-100 text-gray-500"
-      };
-    }
   };
+
+
+
+  const getStatusBadgeConfig = (assignment) => {
+    if (assignment.isCompleted) {
+      return { text: "✅ Completed", className: "bg-green-100 text-green-800" };
+    }
+    if (assignment.isExpired) {
+      return { text: "🔴 Expired", className: "bg-red-100 text-red-800" };
+    }
+    if (assignment.isActive && assignment.isUnlocked) {
+      return { text: "🕒 Pending", className: "bg-yellow-100 text-yellow-800" };
+    }
+    return { text: "🔒 Locked", className: "bg-gray-100 text-gray-500" };
+  };
+
+
+
+
 
   // 🧱 Empty state
   const EmptyState = ({ title, message, icon = "📝" }) => (
@@ -286,9 +265,10 @@ const StudentHome = () => {
 
                   {assignment.student_marks_obtained !== null && (
                     <p className="text-xs text-green-600 mb-2">
-                      Score: {assignment.student_marks_obtained}/{assignment.total_marks}
+                      Score: {assignment.student_marks_obtained}
                     </p>
                   )}
+
 
                   <p className="text-xs text-gray-500 mb-4 lg:mb-6">
                     Status: {assignment.time_status} • Submissions: {assignment.total_submissions}

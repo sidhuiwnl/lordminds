@@ -17,6 +17,7 @@ const TotalDuration = () => {
   const [loading, setLoading] = useState(true);
   const [studentName, setStudentName] = useState("");
   const [totalHours, setTotalHours] = useState(0);
+  const [fullName, setFullName] = useState("");
 
   useEffect(() => {
     const userData = localStorage.getItem("user");
@@ -36,12 +37,16 @@ const TotalDuration = () => {
         const data = await res.json();
 
         if (data.status === "success" && data.data) {
-          const { student_name, total_hours } = data.data;
+          const { student_name, total_hours, full_name } = data.data;
+
           setStudentName(student_name);
           setTotalHours(total_hours);
+          setFullName(full_name);
+
+          const labelText = `${student_name} (${full_name})`;
 
           setChartData({
-            labels: [student_name],
+            labels: [labelText],
             datasets: [
               {
                 label: "Total Hours",
@@ -65,11 +70,11 @@ const TotalDuration = () => {
 
   // 🎨 Set bar color based on hours spent
   const getBarColor = (hours) => {
-    if (hours < 2) return "rgba(239, 68, 68, 0.8)"; // 🔴 red
-    if (hours < 4) return "rgba(249, 115, 22, 0.8)"; // 🟠 orange
-    if (hours < 6) return "rgba(234, 179, 8, 0.8)";  // 🟡 yellow
-    if (hours < 10) return "rgba(59, 130, 246, 0.8)"; // 🔵 blue
-    return "rgba(34, 197, 94, 0.8)"; // 🟢 green
+    if (hours < 2) return "rgba(239, 68, 68, 0.8)";
+    if (hours < 4) return "rgba(249, 115, 22, 0.8)";
+    if (hours < 6) return "rgba(234, 179, 8, 0.8)";
+    if (hours < 10) return "rgba(59, 130, 246, 0.8)";
+    return "rgba(34, 197, 94, 0.8)";
   };
 
   const options = {

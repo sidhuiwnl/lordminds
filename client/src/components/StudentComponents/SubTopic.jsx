@@ -21,19 +21,22 @@ const SubtopicsComponent = () => {
         }
 
         const response = await fetch(
-          `${import.meta.env.VITE_BACKEND_API_URL}/topics/${userId}/subtopics/${topic}`,
+          `${import.meta.env.VITE_BACKEND_API_URL}/topics/${userId}/subtopics/${topic}`
         );
 
         if (!response.ok) throw new Error("Failed to fetch subtopics");
 
         const data = await response.json();
 
-        // ✅ NEW: Handle the single topic response structure
+        // Handle valid topic structure
         if (data.data && data.data.sub_topics) {
           const processedSubtopics = data.data.sub_topics.map((sub) => ({
             ...sub,
-            topic_name: data.data.topic_name, // Use the topic name from the response
-            progress: sub.progress?.completion_percent ?? 0,
+            topic_name: data.data.topic_name,
+            progress: {
+              completion_percent: sub.progress?.completion_percent ?? 0,
+              is_completed: sub.progress?.is_completed ?? false
+            }
           }));
 
           setSubtopics(processedSubtopics);
@@ -50,8 +53,9 @@ const SubtopicsComponent = () => {
     }
 
     fetchSubtopics();
-  }, [topic]); // ✅ Added topic as dependency
+  }, [topic]);
 
+  // LOADING UI
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen text-gray-600">
@@ -60,6 +64,7 @@ const SubtopicsComponent = () => {
     );
   }
 
+  // EMPTY STATE
   if (subtopics.length === 0) {
     return (
       <div className="flex justify-center items-center min-h-screen text-gray-500">
@@ -90,6 +95,7 @@ const SubtopicsComponent = () => {
                 </p>
               </div>
 
+              {/* ✔️ Corrected: Render based on is_completed */}
               {sub.progress?.is_completed ? (
                 <a
                   href={`/student/${sub.sub_topic_id}/view-test`}
@@ -107,19 +113,17 @@ const SubtopicsComponent = () => {
               )}
             </div>
 
-
-            {/* Progress bar */}
+            {/* Progress Bar */}
             <div className="mt-2">
-              <p className="text-xs font-semibold text-gray-700 mb-1">
-                Progress
-              </p>
+              <p className="text-xs font-semibold text-gray-700 mb-1">Progress</p>
+
               <div className="w-full bg-gray-200 rounded-full h-[25px] relative overflow-hidden">
                 <div
-                  className="bg-blue-500 h-6 rounded-full transition-all duration-500 relative"
-                  style={{ width: `${sub.progress}%` }}
+                  className="bg-blue-500 h-[25px] rounded-full transition-all duration-500 relative"
+                  style={{ width: `${sub.progress?.completion_percent ?? 0}%` }}
                 >
-                  <span className="absolute left-2 text-xs text-white font-semibold mt-1">
-                    {sub.progress}%
+                  <span className="absolute left-2 text-xs text-white font-semibold mt-[3px]">
+                    {sub.progress?.completion_percent ?? 0}%
                   </span>
                 </div>
               </div>

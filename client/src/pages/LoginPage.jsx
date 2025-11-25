@@ -175,7 +175,7 @@ const LoginPage = () => {
 
             <p className="text-center text-xs lg:text-sm text-blue-600">
               Don't have an account?{" "}
-              <a href="#" className="underline font-semibold">
+              <a href="/onboard" className="underline font-semibold">
                 Create New Profile
               </a>
             </p>

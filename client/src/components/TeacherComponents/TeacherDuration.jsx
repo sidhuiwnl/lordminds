@@ -156,7 +156,7 @@ const TeacherDuration = () => {
 
   // Filters section
   const renderFilters = () => (
-    <div className="mb-6 p-4 bg-white rounded-lg shadow-sm border border-gray-200">
+    <div className="mb-6 p-4 bg-white mt-20 rounded-lg shadow-sm border border-gray-200">
       <div className="flex-1">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Select Department

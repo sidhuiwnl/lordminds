@@ -1,6 +1,7 @@
 from datetime import datetime
+from decimal import Decimal
 import json
-from typing import Optional
+from typing import Any, Dict, Optional
 import bcrypt
 from fastapi import APIRouter, HTTPException, Form, File, UploadFile
 from config.database import get_db
@@ -63,8 +64,140 @@ async def get_specific_topic_progress(college_id: int, department_id: int, topic
 
 
 
+# @router.post("/store-marks")
+# async def store_marks(marks_data: dict):
+#     """
+#     Store subtopic marks (ONE ATTEMPT ONLY).
+#     After first submission:
+#       - Student CANNOT retake again
+#       - is_completed = TRUE always (even if failed)
+#     """
+#     try:
+#         with get_db() as conn:
+#             with conn.cursor() as cursor:
+#                 student_id = marks_data["student_id"]
+#                 sub_topic_id = marks_data["sub_topic_id"]
+#                 marks_obtained = marks_data["marks_obtained"]
+#                 max_marks = marks_data["max_marks"]
+
+#                 # 1️⃣ Validate required data
+#                 if not all([student_id, sub_topic_id, marks_obtained is not None, max_marks]):
+#                     raise HTTPException(status_code=400, detail="Missing required fields")
+
+#                 if marks_obtained < 0 or max_marks <= 0:
+#                     raise HTTPException(status_code=400, detail="Invalid marks values")
+
+#                 # 2️⃣ Verify student exists + active
+#                 cursor.execute("""
+#                     SELECT user_id FROM users 
+#                     WHERE user_id = %s AND role_id = 5 AND is_active = TRUE
+#                 """, (student_id,))
+#                 if not cursor.fetchone():
+#                     raise HTTPException(status_code=404, detail="Student not found or inactive")
+
+#                 # 3️⃣ Verify subtopic exists
+#                 cursor.execute("""
+#                     SELECT sub_topic_id, topic_id 
+#                     FROM sub_topics 
+#                     WHERE sub_topic_id = %s AND is_active = TRUE
+#                 """, (sub_topic_id,))
+#                 subtopic = cursor.fetchone()
+#                 if not subtopic:
+#                     raise HTTPException(status_code=404, detail="Subtopic not found or inactive")
+
+#                 # 4️⃣ Check if student already completed this test (BLOCK RETAKE)
+#                 cursor.execute("""
+#                     SELECT attempt_id, obtained_marks 
+#                     FROM student_test_attempts
+#                     WHERE student_id = %s
+#                       AND test_scope = 'sub_topic'
+#                       AND reference_id = %s
+#                       AND is_completed = TRUE
+#                 """, (student_id, sub_topic_id))
+
+#                 existing_attempt = cursor.fetchone()
+#                 if existing_attempt:
+#                     return {
+#                         "status": "success",
+#                         "already_completed": True,
+#                         "message": "You already completed this test. Retake is not allowed.",
+#                         "data": {
+#                             "previous_score": float(existing_attempt["obtained_marks"])
+#                         }
+#                     }
+
+#                 # 5️⃣ Score calculations
+#                 percentage = (marks_obtained / max_marks) * 100
+#                 is_passed = percentage >= 40  # Passing threshold
+
+#                 # 6️⃣ Store subtopic marks (first attempt only)
+#                 cursor.execute("""
+#                     INSERT INTO sub_topic_marks 
+#                     (student_id, sub_topic_id, marks_obtained, max_marks, percentage, is_passed, attempted_at)
+#                     VALUES (%s, %s, %s, %s, %s, %s, NOW())
+#                 """, (
+#                     student_id,
+#                     sub_topic_id,
+#                     marks_obtained,
+#                     max_marks,
+#                     percentage,
+#                     is_passed
+#                 ))
+
+#                 # 7️⃣ Store test attempt (BLOCK ALL FUTURE ATTEMPTS)
+#                 cursor.execute("""
+#                     INSERT INTO student_test_attempts
+#                     (student_id, test_scope, reference_id, is_completed,
+#                      obtained_marks, total_marks, percentage, is_passed, completed_at)
+#                     VALUES (%s, 'sub_topic', %s, TRUE, %s, %s, %s, %s, NOW())
+#                 """, (
+#                     student_id,
+#                     sub_topic_id,
+#                     marks_obtained,
+#                     max_marks,
+#                     percentage,
+#                     is_passed
+#                 ))
+
+#                 # 8️⃣ Update subtopic-level progress (ALWAYS mark as completed)
+#                 cursor.execute("""
+#                     INSERT INTO student_subtopic_progress 
+#                     (student_id, sub_topic_id, is_completed, score, last_accessed)
+#                     VALUES (%s, %s, TRUE, %s, NOW())
+#                     ON DUPLICATE KEY UPDATE
+#                         is_completed = TRUE,
+#                         score = VALUES(score),
+#                         last_accessed = NOW()
+#                 """, (
+#                     student_id,
+#                     sub_topic_id,
+#                     marks_obtained
+#                 ))
+
+#                 conn.commit()
+
+#                 return {
+#                     "status": "success",
+#                     "already_completed": False,
+#                     "message": "Marks stored. Test marked as completed.",
+#                     "data": {
+#                         "sub_topic_id": sub_topic_id,
+#                         "marks_obtained": marks_obtained,
+#                         "max_marks": max_marks,
+#                         "percentage": round(percentage, 2),
+#                         "is_passed": is_passed,
+#                         "completion_status": "completed"
+#                     }
+#                 }
+
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error storing marks: {str(e)}")
+
+
 @router.post("/store-marks")
-async def store_marks(marks_data: dict):
+async def store_marks(marks_data: Dict[str, Any]):
     """
     Store subtopic marks (ONE ATTEMPT ONLY).
     After first submission:
@@ -72,109 +205,199 @@ async def store_marks(marks_data: dict):
       - is_completed = TRUE always (even if failed)
     """
     try:
+        # basic input extraction
+        student_id = marks_data.get("student_id")
+        sub_topic_id = marks_data.get("sub_topic_id")
+        marks_obtained = marks_data.get("marks_obtained")
+        max_marks = marks_data.get("max_marks")
+
+        # 1️⃣ Validate required data
+        if not all([student_id, sub_topic_id]) or marks_obtained is None or max_marks is None:
+            raise HTTPException(status_code=400, detail="Missing required fields")
+
+        try:
+            marks_obtained = float(marks_obtained)
+            max_marks = float(max_marks)
+        except Exception:
+            raise HTTPException(status_code=400, detail="marks_obtained and max_marks must be numeric")
+
+        if marks_obtained < 0 or max_marks <= 0:
+            raise HTTPException(status_code=400, detail="Invalid marks values")
+
+        # compute percentage and pass/fail (used in response only)
+        percentage = (marks_obtained / max_marks) * 100
+        is_passed = percentage >= 40.0
+
         with get_db() as conn:
             with conn.cursor() as cursor:
-                student_id = marks_data["student_id"]
-                sub_topic_id = marks_data["sub_topic_id"]
-                marks_obtained = marks_data["marks_obtained"]
-                max_marks = marks_data["max_marks"]
-
-                # 1️⃣ Validate required data
-                if not all([student_id, sub_topic_id, marks_obtained is not None, max_marks]):
-                    raise HTTPException(status_code=400, detail="Missing required fields")
-
-                if marks_obtained < 0 or max_marks <= 0:
-                    raise HTTPException(status_code=400, detail="Invalid marks values")
-
-                # 2️⃣ Verify student exists + active
+                # 2️⃣ Verify student exists + active (role_id = 5)
                 cursor.execute("""
-                    SELECT user_id FROM users 
+                    SELECT user_id, college_id, department_id
+                    FROM users
                     WHERE user_id = %s AND role_id = 5 AND is_active = TRUE
-                """, (student_id,))
-                if not cursor.fetchone():
+                    """, (student_id,))
+                user_row = cursor.fetchone()
+                if not user_row:
                     raise HTTPException(status_code=404, detail="Student not found or inactive")
 
-                # 3️⃣ Verify subtopic exists
+                # fetch college/department from user_row
+                college_id = user_row.get("college_id")
+                department_id = user_row.get("department_id")
+
+                # 3️⃣ Verify subtopic exists and retrieve topic_id
                 cursor.execute("""
-                    SELECT sub_topic_id, topic_id 
-                    FROM sub_topics 
+                    SELECT sub_topic_id, topic_id
+                    FROM sub_topics
                     WHERE sub_topic_id = %s AND is_active = TRUE
                 """, (sub_topic_id,))
                 subtopic = cursor.fetchone()
                 if not subtopic:
                     raise HTTPException(status_code=404, detail="Subtopic not found or inactive")
 
+                topic_id = subtopic.get("topic_id")
+
                 # 4️⃣ Check if student already completed this test (BLOCK RETAKE)
                 cursor.execute("""
-                    SELECT attempt_id, obtained_marks 
+                    SELECT attempt_id, obtained_marks
                     FROM student_test_attempts
                     WHERE student_id = %s
                       AND test_scope = 'sub_topic'
                       AND reference_id = %s
                       AND is_completed = TRUE
+                    LIMIT 1
                 """, (student_id, sub_topic_id))
 
                 existing_attempt = cursor.fetchone()
                 if existing_attempt:
+                    prev_score = existing_attempt.get("obtained_marks")
                     return {
                         "status": "success",
                         "already_completed": True,
                         "message": "You already completed this test. Retake is not allowed.",
                         "data": {
-                            "previous_score": float(existing_attempt["obtained_marks"])
+                            "previous_score": float(prev_score) if prev_score is not None else None
                         }
                     }
 
-                # 5️⃣ Score calculations
-                percentage = (marks_obtained / max_marks) * 100
-                is_passed = percentage >= 40  # Passing threshold
-
-                # 6️⃣ Store subtopic marks (first attempt only)
+                # 5️⃣ Insert into sub_topic_marks (use topic_id, college_id, department_id)
                 cursor.execute("""
-                    INSERT INTO sub_topic_marks 
-                    (student_id, sub_topic_id, marks_obtained, max_marks, percentage, is_passed, attempted_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                    INSERT INTO sub_topic_marks
+                    (student_id, sub_topic_id, topic_id, college_id, department_id,
+                     marks_obtained, max_marks, attempted_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
                 """, (
                     student_id,
                     sub_topic_id,
-                    marks_obtained,
-                    max_marks,
-                    percentage,
-                    is_passed
+                    topic_id,
+                    college_id,
+                    department_id,
+                    Decimal(str(marks_obtained)),
+                    Decimal(str(max_marks))
                 ))
 
-                # 7️⃣ Store test attempt (BLOCK ALL FUTURE ATTEMPTS)
+                # 6️⃣ Insert into student_test_attempts (first attempt, completed)
+                # attempt_number = 1 (since retake blocked), is_completed = 1, completed_at = NOW()
                 cursor.execute("""
                     INSERT INTO student_test_attempts
-                    (student_id, test_scope, reference_id, is_completed,
-                     obtained_marks, total_marks, percentage, is_passed, completed_at)
-                    VALUES (%s, 'sub_topic', %s, TRUE, %s, %s, %s, %s, NOW())
+                    (student_id, test_scope, reference_id, attempt_number, is_completed,
+                     total_marks, obtained_marks, started_at, completed_at, time_spent_minutes)
+                    VALUES (%s, 'sub_topic', %s, %s, %s, %s, %s, NULL, NOW(), %s)
                 """, (
                     student_id,
                     sub_topic_id,
-                    marks_obtained,
-                    max_marks,
-                    percentage,
-                    is_passed
+                    1,                      # attempt_number
+                    1,                      # is_completed (tinyint)
+                    Decimal(str(max_marks)),
+                    Decimal(str(marks_obtained)),
+                    None                    # time_spent_minutes (optional)
                 ))
 
-                # 8️⃣ Update subtopic-level progress (ALWAYS mark as completed)
+                # 7️⃣ Upsert student_subtopic_progress (mark completed regardless of pass/fail)
                 cursor.execute("""
-                    INSERT INTO student_subtopic_progress 
-                    (student_id, sub_topic_id, is_completed, score, last_accessed)
-                    VALUES (%s, %s, TRUE, %s, NOW())
+                    INSERT INTO student_subtopic_progress
+                    (student_id, topic_id, sub_topic_id, is_completed, score, time_spent_minutes, last_accessed)
+                    VALUES (%s, %s, %s, %s, %s, %s, NOW())
                     ON DUPLICATE KEY UPDATE
-                        is_completed = TRUE,
-                        score = VALUES(score),
-                        last_accessed = NOW()
+                      is_completed = VALUES(is_completed),
+                      score = VALUES(score),
+                      time_spent_minutes = COALESCE(VALUES(time_spent_minutes), time_spent_minutes),
+                      last_accessed = NOW()
                 """, (
                     student_id,
+                    topic_id,
                     sub_topic_id,
-                    marks_obtained
+                    1,                          # is_completed = TRUE
+                    Decimal(str(marks_obtained)), # store raw score (marks_obtained)
+                    None
                 ))
 
+                # 8️⃣ Recompute and upsert topic-level progress in student_topic_progress
+                # a) completed_sub_topics (distinct sub_topic_id entries for this student & topic)
+                cursor.execute("""
+                    SELECT COUNT(DISTINCT sub_topic_id) AS completed_sub_topics
+                    FROM sub_topic_marks
+                    WHERE student_id = %s AND topic_id = %s
+                """, (student_id, topic_id))
+                completed_row = cursor.fetchone()
+                completed_sub_topics = int(completed_row.get("completed_sub_topics") or 0)
+
+                # b) total_sub_topics for the topic (active ones)
+                cursor.execute("""
+                    SELECT COUNT(*) AS total_sub_topics
+                    FROM sub_topics
+                    WHERE topic_id = %s AND is_active = TRUE
+                """, (topic_id,))
+                total_row = cursor.fetchone()
+                total_sub_topics = int(total_row.get("total_sub_topics") or 0)
+
+                # c) average_score across this student's sub_topic_marks for the topic (percent)
+                cursor.execute("""
+                    SELECT AVG((marks_obtained / NULLIF(max_marks,0)) * 100) AS avg_percent
+                    FROM sub_topic_marks
+                    WHERE student_id = %s AND topic_id = %s
+                """, (student_id, topic_id))
+                avg_row = cursor.fetchone()
+                average_score = float(avg_row.get("avg_percent") or 0.0)
+
+                # safe compute progress_percent
+                progress_percent = (completed_sub_topics / total_sub_topics * 100.0) if total_sub_topics else 0.0
+
+                # map progress_percent to status (adjust mapping as needed)
+                if progress_percent == 0:
+                    status = 'Not Started'
+                elif progress_percent < 50:
+                    status = 'Learning Now'
+                elif progress_percent < 100:
+                    status = 'Ongoing'
+                else:
+                    status = 'Completed'
+
+                # upsert into student_topic_progress
+                cursor.execute("""
+                    INSERT INTO student_topic_progress
+                    (student_id, topic_id, completed_sub_topics, total_sub_topics, progress_percent, average_score, status, last_updated)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+                    ON DUPLICATE KEY UPDATE
+                        completed_sub_topics = VALUES(completed_sub_topics),
+                        total_sub_topics = VALUES(total_sub_topics),
+                        progress_percent = VALUES(progress_percent),
+                        average_score = VALUES(average_score),
+                        status = VALUES(status),
+                        last_updated = NOW()
+                """, (
+                    student_id,
+                    topic_id,
+                    completed_sub_topics,
+                    total_sub_topics,
+                    Decimal(str(round(progress_percent, 2))),
+                    Decimal(str(round(average_score, 2))),
+                    status
+                ))
+
+                # commit transaction
                 conn.commit()
 
+                # return success response (include computed percentage & pass/fail)
                 return {
                     "status": "success",
                     "already_completed": False,
@@ -185,17 +408,27 @@ async def store_marks(marks_data: dict):
                         "max_marks": max_marks,
                         "percentage": round(percentage, 2),
                         "is_passed": is_passed,
-                        "completion_status": "completed"
+                        "completion_status": "completed",
+                        "topic_progress": {
+                            "topic_id": topic_id,
+                            "completed_sub_topics": completed_sub_topics,
+                            "total_sub_topics": total_sub_topics,
+                            "progress_percent": round(progress_percent, 2),
+                            "average_score_percent": round(average_score, 2),
+                            "status": status
+                        }
                     }
                 }
 
     except HTTPException:
+        # re-raise to let FastAPI handle
         raise
     except Exception as e:
+        # unexpected errors -> 500
         raise HTTPException(status_code=500, detail=f"Error storing marks: {str(e)}")
 
 
-    
+
 
 @router.get("/{user_id}/test-attempt-status/{test_scope}/{reference_id}")
 async def get_test_attempt_status(user_id: int, test_scope: str, reference_id: int):
@@ -247,33 +480,35 @@ async def store_assignment_marks(marks_data: dict):
     """
     Store assignment marks (ONE ATTEMPT ONLY).
     After first submission:
-      - Student CANNOT retake again
+      - Student CANNOT retake
       - is_completed = TRUE always
     """
+
     try:
         student_id = marks_data["student_id"]
         assignment_id = marks_data["assignment_id"]
         marks_obtained = marks_data["marks_obtained"]
         max_marks = marks_data["max_marks"]
 
-        # 1️⃣ Validation
+        # Validation
         if not all([student_id, assignment_id, max_marks]) or marks_obtained is None:
             raise HTTPException(status_code=400, detail="Missing required fields")
 
         with get_db() as conn:
             with conn.cursor() as cursor:
 
-                # 2️⃣ Check if assignment already completed
+                # 1️⃣ Prevent retake
                 cursor.execute("""
                     SELECT obtained_marks
                     FROM student_test_attempts
                     WHERE student_id = %s
-                      AND test_scope = 'assignment'
                       AND reference_id = %s
+                      AND test_scope = 'assignment'
                       AND is_completed = TRUE
                 """, (student_id, assignment_id))
 
                 existing = cursor.fetchone()
+
                 if existing:
                     return {
                         "status": "success",
@@ -284,7 +519,7 @@ async def store_assignment_marks(marks_data: dict):
                         }
                     }
 
-                # 3️⃣ Store marks in assignment_marks
+                # 2️⃣ Insert marks (NO percentage)
                 cursor.execute("""
                     INSERT INTO assignment_marks 
                     (student_id, assignment_id, marks_obtained, max_marks, graded_at)
@@ -294,30 +529,33 @@ async def store_assignment_marks(marks_data: dict):
                         max_marks = VALUES(max_marks),
                         graded_at = NOW()
                 """, (
-                    student_id, assignment_id,
-                    marks_obtained, max_marks
+                    student_id,
+                    assignment_id,
+                    marks_obtained,
+                    max_marks
                 ))
 
-                # 4️⃣ Mark test as completed
+                # 3️⃣ Create test attempt entry (NO percentage, NO is_passed)
                 cursor.execute("""
                     INSERT INTO student_test_attempts
-                    (student_id, test_scope, reference_id, is_completed,
-                     obtained_marks, total_marks, percentage, is_passed, completed_at)
-                    VALUES (%s, 'assignment', %s, TRUE, %s, %s, %s, %s, NOW())
+                    (student_id, test_scope, reference_id,
+                     attempt_number, is_completed,
+                     obtained_marks, total_marks,
+                     completed_at, time_spent_minutes)
+                    VALUES (%s, 'assignment', %s,
+                            1, TRUE,
+                            %s, %s,
+                            NOW(), NULL)
                     ON DUPLICATE KEY UPDATE
                         is_completed = TRUE,
                         obtained_marks = VALUES(obtained_marks),
                         total_marks = VALUES(total_marks),
-                        percentage = VALUES(percentage),
-                        is_passed = VALUES(is_passed),
                         completed_at = NOW()
                 """, (
                     student_id,
                     assignment_id,
                     marks_obtained,
-                    max_marks,
-                    (marks_obtained / max_marks) * 100,
-                    (marks_obtained / max_marks) * 100 >= 40
+                    max_marks
                 ))
 
                 conn.commit()
@@ -328,9 +566,7 @@ async def store_assignment_marks(marks_data: dict):
             "message": "Assignment submitted successfully.",
             "data": {
                 "marks_obtained": marks_obtained,
-                "max_marks": max_marks,
-                "percentage": round((marks_obtained / max_marks) * 100, 2),
-                "is_passed": (marks_obtained / max_marks) * 100 >= 40
+                "max_marks": max_marks
             }
         }
 
@@ -341,7 +577,6 @@ async def store_assignment_marks(marks_data: dict):
             status_code=500,
             detail=f"Error storing assignment marks: {str(e)}"
         )
-
 
     
 
@@ -447,14 +682,15 @@ async def delete_student(user_id: int):
         raise HTTPException(status_code=500, detail=f"Error deactivating student: {str(e)}")
     
 
+
 @router.get("/subtopic/{sub_topic_id}/view/{student_id}")
 async def view_completed_subtopic_test(sub_topic_id: int, student_id: int):
     """
-    Returns ONLY:
+    Return ONLY:
     - Questions
     - Options
     - Correct Answer
-    NO marks, NO percentage, NO attempts.
+    No marks, no percentage, no attempt details.
     """
 
     try:
@@ -475,14 +711,15 @@ async def view_completed_subtopic_test(sub_topic_id: int, student_id: int):
                         detail="Subtopic not found"
                     )
 
-                # 2️⃣ Ensure student has already completed the test (important!)
+                # 2️⃣ Ensure test was completed
                 cursor.execute("""
-                    SELECT is_completed
+                    SELECT attempt_id
                     FROM student_test_attempts
                     WHERE student_id = %s 
                       AND reference_id = %s 
                       AND test_scope = 'sub_topic'
                       AND is_completed = TRUE
+                    LIMIT 1
                 """, (student_id, sub_topic_id))
 
                 attempt = cursor.fetchone()
@@ -490,36 +727,38 @@ async def view_completed_subtopic_test(sub_topic_id: int, student_id: int):
                 if not attempt:
                     raise HTTPException(
                         status_code=403,
-                        detail="Test not completed. Student cannot view test."
+                        detail="Test not completed. Student cannot view the test."
                     )
 
-                # 3️⃣ Fetch MCQ questions
+                # 3️⃣ Fetch MCQ questions from `questions` table
                 cursor.execute("""
                     SELECT 
-                        question,
-                        option_a,
-                        option_b,
-                        option_c,
-                        option_d,
-                        correct_answer
-                    FROM mcq_questions
-                    WHERE sub_topic_id = %s
-                    ORDER BY id ASC
+                        question_id,
+                        question_text,
+                        question_data
+                    FROM questions
+                    WHERE reference_id = %s
+                      AND test_scope = 'sub_topic'
+                      AND is_active = 1
+                    ORDER BY order_no ASC
                 """, (sub_topic_id,))
 
                 rows = cursor.fetchall()
 
                 questions = []
+
                 for q in rows:
+                    # Parse question_data JSON
+                    try:
+                        data = json.loads(q["question_data"]) if q["question_data"] else {}
+                    except Exception:
+                        data = {}
+
                     questions.append({
-                        "question": q["question"],
-                        "options": [
-                            q["option_a"],
-                            q["option_b"],
-                            q["option_c"],
-                            q["option_d"]
-                        ],
-                        "correct_answer": q["correct_answer"]
+                        "question_id": q["question_id"],
+                        "question": q["question_text"],
+                        "options": data.get("options", []),
+                        "correct_answer": data.get("correct_answer")
                     })
 
                 return {

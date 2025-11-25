@@ -68,129 +68,135 @@ const Assessments = () => {
   }, [userId, subtopic, API_URL, navigate]);
 
 
-  useEffect(() => {
-    /* -----------------------------------------------
-       1. Prevent PrintScreen (Clear Clipboard)
-    ------------------------------------------------ */
-    const handlePrintScreen = async (e) => {
-      if (e.key === "PrintScreen") {
-        e.preventDefault();
-        try {
-          await navigator.clipboard.writeText("");
-        } catch (_) { }
-        toast.error("⚠️ Screenshot attempt blocked!");
-        document.body.style.filter = "blur(50px)";
-        setTimeout(() => (document.body.style.filter = "none"), 1500);
-      }
-    };
+  // useEffect(() => {
+  //   /* -----------------------------------------------
+  //      1. Prevent PrintScreen (Clear Clipboard)
+  //   ------------------------------------------------ */
+  //   const handlePrintScreen = async (e) => {
+  //     if (e.key === "PrintScreen") {
+  //       e.preventDefault();
+  //       try {
+  //         await navigator.clipboard.writeText("");
+  //       } catch (_) { }
+  //       toast.error("⚠️ Screenshot attempt blocked!");
+  //       document.body.style.filter = "blur(50px)";
+  //       setTimeout(() => (document.body.style.filter = "none"), 1500);
+  //     }
+  //   };
 
-    /* -----------------------------------------------
-       2. Disable Copy / Cut / Select
-    ------------------------------------------------ */
-    const preventCopy = (e) => {
-      e.preventDefault();
-      toast.error("⚠️ Copying is disabled.");
-    };
+  //   /* -----------------------------------------------
+  //      2. Disable Copy / Cut / Select
+  //   ------------------------------------------------ */
+  //   const preventCopy = (e) => {
+  //     e.preventDefault();
+  //     toast.error("⚠️ Copying is disabled.");
+  //   };
 
-    const preventSelect = (e) => {
-      e.preventDefault();
-      toast.error("⚠️ Text selection is disabled.");
-      return false;
-    };
+  //   const preventSelect = (e) => {
+  //     e.preventDefault();
+  //     toast.error("⚠️ Text selection is disabled.");
+  //     return false;
+  //   };
 
-    /* -----------------------------------------------
-       3. Disable Right Click
-    ------------------------------------------------ */
-    const preventRightClick = (e) => {
-      e.preventDefault();
-      toast.error("⚠️ Right-click disabled.");
-    };
+  //   /* -----------------------------------------------
+  //      3. Disable Right Click
+  //   ------------------------------------------------ */
+  //   const preventRightClick = (e) => {
+  //     e.preventDefault();
+  //     toast.error("⚠️ Right-click disabled.");
+  //   };
 
-    /* -----------------------------------------------
-       4. Block Dangerous Keyboard Shortcuts
-    ------------------------------------------------ */
-    const blockKeys = (e) => {
-      const key = e.key.toLowerCase();
+  //   /* -----------------------------------------------
+  //      4. Block Dangerous Keyboard Shortcuts
+  //   ------------------------------------------------ */
+  //   const blockKeys = (e) => {
+  //     const key = e.key.toLowerCase();
 
-      // Ctrl + P/U/S and DevTools
-      if (
-        (e.ctrlKey && ["p", "u", "s"].includes(key)) ||
-        (e.ctrlKey && e.shiftKey && ["i", "j", "c"].includes(key))
-      ) {
-        e.preventDefault();
-        toast.error("⚠️ This action is disabled.");
-      }
-    };
+  //     // Ctrl + P/U/S and DevTools
+  //     if (
+  //       (e.ctrlKey && ["p", "u", "s"].includes(key)) ||
+  //       (e.ctrlKey && e.shiftKey && ["i", "j", "c"].includes(key))
+  //     ) {
+  //       e.preventDefault();
+  //       toast.error("⚠️ This action is disabled.");
+  //     }
+  //   };
 
-    /* -----------------------------------------------
-       5. Detect Tab Switching / Window Blur
-    ------------------------------------------------ */
-    const onBlur = () => {
-      document.body.style.filter = "blur(50px)";
-      toast.error("⚠️ Stay on the assignment window!");
-    };
+  //   /* -----------------------------------------------
+  //      5. Detect Tab Switching / Window Blur
+  //   ------------------------------------------------ */
+  //   const onBlur = () => {
+  //     document.body.style.filter = "blur(50px)";
+  //     toast.error("⚠️ Stay on the assignment window!");
+  //   };
 
-    const onFocus = () => {
-      document.body.style.filter = "none";
-    };
+  //   const onFocus = () => {
+  //     document.body.style.filter = "none";
+  //   };
 
-    /* -----------------------------------------------
-       6. Detect Screen Capture Tools (Snipping Tool)
-    ------------------------------------------------ */
-    const snipDetection = setInterval(() => {
-      if (document.hidden || !document.hasFocus()) {
-        document.body.style.filter = "blur(50px)";
-        toast.error("⚠️ Screen capturing detected!");
-      }
-    }, 500);
+  //   /* -----------------------------------------------
+  //      6. Detect Screen Capture Tools (Snipping Tool)
+  //   ------------------------------------------------ */
+  //   const snipDetection = setInterval(() => {
+  //     if (document.hidden || !document.hasFocus()) {
+  //       document.body.style.filter = "blur(50px)";
+  //       toast.error("⚠️ Screen capturing detected!");
+  //     }
+  //   }, 500);
 
-    /* -----------------------------------------------
-       7. Add all listeners once
-    ------------------------------------------------ */
-    window.addEventListener("keyup", handlePrintScreen);
-    window.addEventListener("keydown", blockKeys);
-    window.addEventListener("blur", onBlur);
-    window.addEventListener("focus", onFocus);
+  //   /* -----------------------------------------------
+  //      7. Add all listeners once
+  //   ------------------------------------------------ */
+  //   window.addEventListener("keyup", handlePrintScreen);
+  //   window.addEventListener("keydown", blockKeys);
+  //   window.addEventListener("blur", onBlur);
+  //   window.addEventListener("focus", onFocus);
 
-    document.addEventListener("copy", preventCopy);
-    document.addEventListener("cut", preventCopy);
-    document.addEventListener("selectstart", preventSelect);
-    document.addEventListener("contextmenu", preventRightClick);
+  //   document.addEventListener("copy", preventCopy);
+  //   document.addEventListener("cut", preventCopy);
+  //   document.addEventListener("selectstart", preventSelect);
+  //   document.addEventListener("contextmenu", preventRightClick);
 
-    /* -----------------------------------------------
-       Cleanup listeners on unmount
-    ------------------------------------------------ */
-    return () => {
-      window.removeEventListener("keyup", handlePrintScreen);
-      window.removeEventListener("keydown", blockKeys);
-      window.removeEventListener("blur", onBlur);
-      window.removeEventListener("focus", onFocus);
+  //   /* -----------------------------------------------
+  //      Cleanup listeners on unmount
+  //   ------------------------------------------------ */
+  //   return () => {
+  //     window.removeEventListener("keyup", handlePrintScreen);
+  //     window.removeEventListener("keydown", blockKeys);
+  //     window.removeEventListener("blur", onBlur);
+  //     window.removeEventListener("focus", onFocus);
 
-      document.removeEventListener("copy", preventCopy);
-      document.removeEventListener("cut", preventCopy);
-      document.removeEventListener("selectstart", preventSelect);
-      document.removeEventListener("contextmenu", preventRightClick);
+  //     document.removeEventListener("copy", preventCopy);
+  //     document.removeEventListener("cut", preventCopy);
+  //     document.removeEventListener("selectstart", preventSelect);
+  //     document.removeEventListener("contextmenu", preventRightClick);
 
-      clearInterval(snipDetection);
-    };
-  }, []);
+  //     clearInterval(snipDetection);
+  //   };
+  // }, []);
 
-  useEffect(() => {
-    const enterFullscreen = () => document.documentElement.requestFullscreen();
-    enterFullscreen();
+  // useEffect(() => {
+  //   const enterFullscreen = () => document.documentElement.requestFullscreen();
+  //   enterFullscreen();
 
-    const onFSChange = () => {
-      if (!document.fullscreenElement) {
-        toast.error("⚠️ Fullscreen required! Exiting exam...");
-        navigate("/student/studenthome");
-      }
-    };
+  //   const onFSChange = () => {
+  //     if (!document.fullscreenElement) {
+  //       toast.error("⚠️ Fullscreen required! Exiting exam...");
+  //       navigate("/student/studenthome");
+  //     }
+  //   };
 
-    document.addEventListener("fullscreenchange", onFSChange);
-    return () => document.removeEventListener("fullscreenchange", onFSChange);
-  }, []);
+  //   document.addEventListener("fullscreenchange", onFSChange);
+  //   return () => document.removeEventListener("fullscreenchange", onFSChange);
+  // }, []);
+
+
+
 
   // 🧭 Fetch Questions + Subtopic
+  
+  
+  
   useEffect(() => {
     if (testCompleted) {
       setLoading(false);
