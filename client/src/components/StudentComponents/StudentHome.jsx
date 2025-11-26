@@ -67,7 +67,7 @@ const StudentHome = () => {
           isUnlocked = true;
         } else {
           const previous = arr[index - 1];
-          const prevCompleted = previous.test_completed === true;
+          const prevCompleted = previous.test_completed === 1 || previous.test_completed === true;
           const prevExpired = previous.time_status === "expired";
           isUnlocked = prevCompleted || prevExpired;
         }
@@ -236,7 +236,7 @@ const StudentHome = () => {
               return (
                 <div
                   key={assignment.assignment_id}
-                  className={`min-w-[260px] lg:min-w-[500px] bg-white rounded-2xl shadow-sm p-4 lg:p-6 flex-shrink-0 transition-opacity ${!assignment.isUnlocked && !assignment.hasSubmitted ? "opacity-60" : ""
+                  className={`min-w-[260px] lg:min-w-[500px] bg-white rounded-2xl shadow-sm p-4 lg:p-6 flex-shrink-0 flex flex-col justify-between transition-opacity ${!assignment.isUnlocked && !assignment.hasSubmitted ? "opacity-60" : ""
                     }`}
                 >
                   <div className="flex justify-between items-start mb-3">

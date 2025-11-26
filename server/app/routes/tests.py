@@ -26,8 +26,6 @@ async def create_test(
     department_id: int = Form(None),
     assignment_number: str = Form(None),
     assignment_topic: str = Form(None),
-    total_marks: float = Form(100),
-    passing_marks: float = Form(40),
     start_date: str = Form(None),
     end_date: str = Form(None),  # Can be null
 
@@ -112,17 +110,15 @@ async def create_test(
                         """
                         INSERT INTO assignments
                         (assignment_number, assignment_topic, college_id, department_id,
-                         total_marks, passing_marks, start_date, end_date, file_name, file_path,
+                          start_date, end_date, file_name, file_path,
                          created_at, updated_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                        VALUES (%s,  %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
                         """,
                         (
                             assignment_number,
                             assignment_topic,
                             college_id,
                             department_id,
-                            total_marks,
-                            passing_marks,
                             start_dt,
                             end_dt,
                             file.filename,

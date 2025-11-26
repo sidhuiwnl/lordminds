@@ -2,6 +2,8 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import RecordRTC from "recordrtc";
 import { ToastContainer, toast } from "react-toastify";
+import Swal from "sweetalert2";
+
 
 const Assignments = () => {
   const { assignment } = useParams();
@@ -22,6 +24,8 @@ const Assignments = () => {
   const [sessionId, setSessionId] = useState(null);
   const [sessionEnded, setSessionEnded] = useState(false);
   const [originalQuestions, setOriginalQuestions] = useState([]);
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const [blurHandled, setBlurHandled] = useState(false);
 
 
   const totalSteps = questions.length;
@@ -100,21 +104,55 @@ const Assignments = () => {
        5. Detect Tab Switching / Window Blur
     ------------------------------------------------ */
     const onBlur = () => {
-      document.body.style.filter = "blur(50px)";
-      toast.error("⚠️ Stay on the assignment window!");
+      if (blurHandled) return;
+
+      setBlurHandled(true);
+
+      setTabSwitchCount(prev => {
+        const newCount = prev + 1;
+
+        // Blur only for the first switch
+        if (newCount === 1) {
+          document.body.style.filter = "blur(50px)";
+          toast.error(`⚠️ Window switched! Warning ${newCount}/2`);
+        }
+
+        // On second violation → REMOVE BLUR + FORCE REDIRECT
+        if (newCount >= 2) {
+          // Remove blur immediately so SweetAlert is visible
+          document.body.style.filter = "none";
+
+          Swal.fire({
+            title: "Test Terminated ❌",
+            text: "You switched tabs multiple times.",
+            icon: "error",
+            confirmButtonColor: "#d33",
+          }).then(() => {
+            navigate("/student/studenthome");
+          });
+        }
+
+        return newCount;
+      });
     };
+
 
     const onFocus = () => {
       document.body.style.filter = "none";
+      setBlurHandled(false); // Allow next blur event to fire one time
     };
+
 
     /* -----------------------------------------------
        6. Detect Screen Capture Tools (Snipping Tool)
     ------------------------------------------------ */
     const snipDetection = setInterval(() => {
+      // Only check, don't trigger blur/toast spam
       if (document.hidden || !document.hasFocus()) {
-        document.body.style.filter = "blur(50px)";
-        toast.error("⚠️ Screen capturing detected!");
+        if (!blurHandled) {
+          document.body.style.filter = "blur(50px)";
+          toast.error("⚠️ Screen capturing detected!");
+        }
       }
     }, 500);
 
@@ -128,7 +166,7 @@ const Assignments = () => {
 
     document.addEventListener("copy", preventCopy);
     document.addEventListener("cut", preventCopy);
-    document.addEventListener("selectstart", preventSelect);
+    // document.addEventListener("selectstart", preventSelect);
     document.addEventListener("contextmenu", preventRightClick);
 
     /* -----------------------------------------------
@@ -142,27 +180,27 @@ const Assignments = () => {
 
       document.removeEventListener("copy", preventCopy);
       document.removeEventListener("cut", preventCopy);
-      document.removeEventListener("selectstart", preventSelect);
+      // document.removeEventListener("selectstart", preventSelect);
       document.removeEventListener("contextmenu", preventRightClick);
 
       clearInterval(snipDetection);
     };
   }, []);
 
-  useEffect(() => {
-    const enterFullscreen = () => document.documentElement.requestFullscreen();
-    enterFullscreen();
+  // useEffect(() => {
+  //   const enterFullscreen = () => document.documentElement.requestFullscreen();
+  //   enterFullscreen();
 
-    const onFSChange = () => {
-      if (!document.fullscreenElement) {
-        toast.error("⚠️ Fullscreen required! Exiting exam...");
-        navigate("/student/studenthome");
-      }
-    };
+  //   const onFSChange = () => {
+  //     if (!document.fullscreenElement) {
+  //       toast.error("⚠️ Fullscreen required! Exiting exam...");
+  //       navigate("/student/studenthome");
+  //     }
+  //   };
 
-    document.addEventListener("fullscreenchange", onFSChange);
-    return () => document.removeEventListener("fullscreenchange", onFSChange);
-  }, []);
+  //   document.addEventListener("fullscreenchange", onFSChange);
+  //   return () => document.removeEventListener("fullscreenchange", onFSChange);
+  // }, []);
 
 
   // ✅ Fetch Questions
@@ -500,10 +538,20 @@ const Assignments = () => {
   const handleSubmit = async () => {
     const score = calculateScore();
 
-    // Confirm submission
-    if (!window.confirm("Are you sure you want to submit? You cannot re-attempt this assignment.")) {
-      return;
-    }
+    // 🚀 SweetAlert2 Confirmation Popup
+    const result = await Swal.fire({
+      title: "Submit Assignment?",
+      text: "You cannot re-attempt this assignment after submission.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#16a34a",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Yes, Submit",
+      cancelButtonText: "Cancel",
+      reverseButtons: true,
+    });
+
+    if (!result.isConfirmed) return;
 
     try {
       const res = await retryFetch(async () => {
@@ -520,20 +568,31 @@ const Assignments = () => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response;
       });
+
       const data = await res.json();
+
       if (data.status === "success") {
         await endSession();
-        toast.success(
-          `✅ Assignment Completed! You scored ${score.marks_obtained}/${score.max_marks}`
-        );
+
+        Swal.fire({
+          title: "Assignment Submitted 🎉",
+          text: `You scored ${score.marks_obtained}/${score.max_marks}!`,
+          icon: "success",
+          confirmButtonColor: "#1b65a6",
+        });
 
         localStorage.removeItem(`assignment_${assignment}_order_v3`);
-
         navigate("/student/studenthome");
       }
     } catch (err) {
       console.error("Error submitting assignment:", err);
-      toast.error("Error submitting assignment. Try again.");
+
+      Swal.fire({
+        title: "Submission Failed",
+        text: "There was an error submitting your assignment. Please try again.",
+        icon: "error",
+        confirmButtonColor: "#d33",
+      });
     }
   };
 

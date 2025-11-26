@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import RecordRTC from "recordrtc";
 import { ToastContainer, toast } from "react-toastify";
+import Swal from "sweetalert2";
 
 const Assessments = () => {
   const { subtopic } = useParams();
@@ -21,6 +22,9 @@ const Assessments = () => {
   const [attemptCounts, setAttemptCounts] = useState({});
   const [showCorrectAnswer, setShowCorrectAnswer] = useState({});
   const recorderRef = useRef(null);
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const [blurHandled, setBlurHandled] = useState(false);
+
 
   const totalSteps = questions.length;
   const API_URL = import.meta.env.VITE_BACKEND_API_URL;
@@ -41,139 +45,148 @@ const Assessments = () => {
   };
 
   // Check if test already completed
-  useEffect(() => {
-    const checkTestCompletion = async () => {
-      try {
-        const response = await fetch(
-          `${API_URL}/${userId}/test-attempt-status/sub_topic/${subtopic}`
-        );
-        const data = await response.json();
 
-        if (data?.data?.has_completed) {
-          setTestCompleted(true);
-          setExistingResults(data.data.attempt_data);
-          toast.info("You have already completed this test. Redirecting to results...");
-          setTimeout(() => {
-            navigate(`/student/studenthome`);
-          }, 2000);
-        }
-      } catch (error) {
-        console.error("Error checking test completion:", error);
+  useEffect(() => {
+    /* -----------------------------------------------
+       1. Prevent PrintScreen (Clear Clipboard)
+    ------------------------------------------------ */
+    const handlePrintScreen = async (e) => {
+      if (e.key === "PrintScreen") {
+        e.preventDefault();
+        try {
+          await navigator.clipboard.writeText("");
+        } catch (_) { }
+        toast.error("⚠️ Screenshot attempt blocked!");
+        document.body.style.filter = "blur(50px)";
+        setTimeout(() => (document.body.style.filter = "none"), 1500);
       }
     };
 
-    if (userId && subtopic) {
-      checkTestCompletion();
-    }
-  }, [userId, subtopic, API_URL, navigate]);
+    /* -----------------------------------------------
+       2. Disable Copy / Cut / Select
+    ------------------------------------------------ */
+    const preventCopy = (e) => {
+      e.preventDefault();
+      toast.error("⚠️ Copying is disabled.");
+    };
+
+    const preventSelect = (e) => {
+      e.preventDefault();
+      toast.error("⚠️ Text selection is disabled.");
+      return false;
+    };
+
+    /* -----------------------------------------------
+       3. Disable Right Click
+    ------------------------------------------------ */
+    const preventRightClick = (e) => {
+      e.preventDefault();
+      toast.error("⚠️ Right-click disabled.");
+    };
+
+    /* -----------------------------------------------
+       4. Block Dangerous Keyboard Shortcuts
+    ------------------------------------------------ */
+    const blockKeys = (e) => {
+      const key = e.key.toLowerCase();
+
+      // Ctrl + P/U/S and DevTools
+      if (
+        (e.ctrlKey && ["p", "u", "s"].includes(key)) ||
+        (e.ctrlKey && e.shiftKey && ["i", "j", "c"].includes(key))
+      ) {
+        e.preventDefault();
+        toast.error("⚠️ This action is disabled.");
+      }
+    };
+
+    /* -----------------------------------------------
+       5. Detect Tab Switching / Window Blur
+    ------------------------------------------------ */
+    const onBlur = () => {
+      if (blurHandled) return;
+
+      setBlurHandled(true);
+
+      setTabSwitchCount(prev => {
+        const newCount = prev + 1;
+
+        // Blur only for the first switch
+        if (newCount === 1) {
+          document.body.style.filter = "blur(50px)";
+          toast.error(`⚠️ Window switched! Warning ${newCount}/2`);
+        }
+
+        // On second violation → REMOVE BLUR + FORCE REDIRECT
+        if (newCount >= 2) {
+          // Remove blur immediately so SweetAlert is visible
+          document.body.style.filter = "none";
+
+          Swal.fire({
+            title: "Test Terminated ❌",
+            text: "You switched tabs multiple times.",
+            icon: "error",
+            confirmButtonColor: "#d33",
+          }).then(() => {
+            navigate("/student/studenthome");
+          });
+        }
+
+        return newCount;
+      });
+    };
 
 
-  // useEffect(() => {
-  //   /* -----------------------------------------------
-  //      1. Prevent PrintScreen (Clear Clipboard)
-  //   ------------------------------------------------ */
-  //   const handlePrintScreen = async (e) => {
-  //     if (e.key === "PrintScreen") {
-  //       e.preventDefault();
-  //       try {
-  //         await navigator.clipboard.writeText("");
-  //       } catch (_) { }
-  //       toast.error("⚠️ Screenshot attempt blocked!");
-  //       document.body.style.filter = "blur(50px)";
-  //       setTimeout(() => (document.body.style.filter = "none"), 1500);
-  //     }
-  //   };
+    const onFocus = () => {
+      document.body.style.filter = "none";
+      setBlurHandled(false); // Allow next blur event to fire one time
+    };
 
-  //   /* -----------------------------------------------
-  //      2. Disable Copy / Cut / Select
-  //   ------------------------------------------------ */
-  //   const preventCopy = (e) => {
-  //     e.preventDefault();
-  //     toast.error("⚠️ Copying is disabled.");
-  //   };
 
-  //   const preventSelect = (e) => {
-  //     e.preventDefault();
-  //     toast.error("⚠️ Text selection is disabled.");
-  //     return false;
-  //   };
+    /* -----------------------------------------------
+       6. Detect Screen Capture Tools (Snipping Tool)
+    ------------------------------------------------ */
+    const snipDetection = setInterval(() => {
+      // Only check, don't trigger blur/toast spam
+      if (document.hidden || !document.hasFocus()) {
+        if (!blurHandled) {
+          document.body.style.filter = "blur(50px)";
+          toast.error("⚠️ Screen capturing detected!");
+        }
+      }
+    }, 500);
 
-  //   /* -----------------------------------------------
-  //      3. Disable Right Click
-  //   ------------------------------------------------ */
-  //   const preventRightClick = (e) => {
-  //     e.preventDefault();
-  //     toast.error("⚠️ Right-click disabled.");
-  //   };
+    /* -----------------------------------------------
+       7. Add all listeners once
+    ------------------------------------------------ */
+    window.addEventListener("keyup", handlePrintScreen);
+    window.addEventListener("keydown", blockKeys);
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
 
-  //   /* -----------------------------------------------
-  //      4. Block Dangerous Keyboard Shortcuts
-  //   ------------------------------------------------ */
-  //   const blockKeys = (e) => {
-  //     const key = e.key.toLowerCase();
+    document.addEventListener("copy", preventCopy);
+    document.addEventListener("cut", preventCopy);
+    // document.addEventListener("selectstart", preventSelect);
+    document.addEventListener("contextmenu", preventRightClick);
 
-  //     // Ctrl + P/U/S and DevTools
-  //     if (
-  //       (e.ctrlKey && ["p", "u", "s"].includes(key)) ||
-  //       (e.ctrlKey && e.shiftKey && ["i", "j", "c"].includes(key))
-  //     ) {
-  //       e.preventDefault();
-  //       toast.error("⚠️ This action is disabled.");
-  //     }
-  //   };
+    /* -----------------------------------------------
+       Cleanup listeners on unmount
+    ------------------------------------------------ */
+    return () => {
+      window.removeEventListener("keyup", handlePrintScreen);
+      window.removeEventListener("keydown", blockKeys);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
 
-  //   /* -----------------------------------------------
-  //      5. Detect Tab Switching / Window Blur
-  //   ------------------------------------------------ */
-  //   const onBlur = () => {
-  //     document.body.style.filter = "blur(50px)";
-  //     toast.error("⚠️ Stay on the assignment window!");
-  //   };
+      document.removeEventListener("copy", preventCopy);
+      document.removeEventListener("cut", preventCopy);
+      // document.removeEventListener("selectstart", preventSelect);
+      document.removeEventListener("contextmenu", preventRightClick);
 
-  //   const onFocus = () => {
-  //     document.body.style.filter = "none";
-  //   };
+      clearInterval(snipDetection);
+    };
+  }, []);
 
-  //   /* -----------------------------------------------
-  //      6. Detect Screen Capture Tools (Snipping Tool)
-  //   ------------------------------------------------ */
-  //   const snipDetection = setInterval(() => {
-  //     if (document.hidden || !document.hasFocus()) {
-  //       document.body.style.filter = "blur(50px)";
-  //       toast.error("⚠️ Screen capturing detected!");
-  //     }
-  //   }, 500);
-
-  //   /* -----------------------------------------------
-  //      7. Add all listeners once
-  //   ------------------------------------------------ */
-  //   window.addEventListener("keyup", handlePrintScreen);
-  //   window.addEventListener("keydown", blockKeys);
-  //   window.addEventListener("blur", onBlur);
-  //   window.addEventListener("focus", onFocus);
-
-  //   document.addEventListener("copy", preventCopy);
-  //   document.addEventListener("cut", preventCopy);
-  //   document.addEventListener("selectstart", preventSelect);
-  //   document.addEventListener("contextmenu", preventRightClick);
-
-  //   /* -----------------------------------------------
-  //      Cleanup listeners on unmount
-  //   ------------------------------------------------ */
-  //   return () => {
-  //     window.removeEventListener("keyup", handlePrintScreen);
-  //     window.removeEventListener("keydown", blockKeys);
-  //     window.removeEventListener("blur", onBlur);
-  //     window.removeEventListener("focus", onFocus);
-
-  //     document.removeEventListener("copy", preventCopy);
-  //     document.removeEventListener("cut", preventCopy);
-  //     document.removeEventListener("selectstart", preventSelect);
-  //     document.removeEventListener("contextmenu", preventRightClick);
-
-  //     clearInterval(snipDetection);
-  //   };
-  // }, []);
 
   // useEffect(() => {
   //   const enterFullscreen = () => document.documentElement.requestFullscreen();
@@ -194,9 +207,9 @@ const Assessments = () => {
 
 
   // 🧭 Fetch Questions + Subtopic
-  
-  
-  
+
+
+
   useEffect(() => {
     if (testCompleted) {
       setLoading(false);
@@ -453,10 +466,20 @@ const Assessments = () => {
   const handleSubmitTest = async () => {
     const score = calculateScore();
 
-    // Confirm submission
-    if (!window.confirm("Are you sure you want to submit? You cannot re-attempt this test.")) {
-      return;
-    }
+    // 🚀 SweetAlert2 Confirmation Popup
+    const result = await Swal.fire({
+      title: "Submit Test?",
+      text: "You cannot re-attempt this test after submission.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#16a34a",   // Tailwind green-600
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Yes, Submit",
+      cancelButtonText: "Cancel",
+      reverseButtons: true,
+    });
+
+    if (!result.isConfirmed) return;
 
     try {
       const res = await fetch(`${API_URL}/student/store-marks`, {
@@ -474,13 +497,20 @@ const Assessments = () => {
 
       if (data.status === "success") {
         if (data.data.already_completed) {
-          toast.info("Test was already completed previously.");
+          Swal.fire({
+            title: "Already Completed",
+            text: "You have already taken this test earlier.",
+            icon: "info",
+            confirmButtonColor: "#1b65a6",
+          });
           navigate("/student/studenthome");
         } else {
-          toast.success(
-            `✅ Test Completed! You scored ${score.marks_obtained}/${score.max_marks}`
-          );
-          // Navigate to results page
+          await Swal.fire({
+            title: "Test Submitted 🎉",
+            text: `You scored ${score.marks_obtained}/${score.max_marks}`,
+            icon: "success",
+            confirmButtonColor: "#1b65a6",
+          });
           navigate("/student/studenthome");
         }
       } else {
@@ -488,9 +518,16 @@ const Assessments = () => {
       }
     } catch (err) {
       console.error("Error submitting test:", err);
-      toast.error("Error completing test. Please try again.");
+
+      Swal.fire({
+        title: "Submission Failed",
+        text: "There was an error submitting your test. Please try again.",
+        icon: "error",
+        confirmButtonColor: "#d33",
+      });
     }
   };
+
 
   // If test already completed, show message
   if (testCompleted) {
