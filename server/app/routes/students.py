@@ -1,9 +1,12 @@
 from datetime import datetime
 from decimal import Decimal
 import json
-from typing import Any, Dict, Optional
+import os
+from typing import Any, Dict, List, Optional
+from uuid import uuid4
 import bcrypt
 from fastapi import APIRouter, HTTPException, Form, File, UploadFile
+from pydantic import BaseModel
 from config.database import get_db
 
 
@@ -849,3 +852,123 @@ async def view_assignment_answers_only(assignment_id: int, student_id: int):
             status_code=500,
             detail=f"Error fetching assignment answers: {str(e)}"
         )
+
+
+
+class ProfileData(BaseModel):
+    user_id: int
+    dob: Optional[str] = None
+    email: Optional[str] = None
+    mobile: Optional[str] = None
+    github: Optional[str] = None
+    linkedin: Optional[str] = None
+    resume_path: Optional[str] = None    # path returned after file upload
+    skills: Optional[List[str]] = []
+
+
+@router.post("/profile")
+async def save_student_profile(data: ProfileData):
+
+    if not data.user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+
+                # 1️⃣ Insert or update student_profile
+                profile_query = """
+                    INSERT INTO student_profile 
+                        (user_id, dob, mobile, github_url, linkedin_url, resume_path, is_onboarded)
+                    VALUES (%s, %s, %s, %s, %s, %s, 1)
+                    ON DUPLICATE KEY UPDATE
+                        dob = VALUES(dob),
+                        mobile = VALUES(mobile),
+                        github_url = VALUES(github_url),
+                        linkedin_url = VALUES(linkedin_url),
+                        resume_path = VALUES(resume_path),
+                        is_onboarded = 1
+                """
+
+                cursor.execute(
+                    profile_query,
+                    [
+                        data.user_id,
+                        data.dob,
+                        data.mobile,
+                        data.github,
+                        data.linkedin,
+                        data.resume_path,
+                    ]
+                )
+
+                # 2️⃣ Update email in users table
+                cursor.execute(
+                    "UPDATE users SET email = %s WHERE user_id = %s",
+                    (data.email, data.user_id)
+                )
+
+                # 3️⃣ Delete old skills
+                cursor.execute(
+                    "DELETE FROM student_skills WHERE user_id = %s",
+                    (data.user_id,)
+                )
+
+                # 4️⃣ Insert new skills
+                if data.skills and len(data.skills) > 0:
+                    skills = [(data.user_id, skill) for skill in data.skills]
+
+                    cursor.executemany(
+                        "INSERT INTO student_skills (user_id, skill_name) VALUES (%s, %s)",
+                        skills
+                    )
+
+            conn.commit()
+
+        return {
+            "status": "success",
+            "message": "Profile updated successfully"
+        }
+
+    except Exception as e:
+        print("Error saving student profile:", e)
+        raise HTTPException(status_code=500, detail="Server error")
+
+
+
+@router.post("/upload/resume")
+async def upload_resume(file: UploadFile):
+    # Create folders automatically if missing
+    upload_dir = "uploads/resumes"
+    os.makedirs(upload_dir, exist_ok=True)
+
+    filename = f"{uuid4()}_{file.filename}"
+    save_path = os.path.join(upload_dir, filename)
+
+    # Write file
+    with open(save_path, "wb") as f:
+        f.write(await file.read())
+
+    return {"file_path": save_path}
+
+
+@router.get("/{user_id}/is-onboarded")
+async def check_onboarded(user_id: int):
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+
+                cursor.execute(
+                    "SELECT 1 FROM student_profile WHERE user_id = %s",
+                    (user_id,)
+                )
+
+                profile_exists = cursor.fetchone()  # ❗ NO await
+
+        return {
+            "is_onboarded": True if profile_exists else False
+        }
+
+    except Exception as e:
+        print("Error checking onboarding:", e)
+        raise HTTPException(status_code=500, detail="Server error")

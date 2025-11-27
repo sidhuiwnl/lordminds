@@ -107,19 +107,15 @@ const Assessments = () => {
       if (blurHandled) return;
 
       setBlurHandled(true);
-
       setTabSwitchCount(prev => {
         const newCount = prev + 1;
 
-        // Blur only for the first switch
         if (newCount === 1) {
           document.body.style.filter = "blur(50px)";
           toast.error(`⚠️ Window switched! Warning ${newCount}/2`);
         }
 
-        // On second violation → REMOVE BLUR + FORCE REDIRECT
         if (newCount >= 2) {
-          // Remove blur immediately so SweetAlert is visible
           document.body.style.filter = "none";
 
           Swal.fire({
@@ -188,20 +184,23 @@ const Assessments = () => {
   }, []);
 
 
-  // useEffect(() => {
-  //   const enterFullscreen = () => document.documentElement.requestFullscreen();
-  //   enterFullscreen();
+  useEffect(() => {
+    const enterFullscreen = () => document.documentElement.requestFullscreen();
+    enterFullscreen();
 
-  //   const onFSChange = () => {
-  //     if (!document.fullscreenElement) {
-  //       toast.error("⚠️ Fullscreen required! Exiting exam...");
-  //       navigate("/student/studenthome");
-  //     }
-  //   };
+    const onFSChange = () => {
+      // If fullscreen exited BECAUSE of a blur event, ignore it
+      if (blurHandled) return;
 
-  //   document.addEventListener("fullscreenchange", onFSChange);
-  //   return () => document.removeEventListener("fullscreenchange", onFSChange);
-  // }, []);
+      if (!document.fullscreenElement) {
+        toast.error("⚠️ Fullscreen required! Exiting exam...");
+        navigate("/student/studenthome");
+      }
+    };
+
+    document.addEventListener("fullscreenchange", onFSChange);
+    return () => document.removeEventListener("fullscreenchange", onFSChange);
+  }, []);
 
 
 

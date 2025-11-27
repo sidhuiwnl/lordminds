@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { toast, ToastContainer } from "react-toastify";
 
 const StudentHome = () => {
   const navigate = useNavigate();
@@ -92,6 +93,32 @@ const StudentHome = () => {
     }
   }
 
+  async function requestMicPermission() {
+  try {
+    const status = await navigator.permissions.query({ name: "microphone" });
+
+    if (status.state === "granted") {
+      return true; // Already granted
+    }
+
+    if (status.state === "denied") {
+      toast.error("Microphone is blocked. Enable it from the browser lock icon.");
+      return false;
+    }
+
+    // State is "prompt" → this triggers REAL browser permission popup
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(track => track.stop());
+    return true;
+
+  } catch (err) {
+    console.error("Mic permission denied:", err);
+    return false;
+  }
+}
+
+
+
   // ✅ Fetch topics dynamically
   async function fetchTopicsForStudent(student_id) {
     try {
@@ -171,7 +198,14 @@ const StudentHome = () => {
         text: "Start Assignment",
         className: "bg-yellow-400 text-gray-900 hover:bg-yellow-500",
         disabled: false,
-        action: () => navigate(`/student/assignment/${assignment.assignment_id}`)
+        action: async () => {
+          const ok = await requestMicPermission();
+          if (!ok) {
+            toast("Microphone permission is required to start the assignment test.");
+            return;
+          }
+          navigate(`/student/assignment/${assignment.assignment_id}`);
+        }
       };
     }
 
@@ -219,6 +253,7 @@ const StudentHome = () => {
       <h2 className="text-lg lg:text-xl font-bold text-gray-800 mb-4">
         Assignments
       </h2>
+      <ToastContainer />
 
       {assignmentData.length === 0 ? (
         <EmptyState

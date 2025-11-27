@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { toast, ToastContainer } from "react-toastify";
 
 const SubtopicsComponent = () => {
   const [subtopics, setSubtopics] = useState([]);
@@ -55,6 +56,17 @@ const SubtopicsComponent = () => {
     fetchSubtopics();
   }, [topic]);
 
+  async function requestMicPermission() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop());
+      return true;
+    } catch (err) {
+      console.error("Mic permission denied", err);
+      return false;
+    }
+  }
+
   // LOADING UI
   if (loading) {
     return (
@@ -73,11 +85,24 @@ const SubtopicsComponent = () => {
     );
   }
 
+  const handleStartTest = async (subTopicId) => {
+    const granted = await requestMicPermission();
+
+    if (!granted) {
+      toast("Microphone permission is required to start the test.");
+      return;
+    }
+
+    // Now safe to navigate without breaking fullscreen
+    window.location.href = `/student/${subTopicId}/lessonsoverview`;
+  };
+
   return (
     <div className="p-4 lg:p-6 mt-20 bg-gray-50 min-h-screen">
       <h2 className="text-xl font-bold text-gray-800 mb-6">
         {topicName} - Subtopics
       </h2>
+      <ToastContainer/>
 
       <div className="space-y-4 lg:space-y-6 mx-0 lg:mx-4">
         {subtopics.map((sub) => (
@@ -104,12 +129,12 @@ const SubtopicsComponent = () => {
                   View Test
                 </a>
               ) : (
-                <a
-                  href={`/student/${sub.sub_topic_id}/lessonsoverview`}
+                <button
+                  onClick={() => handleStartTest(sub.sub_topic_id)}
                   className="bg-yellow-400 text-gray-900 px-3 lg:px-4 py-2 rounded-sm text-xs lg:text-sm font-medium hover:bg-yellow-500 transition-colors w-full sm:w-auto text-center"
                 >
                   Start Test
-                </a>
+                </button>
               )}
             </div>
 

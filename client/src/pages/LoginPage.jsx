@@ -38,23 +38,45 @@ const LoginPage = () => {
         throw new Error(result.detail || "Invalid username or password");
       }
 
+      // Save user to localStorage
       localStorage.setItem("user", JSON.stringify(result.data));
 
+      // ======================
+      // 🎯 Onboarding Redirect
+      // ======================
       if (result.data.role === "student") {
-        navigate("/student/studenthome");
-      } else if (result.data.role === "admin") {
+        const userId = result.data.user_id;
+
+        const onboardRes = await fetch(
+          `${import.meta.env.VITE_BACKEND_API_URL}/student/${userId}/is-onboarded`
+        );
+
+        const onboardData = await onboardRes.json();
+
+        if (!onboardData.is_onboarded) {
+          navigate("/onboard");
+        } else {
+          navigate("/student/studenthome");
+        }
+
+        return; // stop here
+      }
+
+      // ======================
+      // Other Roles (no onboarding)
+      // ======================
+      if (result.data.role === "admin") {
         navigate("/admin/adminhome");
       } else if (result.data.role === "super_admin") {
-        navigate("superadmin/superadminhome");
-      }else if (result.data.role === "administrator") {
+        navigate("/superadmin/superadminhome");
+      } else if (result.data.role === "administrator") {
         navigate("/administrator/administratorhome");
-      } 
-      else if (result.data.role === "teacher") {
+      } else if (result.data.role === "teacher") {
         navigate("/teacher/teacherhome");
-      } 
-      else {
+      } else {
         navigate("/");
       }
+
     } catch (err) {
       setError(err.message);
     } finally {
@@ -164,9 +186,8 @@ const LoginPage = () => {
             <button
               type="submit"
               disabled={loading}
-              className={`w-full bg-yellow-400 text-[#222] font-bold py-2 lg:py-3 rounded-md transition duration-200 text-sm lg:text-lg mb-1 ${
-                loading ? "opacity-70 cursor-not-allowed" : "hover:bg-yellow-500"
-              }`}
+              className={`w-full bg-yellow-400 text-[#222] font-bold py-2 lg:py-3 rounded-md transition duration-200 text-sm lg:text-lg mb-1 ${loading ? "opacity-70 cursor-not-allowed" : "hover:bg-yellow-500"
+                }`}
             >
               {loading ? "Signing in..." : "Sign in"}
             </button>
