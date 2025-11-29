@@ -16,296 +16,128 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/create", status_code=201)
 async def create_test(
-    test_type: str = Form(...),  # 'assignment' or 'sub_topic'
-    
-    # Common fields
+    test_type: str = Form(...),
     file: UploadFile = File(...),
 
-    # Assignment fields
-    college_id: int = Form(None),         # <-- ADDED
+    college_id: int = Form(None),
     department_id: int = Form(None),
     assignment_number: str = Form(None),
     assignment_topic: str = Form(None),
     start_date: str = Form(None),
-    end_date: str = Form(None),  # Can be null
+    end_date: str = Form(None),
 
-    # Subtopic fields
     topic_name: str = Form(None),
     sub_topic_name: str = Form(None),
     file_name: str = Form(None),
 ):
-    """Create assignment or subtopic test — optimized for speed."""
+    if not file.filename.endswith((".xlsx", ".xls")):
+        raise HTTPException(400, "Only Excel files allowed")
 
-    # Validate file
-    if not file.filename or not file.filename.endswith((".xlsx", ".xls")):
-        raise HTTPException(status_code=400, detail="Only Excel (.xlsx/.xls) files are allowed.")
-
-    # Save uploaded file
     unique_id = str(uuid.uuid4())
-    file_extension = os.path.splitext(file.filename)[1]
-    saved_filename = f"{unique_id}{file_extension}"
+    saved_filename = f"{unique_id}{os.path.splitext(file.filename)[1]}"
     save_folder = os.path.join(UPLOAD_DIR, test_type)
     os.makedirs(save_folder, exist_ok=True)
     file_path = os.path.join(save_folder, saved_filename)
 
-    async with aiofiles.open(file_path, "wb") as out_file:
-        while content := await file.read(1024 * 1024):
-            await out_file.write(content)
+    async with aiofiles.open(file_path, "wb") as out:
+        while data := await file.read(1024 * 1024):
+            await out.write(data)
+    end_date = end_date or None
+    start_date = start_date or None
 
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
 
-                # ============================================================
-                # 1️⃣ ASSIGNMENT CREATION SECTION (UPDATED WITH college_id)
-                # ============================================================
+                # CREATE ASSIGNMENT
                 if test_type == "assignment":
                     if not all([college_id, department_id, assignment_number, assignment_topic]):
-                        raise HTTPException(status_code=400,
-                            detail="college_id, department_id, assignment_number, and assignment_topic are required."
-                        )
+                        raise HTTPException(400, "Missing required assignment fields")
+                    
 
-                    # Validate college
-                    cursor.execute(
-                        "SELECT college_id FROM colleges WHERE college_id=%s AND is_active=TRUE",
-                        (college_id,)
-                    )
-                    if not cursor.fetchone():
-                        raise HTTPException(status_code=400, detail="Invalid college_id")
-
-                    # Validate department
-                    cursor.execute(
-                        "SELECT department_id FROM departments WHERE department_id=%s AND is_active=TRUE",
-                        (department_id,)
-                    )
-                    if not cursor.fetchone():
-                        raise HTTPException(status_code=400, detail="Invalid department_id")
-
-                    # Parse dates
-                    def parse_date(value):
-                        if not value: return None
-                        try:
-                            return datetime.fromisoformat(value.replace("Z", "+00:00"))
-                        except:
-                            raise HTTPException(status_code=400, detail="Invalid date format (use ISO).")
-
-                    start_dt = parse_date(start_date)
-                    end_dt = parse_date(end_date)
-
-                    # Check unique assignment number inside same college + department
-                    cursor.execute(
-                        """SELECT assignment_id 
-                           FROM assignments 
-                           WHERE assignment_number=%s AND department_id=%s AND college_id=%s""",
-                        (assignment_number, department_id, college_id)
-                    )
-                    if cursor.fetchone():
-                        raise HTTPException(
-                            status_code=400,
-                            detail="Assignment number already exists for this department."
-                        )
-
-                    # Insert new assignment WITH college_id
-                    cursor.execute(
-                        """
+                    cursor.execute("""
                         INSERT INTO assignments
-                        (assignment_number, assignment_topic, college_id, department_id,
-                          start_date, end_date, file_name, file_path,
-                         created_at, updated_at)
-                        VALUES (%s,  %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-                        """,
-                        (
-                            assignment_number,
-                            assignment_topic,
-                            college_id,
-                            department_id,
-                            start_dt,
-                            end_dt,
-                            file.filename,
-                            file_path,
-                        )
-                    )
-
+                        (assignment_number, assignment_topic, college_id, department_id, start_date,
+                         end_date, file_name, file_path, created_at, updated_at)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NOW())
+                    """, (
+                        assignment_number, assignment_topic, college_id, department_id,
+                        start_date, end_date, file.filename, file_path
+                    ))
                     ref_id = cursor.lastrowid
                     test_scope = "assignment"
 
-                # ============================================================
-                # 2️⃣ SUBTOPIC TEST CREATION (UNCHANGED)
-                # ============================================================
+                # CREATE SUBTOPIC TEST
                 elif test_type == "sub_topic":
-
-                    if not all([topic_name, sub_topic_name]):
-                        raise HTTPException(status_code=400,
-                            detail="Missing topic_name or sub_topic_name."
-                        )
-
-                    cursor.execute(
-                        "SELECT topic_id FROM topics WHERE topic_name=%s AND is_active=TRUE",
-                        (topic_name,)
-                    )
+                    cursor.execute("SELECT topic_id FROM topics WHERE topic_name=%s", (topic_name,))
                     topic = cursor.fetchone()
                     if not topic:
-                        raise HTTPException(status_code=400, detail="Topic not found.")
+                        raise HTTPException(400, "Topic not found")
 
                     topic_id = topic["topic_id"]
 
-                    cursor.execute(
-                        "SELECT sub_topic_id FROM sub_topics WHERE topic_id=%s AND sub_topic_name=%s AND is_active=TRUE",
-                        (topic_id, sub_topic_name)
-                    )
-                    sub_topic = cursor.fetchone()
+                    cursor.execute("""
+                        INSERT INTO sub_topics
+                        (topic_id, sub_topic_name, file_name, test_file, created_at, updated_at)
+                        VALUES (%s,%s,%s,%s,NOW(),NOW())
+                    """, (topic_id, sub_topic_name, file.filename, file_path))
 
-                    if sub_topic:
-                        ref_id = sub_topic["sub_topic_id"]
-                        cursor.execute(
-                            """
-                            UPDATE sub_topics 
-                            SET file_name=%s, test_file=%s, updated_at=NOW()
-                            WHERE sub_topic_id=%s
-                            """,
-                            (file.filename, file_path, ref_id)
-                        )
-                    else:
-                        cursor.execute(
-                            """
-                            INSERT INTO sub_topics
-                            (topic_id, sub_topic_name, file_name, test_file, is_active, created_at, updated_at)
-                            VALUES (%s, %s, %s, %s, TRUE, NOW(), NOW())
-                            """,
-                            (topic_id, sub_topic_name, file.filename, file_path)
-                        )
-                        ref_id = cursor.lastrowid
-
+                    ref_id = cursor.lastrowid
                     test_scope = "sub_topic"
 
-                else:
-                    raise HTTPException(status_code=400, detail="Invalid test_type.")
-
-                # ============================================================
-                # 3️⃣ Parse Excel & Insert Questions (unchanged)
-                # ============================================================
-
+                # Parse Excel
                 df = pd.read_excel(file_path)
-                if df.empty:
-                    raise HTTPException(status_code=400, detail="Uploaded Excel file is empty.")
+                df = normalize_columns(df)
 
-                required_columns = ["Question_Type", "Question_Text"]
-                missing = [col for col in required_columns if col not in df.columns]
-                if missing:
-                    raise HTTPException(status_code=400, detail=f"Missing required columns: {', '.join(missing)}")
+                if "question_type" not in df.columns or "question_text" not in df.columns:
+                    raise HTTPException(400, "Excel missing Question_Type or Question_Text")
 
                 question_rows = []
-                question_types_cache = {}
+                question_type_cache = {}
 
-                for index, row in df.iterrows():
-                    if pd.isna(row.get("Question_Type")) or pd.isna(row.get("Question_Text")):
+                for idx, row in df.iterrows():
+                    if pd.isna(row.get("question_type")):
                         continue
 
-                    q_type = str(row["Question_Type"]).strip().lower()
+                    q_type = str(row.get("question_type")).strip().lower()
 
-                    # Cache question type lookup
-                    if q_type not in question_types_cache:
-                        cursor.execute(
-                            "SELECT question_type_id FROM question_type WHERE question_type=%s",
-                            (q_type,)
-                        )
-                        qtr = cursor.fetchone()
-                        if not qtr:
-                            raise HTTPException(status_code=400, detail=f"Invalid question type: {q_type}")
-                        question_types_cache[q_type] = qtr["question_type_id"]
+                    if q_type not in question_type_cache:
+                        cursor.execute("SELECT question_type_id FROM question_type WHERE question_type=%s", (q_type,))
+                        qt = cursor.fetchone()
+                        if not qt:
+                            raise HTTPException(400, f"Invalid question type: {q_type}")
+                        question_type_cache[q_type] = qt["question_type_id"]
 
-                    q_type_id = question_types_cache[q_type]
+                    qd = build_question_json(row, q_type)
 
-                    # Build question_data JSON
-                    qd = {}
-                    if q_type == "mcq":
-                        qd = {
-                            "options": [
-                                row.get("Option_A"),
-                                row.get("Option_B"),
-                                row.get("Option_C"),
-                                row.get("Option_D"),
-                            ],
-                            "correct_answer": row.get("Correct_Answer"),
-                        }
-                    elif q_type == "fill_blank":
-                        qd = {
-                            "sentence": row.get("Question_Text"),
-                            "correct_answers": [
-                                x.strip() for x in str(row.get("Correct_Answer", "")).split(",") if x.strip()
-                            ],
-                        }
-                    elif q_type == "match":
-                        qd = {
-                            "column_a": [x.strip() for x in str(row.get("Option_A", "")).split(";") if x.strip()],
-                            "column_b": [x.strip() for x in str(row.get("Option_B", "")).split(";") if x.strip()],
-                            "correct_pairs": dict(
-                                pair.split("-") for pair in str(row.get("Correct_Answer", "")).split(",")
-                                if "-" in pair and len(pair.split("-")) == 2
-                            ),
-                        }
-                    elif q_type == "own_response":
-                        qd = {
-                            "expected_keywords": [
-                                x.strip() for x in str(row.get("Extra_Data", "")).split(",") if x.strip()
-                            ]
-                        }
-                    elif q_type == "true_false":
-                        qd = {
-                            "statement": row.get("Question_Text"),
-                            "correct_answer": str(row.get("Correct_Answer", "")).lower() in ["true", "1", "yes"],
-                        }
-                    elif q_type == "one_word":
-                        qd = {
-                            "definition": row.get("Question_Text"),
-                            "correct_answer": row.get("Correct_Answer"),
-                        }
+                    question_rows.append((
+                        test_scope,
+                        ref_id,
+                        question_type_cache[q_type],
+                        row.get("question_text"),
+                        json.dumps(qd),
+                        float(row.get("marks", 1)),
+                        int(row.get("order_no", idx + 1)),
+                    ))
 
-                    question_rows.append(
-                        (
-                            test_scope,
-                            ref_id,
-                            q_type_id,
-                            row.get("Question_Text"),
-                            json.dumps(qd),
-                            float(row.get("Marks", 1)),
-                            int(row.get("Order_No", index + 1)),
-                        )
-                    )
-
-                if question_rows:
-                    cursor.executemany(
-                        """
-                        INSERT INTO questions
-                        (test_scope, reference_id, question_type_id, question_text, question_data,
-                         marks, order_no, created_at, updated_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-                        """,
-                        question_rows,
-                    )
-
+                cursor.executemany("""
+                    INSERT INTO questions
+                    (test_scope,reference_id,question_type_id,question_text,question_data,
+                     marks,order_no,created_at,updated_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,NOW(),NOW())
+                """, question_rows)
                 conn.commit()
 
-        return {
-            "status": "success",
-            "message": f"{test_scope.replace('_', ' ').title()} created successfully with {len(question_rows)} questions.",
-            "reference_id": ref_id,
-            "file_info": {
-                "original_name": file.filename,
-                "saved_as": saved_filename,
-                "path": file_path,
-            },
-        }
-
-    except HTTPException:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        raise
+        return {"status": "success", "message": "Test created", "reference_id": ref_id}
 
     except Exception as e:
         if os.path.exists(file_path):
             os.remove(file_path)
-        raise HTTPException(status_code=500, detail=f"Error creating test: {str(e)}")
+        raise HTTPException(500, f"Error: {str(e)}")
+
+
+
+
 
 
 
@@ -334,6 +166,9 @@ async def start_session(user_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error starting session: {str(e)}")
     
+
+
+
 
 @router.put("/end/{session_id}")
 async def end_session(session_id: int):
@@ -376,166 +211,93 @@ async def end_session(session_id: int):
 
 @router.put("/update-file/{assignment_id}")
 async def update_assignment_file(assignment_id: int, file: UploadFile = File(...)):
-    """
-    Update an existing assignment's question file.
-    - Deletes the old file from disk
-    - Deletes existing questions
-    - Parses the new Excel file and re-inserts questions
-    """
-    # ✅ Step 1: Validate file type
+
     if not file.filename.endswith((".xlsx", ".xls")):
-        raise HTTPException(status_code=400, detail="Only Excel (.xlsx/.xls) files are allowed.")
+        raise HTTPException(400, "Only Excel files allowed")
+
+    # Save file
+    unique_id = str(uuid.uuid4())
+    saved_filename = f"{unique_id}{os.path.splitext(file.filename)[1]}"
+    folder = os.path.join(UPLOAD_DIR, "assignment")
+    os.makedirs(folder, exist_ok=True)
+    new_file_path = os.path.join(folder, saved_filename)
+
+    async with aiofiles.open(new_file_path, "wb") as out:
+        while chunk := await file.read(1024 * 1024):
+            await out.write(chunk)
 
     try:
-        # ✅ Step 2: Get assignment info (to remove old file)
         with get_db() as conn:
             with conn.cursor() as cursor:
-                cursor.execute(
-                    "SELECT file_path, file_name FROM assignments WHERE assignment_id = %s",
-                    (assignment_id,)
-                )
-                assignment = cursor.fetchone()
 
-                if not assignment:
-                    raise HTTPException(status_code=404, detail="Assignment not found.")
+                # Delete old file
+                cursor.execute("SELECT file_path FROM assignments WHERE assignment_id=%s", (assignment_id,))
+                data = cursor.fetchone()
+                if not data:
+                    raise HTTPException(404, "Assignment not found")
 
-                old_file_path = assignment.get("file_path")
+                if data["file_path"] and os.path.exists(data["file_path"]):
+                    os.remove(data["file_path"])
 
-                # ✅ Step 3: Delete old file (if exists)
-                if old_file_path and os.path.exists(old_file_path):
-                    os.remove(old_file_path)
-
-        # ✅ Step 4: Save new file
-        unique_id = str(uuid.uuid4())
-        file_extension = os.path.splitext(file.filename)[1]
-        saved_filename = f"{unique_id}{file_extension}"
-        save_folder = os.path.join(UPLOAD_DIR, "assignment")
-        os.makedirs(save_folder, exist_ok=True)
-        new_file_path = os.path.join(save_folder, saved_filename)
-
-        async with aiofiles.open(new_file_path, "wb") as out_file:
-            while chunk := await file.read(1024 * 1024):
-                await out_file.write(chunk)
-
-        # ✅ Step 5: Parse Excel
-        df = pd.read_excel(new_file_path)
-        if df.empty:
-            raise HTTPException(status_code=400, detail="Uploaded Excel file is empty or invalid.")
-
-        # ✅ Step 6: Remove existing questions for this assignment
-        with get_db() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    "DELETE FROM questions WHERE test_scope='assignment' AND reference_id=%s",
-                    (assignment_id,)
-                )
+                # Delete old questions
+                cursor.execute("DELETE FROM questions WHERE test_scope='assignment' AND reference_id=%s", (assignment_id,))
                 conn.commit()
 
-        # ✅ Step 7: Re-insert questions
+        # Parse Excel
+        df = pd.read_excel(new_file_path)
+        df = normalize_columns(df)
+
         question_rows = []
+
         with get_db() as conn:
             with conn.cursor() as cursor:
-                for index, row in df.iterrows():
-                    q_type = str(row["Question_Type"]).strip().lower()
 
-                    cursor.execute(
-                        "SELECT question_type_id FROM question_type WHERE question_type=%s",
-                        (q_type,)
-                    )
-                    q_type_row = cursor.fetchone()
-                    if not q_type_row:
-                        raise HTTPException(status_code=400, detail=f"Invalid question type: {q_type}")
-                    q_type_id = q_type_row["question_type_id"]
+                qt_cache = {}
 
-                    qd = {}
-                    if q_type == "mcq":
-                        qd = {
-                            "options": [
-                                row.get("Option_A"),
-                                row.get("Option_B"),
-                                row.get("Option_C"),
-                                row.get("Option_D")
-                            ],
-                            "correct_answer": row.get("Correct_Answer"),
-                        }
-                    elif q_type == "fill_blank":
-                        qd = {
-                            "sentence": row.get("Question_Text"),
-                            "correct_answers": [
-                                x.strip() for x in str(row.get("Correct_Answer", "")).split(",")
-                            ],
-                        }
-                    elif q_type == "match":
-                        qd = {
-                            "column_a": str(row.get("Option_A", "")).split(";"),
-                            "column_b": str(row.get("Option_B", "")).split(";"),
-                            "correct_pairs": dict(
-                                pair.split("-") for pair in str(row.get("Correct_Answer", "")).split(",") if "-" in pair
-                            ),
-                        }
-                    elif q_type == "own_response":
-                        qd = {"expected_keywords": str(row.get("Extra_Data", "")).split(",")}
-                    elif q_type == "true_false":
-                        qd = {
-                            "statement": row.get("Question_Text"),
-                            "correct_answer": str(row.get("Correct_Answer")).lower() in ["true", "1"],
-                        }
-                    elif q_type == "one_word":
-                        qd = {
-                            "definition": row.get("Question_Text"),
-                            "correct_answer": row.get("Correct_Answer"),
-                        }
+                for idx, row in df.iterrows():
+                    q_type = str(row.get("question_type")).strip().lower()
 
-                    question_rows.append(
-                        (
-                            "assignment",
-                            assignment_id,
-                            q_type_id,
-                            row.get("Question_Text"),
-                            json.dumps(qd),
-                            row.get("Marks", 1),
-                            row.get("Order_No", index + 1),
-                        )
-                    )
+                    if q_type not in qt_cache:
+                        cursor.execute("SELECT question_type_id FROM question_type WHERE question_type=%s", (q_type,))
+                        qt = cursor.fetchone()
+                        if not qt:
+                            raise HTTPException(400, f"Invalid question type: {q_type}")
+                        qt_cache[q_type] = qt["question_type_id"]
 
-                cursor.executemany(
-                    """
+                    qd = build_question_json(row, q_type)
+
+                    question_rows.append((
+                        "assignment",
+                        assignment_id,
+                        qt_cache[q_type],
+                        row.get("question_text"),
+                        json.dumps(qd),
+                        float(row.get("marks", 1)),
+                        int(row.get("order_no", idx + 1)),
+                    ))
+
+                cursor.executemany("""
                     INSERT INTO questions
-                    (test_scope, reference_id, question_type_id, question_text, question_data, marks, order_no, created_at, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-                    """,
-                    question_rows,
-                )
+                    (test_scope,reference_id,question_type_id,question_text,question_data,
+                     marks,order_no,created_at,updated_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,NOW(),NOW())
+                """, question_rows)
 
-                # ✅ Step 8: Update file info in assignments table
-                cursor.execute(
-                    """
+                cursor.execute("""
                     UPDATE assignments
                     SET file_name=%s, file_path=%s, updated_at=NOW()
                     WHERE assignment_id=%s
-                    """,
-                    (file.filename, new_file_path, assignment_id),
-                )
+                """, (file.filename, new_file_path, assignment_id))
+
                 conn.commit()
 
-        return {
-            "status": "success",
-            "message": f"Assignment file updated successfully with {len(question_rows)} new questions.",
-            "assignment_id": assignment_id,
-            "file_info": {
-                "original_name": file.filename,
-                "saved_as": saved_filename,
-                "path": new_file_path,
-            },
-        }
+        return {"status": "success", "message": "Assignment updated", "questions": len(question_rows)}
 
-    except HTTPException:
-        raise
     except Exception as e:
-        print("Error updating assignment file:", e)
-        raise HTTPException(status_code=500, detail=f"Error updating assignment file: {str(e)}")
+        raise HTTPException(500, f"Error: {str(e)}")
 
     
+
 
 
 @router.delete("/delete/{assignment_id}")
@@ -623,163 +385,160 @@ async def delete_assignment(assignment_id: int):
 
 @router.put("/update-file/subtopic/{sub_topic_id}")
 async def update_subtopic_file(sub_topic_id: int, file: UploadFile = File(...)):
-    """
-    Update an existing subtopic's question file.
-    - Deletes old file from disk
-    - Deletes existing questions for that subtopic
-    - Parses new Excel file and re-inserts questions
-    """
-    # ✅ Step 1: Validate file type
-    if not file.filename.endswith((".xlsx", ".xls")):
-        raise HTTPException(status_code=400, detail="Only Excel (.xlsx/.xls) files are allowed.")
+
+    if not file.filename.endswith((".xlsx",".xls")):
+        raise HTTPException(400, "Only Excel allowed")
+
+    unique_id = str(uuid.uuid4())
+    saved_filename = f"{unique_id}{os.path.splitext(file.filename)[1]}"
+    folder = os.path.join(UPLOAD_DIR, "sub_topic")
+    os.makedirs(folder, exist_ok=True)
+    new_file_path = os.path.join(folder, saved_filename)
+
+    async with aiofiles.open(new_file_path, "wb") as out:
+        while chunk := await file.read(1024 * 1024):
+            await out.write(chunk)
 
     try:
-        # ✅ Step 2: Get subtopic info (for deleting old file)
         with get_db() as conn:
             with conn.cursor() as cursor:
-                cursor.execute(
-                    "SELECT test_file, file_name FROM sub_topics WHERE sub_topic_id = %s",
-                    (sub_topic_id,)
-                )
-                sub_topic = cursor.fetchone()
 
-                if not sub_topic:
-                    raise HTTPException(status_code=404, detail="Subtopic not found.")
+                cursor.execute("SELECT test_file FROM sub_topics WHERE sub_topic_id=%s", (sub_topic_id,))
+                subtopic = cursor.fetchone()
+                if not subtopic:
+                    raise HTTPException(404, "Subtopic not found")
 
-                old_file_path = sub_topic.get("test_file")
+                if subtopic["test_file"] and os.path.exists(subtopic["test_file"]):
+                    os.remove(subtopic["test_file"])
 
-                # ✅ Step 3: Delete old file if exists
-                if old_file_path and os.path.exists(old_file_path):
-                    os.remove(old_file_path)
-
-        # ✅ Step 4: Save new file
-        unique_id = str(uuid.uuid4())
-        file_extension = os.path.splitext(file.filename)[1]
-        saved_filename = f"{unique_id}{file_extension}"
-        save_folder = os.path.join(UPLOAD_DIR, "sub_topic")
-        os.makedirs(save_folder, exist_ok=True)
-        new_file_path = os.path.join(save_folder, saved_filename)
-
-        async with aiofiles.open(new_file_path, "wb") as out_file:
-            while chunk := await file.read(1024 * 1024):  # 1MB chunks
-                await out_file.write(chunk)
-
-        # ✅ Step 5: Parse Excel for new questions
-        df = pd.read_excel(new_file_path)
-        if df.empty:
-            raise HTTPException(status_code=400, detail="Uploaded Excel file is empty or invalid.")
-
-        # ✅ Step 6: Delete existing questions linked to this subtopic
-        with get_db() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    "DELETE FROM questions WHERE test_scope='sub_topic' AND reference_id=%s",
-                    (sub_topic_id,),
-                )
+                cursor.execute("DELETE FROM questions WHERE test_scope='sub_topic' AND reference_id=%s", (sub_topic_id,))
                 conn.commit()
 
-        # ✅ Step 7: Insert parsed questions
+        df = pd.read_excel(new_file_path)
+        df = normalize_columns(df)
+
         question_rows = []
+
         with get_db() as conn:
             with conn.cursor() as cursor:
-                for index, row in df.iterrows():
-                    q_type = str(row["Question_Type"]).strip().lower()
 
-                    cursor.execute(
-                        "SELECT question_type_id FROM question_type WHERE question_type=%s",
-                        (q_type,)
-                    )
-                    q_type_row = cursor.fetchone()
-                    if not q_type_row:
-                        raise HTTPException(status_code=400, detail=f"Invalid question type: {q_type}")
-                    q_type_id = q_type_row["question_type_id"]
+                qt_cache = {}
 
-                    # Build question_data JSON structure
-                    qd = {}
-                    if q_type == "mcq":
-                        qd = {
-                            "options": [
-                                row.get("Option_A"),
-                                row.get("Option_B"),
-                                row.get("Option_C"),
-                                row.get("Option_D")
-                            ],
-                            "correct_answer": row.get("Correct_Answer"),
-                        }
-                    elif q_type == "fill_blank":
-                        qd = {
-                            "sentence": row.get("Question_Text"),
-                            "correct_answers": [
-                                x.strip() for x in str(row.get("Correct_Answer", "")).split(",")
-                            ],
-                        }
-                    elif q_type == "match":
-                        qd = {
-                            "column_a": str(row.get("Option_A", "")).split(";"),
-                            "column_b": str(row.get("Option_B", "")).split(";"),
-                            "correct_pairs": dict(
-                                pair.split("-") for pair in str(row.get("Correct_Answer", "")).split(",") if "-" in pair
-                            ),
-                        }
-                    elif q_type == "own_response":
-                        qd = {"expected_keywords": str(row.get("Extra_Data", "")).split(",")}
-                    elif q_type == "true_false":
-                        qd = {
-                            "statement": row.get("Question_Text"),
-                            "correct_answer": str(row.get("Correct_Answer")).lower() in ["true", "1"],
-                        }
-                    elif q_type == "one_word":
-                        qd = {
-                            "definition": row.get("Question_Text"),
-                            "correct_answer": row.get("Correct_Answer"),
-                        }
+                for idx, row in df.iterrows():
+                    q_type = str(row.get("question_type")).strip().lower()
 
-                    question_rows.append(
-                        (
-                            "sub_topic",
-                            sub_topic_id,
-                            q_type_id,
-                            row.get("Question_Text"),
-                            json.dumps(qd),
-                            row.get("Marks", 1),
-                            row.get("Order_No", index + 1),
-                        )
-                    )
+                    if q_type not in qt_cache:
+                        cursor.execute("SELECT question_type_id FROM question_type WHERE question_type=%s", (q_type,))
+                        qt = cursor.fetchone()
+                        if not qt:
+                            raise HTTPException(400, f"Invalid question type: {q_type}")
+                        qt_cache[q_type] = qt["question_type_id"]
 
-                # Bulk insert all questions
-                cursor.executemany(
-                    """
+                    qd = build_question_json(row, q_type)
+
+                    question_rows.append((
+                        "sub_topic",
+                        sub_topic_id,
+                        qt_cache[q_type],
+                        row.get("question_text"),
+                        json.dumps(qd),
+                        float(row.get("marks", 1)),
+                        int(row.get("order_no", idx + 1)),
+                    ))
+
+                cursor.executemany("""
                     INSERT INTO questions
-                    (test_scope, reference_id, question_type_id, question_text, question_data, marks, order_no, created_at, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-                    """,
-                    question_rows,
-                )
+                    (test_scope,reference_id,question_type_id,question_text,question_data,
+                     marks,order_no,created_at,updated_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,NOW(),NOW())
+                """, question_rows)
 
-                # ✅ Step 8: Update file info in sub_topics
-                cursor.execute(
-                    """
+                cursor.execute("""
                     UPDATE sub_topics
                     SET file_name=%s, test_file=%s, updated_at=NOW()
                     WHERE sub_topic_id=%s
-                    """,
-                    (file.filename, new_file_path, sub_topic_id),
-                )
+                """, (file.filename, new_file_path, sub_topic_id))
+
                 conn.commit()
 
+        return {"status": "success", "message": "Subtopic updated", "questions": len(question_rows)}
+
+    except Exception as e:
+        raise HTTPException(500, f"Error: {str(e)}")
+
+
+
+
+
+
+
+
+
+
+def normalize_columns(df):
+    """Normalize Excel columns to lowercase to avoid key errors."""
+    df.columns = [col.strip().lower() for col in df.columns]
+    return df
+
+
+
+
+
+def build_question_json(row, q_type):
+    """Generate question_data JSON based on question type."""
+
+    if q_type == "mcq":
         return {
-            "status": "success",
-            "message": f"Subtopic file updated successfully with {len(question_rows)} new questions.",
-            "sub_topic_id": sub_topic_id,
-            "file_info": {
-                "original_name": file.filename,
-                "saved_as": saved_filename,
-                "path": new_file_path,
-            },
+            "options": [
+                row.get("option_a"),
+                row.get("option_b"),
+                row.get("option_c"),
+                row.get("option_d"),
+            ],
+            "correct_answer": row.get("correct_answer"),
         }
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        print("❌ Error updating subtopic file:", e)
-        raise HTTPException(status_code=500, detail=f"Error updating subtopic file: {str(e)}")
+    if q_type == "fill_blank":
+        return {
+            "sentence": row.get("question_text"),
+            "correct_answers": [
+                x.strip() for x in str(row.get("correct_answer", "")).split(",") if x.strip()
+            ]
+        }
+
+    if q_type == "pronunciation":
+        return {
+            "word": row.get("pronunciation_word"),
+            "correct_answer": row.get("correct_answer")
+        }
+
+    if q_type == "true_false":
+        return {
+            "statement": row.get("question_text"),
+            "correct_answer": str(row.get("correct_answer", "")).lower() in ["true", "1", "yes"]
+        }
+
+    if q_type == "match":
+        return {
+            "column_a": [x.strip() for x in str(row.get("option_a", "")).split(";") if x.strip()],
+            "column_b": [x.strip() for x in str(row.get("option_b", "")).split(";") if x.strip()],
+            "correct_pairs": dict(
+                pair.split("-") for pair in str(row.get("correct_answer", "")).split(",")
+                if "-" in pair and len(pair.split("-")) == 2
+            ),
+        }
+
+    if q_type == "own_response":
+        return {
+            "expected_keywords": [
+                x.strip() for x in str(row.get("extra_data", "")).split(",") if x.strip()
+            ]
+        }
+
+    if q_type == "one_word":
+        return {
+            "definition": row.get("question_text"),
+            "correct_answer": row.get("correct_answer")
+        }
+
+    return {}  # fallback
