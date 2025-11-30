@@ -250,7 +250,7 @@ const SuperAdminUpload = () => {
       fetchAssignments();
       // reset partial fields
       setFormData((p) => ({ ...p, assignmentNo: "", assignmentTopic: "", file: null, startDate: "", endDate: "" }));
-      window.reload();
+      window.location.reload();
     } catch (err) {
       console.error(err);
       toast.error("Failed to upload assignment");
@@ -310,6 +310,7 @@ const SuperAdminUpload = () => {
         overviewText: "",
       }));
       fetchOverviewDetails();
+      window.location.reload();
     } catch (err) {
       console.error(err);
       toast.error("Failed to upload overview");
@@ -348,6 +349,7 @@ const SuperAdminUpload = () => {
 
       toast.success("MCQ uploaded successfully!");
       setFormData((p) => ({ ...p, mcqFile: null, mcqSubTopicName: "", mcqNoOfSubTopic: "" }));
+      window.location.reload();
     } catch (err) {
       console.error(err);
       toast.error("Failed to upload MCQ");

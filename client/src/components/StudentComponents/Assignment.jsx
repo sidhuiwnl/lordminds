@@ -393,113 +393,110 @@ const Assignments = () => {
   // 🧠 Analyze Audio
   const sendAudioForAnalysis = async (audioBlob) => {
     setAnalyzing(true);
-    setFeedback("🔄 Analyzing Audio...");
+    setFeedback("Analyzing your answer...");
+
     const formData = new FormData();
     formData.append("file", audioBlob, "response.wav");
 
     try {
-      const res = await retryFetch(async () => {
-        const response = await fetch(`${API_URL}/users/analyze-voice`, {
-          method: "POST",
-          body: formData,
-        });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response;
-      });
-
+      const res = await retryFetch(() =>
+        fetch(`${API_URL}/users/analyze-voice`, { method: "POST", body: formData })
+      );
       const result = await res.json();
       const qid = currentQuestion.question_id;
-
-      // Increment attempt count for this question
       const newAttemptCount = (attemptCounts[qid] || 0) + 1;
-      setAttemptCounts(prev => ({
-        ...prev,
-        [qid]: newAttemptCount
-      }));
+      setAttemptCounts(prev => ({ ...prev, [qid]: newAttemptCount }));
 
-      setAnalysisResults((prev) => ({ ...prev, [qid]: result }));
+      const transcript = (
+        result?.data?.transcription ||
+        result?.transcription ||
+        result?.text ||
+        ""
+      ).toLowerCase().replace(/[.,!?;:'"()]/g, '').trim();
 
-      const expectedAnswer =
-        currentQuestion?.question_data?.correct_answer?.toString().toLowerCase() || "";
-
-      const transcript =
-        result?.data?.transcription?.toLowerCase?.() ||
-        result?.transcription?.toLowerCase?.() ||
-        "";
-
-      // ⚠️ Handle "Could not understand"
-      if (transcript.includes("could not understand")) {
-        setFeedback("⚠️ Could not understand your answer. Please try speaking clearly.");
-        speechSynthesis.speak(
-          new SpeechSynthesisUtterance("Could not understand your answer, please try again.")
-        );
+      if (!transcript || transcript.includes("could not understand")) {
+        setFeedback("Could not understand. Speak clearly.");
+        speechSynthesis.speak(new SpeechSynthesisUtterance("Could not understand. Try again."));
+        setAnalyzing(false);
         return;
       }
 
-      // ✅ Evaluate correctness with fuzzy matching
-      const isCorrect = checkAnswerCorrectness(transcript, expectedAnswer);
+      let isCorrect = false;
+      let correctText = "";
 
+      // 1. FILL IN THE BLANKS
+      if (currentQuestion.question_type === "fill_blank") {
+        const correctAnswers = Array.isArray(currentQuestion.question_data.correct_answers)
+          ? currentQuestion.question_data.correct_answers.map(a => a.toString().toLowerCase().trim())
+          : [currentQuestion.question_data.correct_answer?.toString().toLowerCase().trim()].filter(Boolean);
+
+        isCorrect = correctAnswers.every(ans => transcript.includes(ans));
+        correctText = correctAnswers.join(" and ");
+      }
+
+      // 2. PRONUNCIATION
+      else if (currentQuestion.question_type === "pronunciation") {
+        const correctAnswers = Array.isArray(currentQuestion.question_data.correct_answers)
+          ? currentQuestion.question_data.correct_answers.map(a => a.toString().toLowerCase().trim())
+          : [currentQuestion.question_data.correct_answer?.toString().toLowerCase().trim()].filter(Boolean);
+
+        isCorrect = correctAnswers.some(ans => transcript.includes(ans));
+        correctText = correctAnswers.join(" or ");
+      }
+
+      // 3. MCQ & TRUE/FALSE — FIXED & PERFECT
+      else if (["mcq", "true_false"].includes(currentQuestion.question_type)) {
+        const correctAnswer = currentQuestion.question_data.correct_answer?.toString().toLowerCase().trim();
+        const options = (currentQuestion.question_data.options || []).map(o => o.toString().toLowerCase().trim());
+
+        // Find which option is correct → get its letter
+        const correctIndex = options.indexOf(correctAnswer);
+        const correctLetter = correctIndex !== -1 ? String.fromCharCode(65 + correctIndex).toLowerCase() : "";
+
+        // What student can say to be correct
+        const acceptable = [
+          correctAnswer,                    // "went"
+          correctLetter,                    // "b"
+          correctLetter.toUpperCase(),      // "B"
+        ];
+
+        // Extra for True/False
+        if (currentQuestion.question_type === "true_false") {
+          if (correctAnswer === "true") acceptable.push("yes");
+          if (correctAnswer === "false") acceptable.push("no");
+        }
+
+        isCorrect = acceptable.some(ans => transcript.includes(ans));
+        correctText = correctAnswer.toUpperCase();
+      }
+
+      // Final Result
       if (isCorrect) {
-        setFeedback("✅ Correct Answer!");
-        setAnalysisResults((prev) => ({
-          ...prev,
-          [qid]: { ...result, correctness: "correct" },
-        }));
-        setAnswers((prev) => ({ ...prev, [`completed-${qid}`]: true }));
-        speechSynthesis.speak(new SpeechSynthesisUtterance("Correct answer"));
-
-        // Mark question as completed and show next button
+        setFeedback("Correct Answer!");
+        setAnalysisResults(prev => ({ ...prev, [qid]: { correctness: "correct" } }));
         setAnswers(prev => ({ ...prev, [`show-next-${qid}`]: true }));
-
+        speechSynthesis.speak(new SpeechSynthesisUtterance("Correct"));
       } else {
-        // Wrong answer logic
         if (newAttemptCount >= 2) {
-          // After 2 wrong attempts, show correct answer and enable next button
-          setFeedback(`❌ Incorrect Answer. The correct answer is: ${expectedAnswer}`);
+          setFeedback(`Incorrect. Correct: ${correctText}`);
           setShowCorrectAnswer(prev => ({ ...prev, [qid]: true }));
           setAnswers(prev => ({ ...prev, [`show-next-${qid}`]: true }));
-          speechSynthesis.speak(new SpeechSynthesisUtterance(`Wrong answer. The correct answer is ${expectedAnswer}`));
+          speechSynthesis.speak(new SpeechSynthesisUtterance(`Wrong. The answer is ${correctText}`));
         } else {
-          // First wrong attempt
-          setFeedback(`❌ Incorrect Answer. Try again. Attempt ${newAttemptCount}/2`);
-          setAnalysisResults((prev) => ({
-            ...prev,
-            [qid]: { ...result, correctness: "wrong" },
-          }));
-          speechSynthesis.speak(new SpeechSynthesisUtterance("Wrong answer, please try again"));
+          setFeedback(`Incorrect. Try again. Attempt ${newAttemptCount}/2`);
+          speechSynthesis.speak(new SpeechSynthesisUtterance("Wrong. Try again"));
         }
       }
+
     } catch (err) {
-      console.error("Error analyzing audio:", err);
-      setFeedback("⚠️ Error analyzing audio. Please try again.");
-      toast.error("Analysis failed. Please check your connection and try again.");
+      console.error(err);
+      setFeedback("Analysis failed. Try again.");
     } finally {
       setAnalyzing(false);
     }
   };
 
-  // Fuzzy matching for answer correctness
-  const checkAnswerCorrectness = (transcript, expectedAnswer) => {
-    if (!expectedAnswer) return false;
 
-    // Exact match
-    if (transcript.includes(expectedAnswer)) return true;
-
-    // Common variations
-    const variations = {
-      "present": ["present tense"],
-      "past": ["past tense"],
-      "future": ["future tense"],
-      "continuous": ["continuous tense", "progressive"],
-      "perfect": ["perfect tense"]
-    };
-
-    if (variations[expectedAnswer]) {
-      return variations[expectedAnswer].some(variant => transcript.includes(variant));
-    }
-
-    return false;
-  };
 
   // 🗣 Speak only option text (no correctness)
   const handleOptionChange = (option) => {
@@ -662,15 +659,49 @@ const Assignments = () => {
             })}
           </div>
 
-          {/* Show correct answer if revealed */}
+          {/* Show correct answer when revealed (Supports ALL question types) */}
           {showCorrectAnswer[currentQuestionId] && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-              <p className="text-green-800 font-semibold">
-                💡 Correct Answer: {currentQuestion?.question_data?.correct_answer}
+            <div className="bg-green-100 border-2 border-green-300 rounded-xl p-5 mt-6 shadow-md">
+              <p className="text-green-800 font-bold text-lg flex items-center gap-2">
+                Correct Answer:
+                <span className="font-normal text-base">
+                  {(() => {
+                    const data = currentQuestion.question_data;
+
+                    // Fill in the blanks → multiple answers
+                    if (currentQuestion.question_type === "fill_blank") {
+                      const answers = Array.isArray(data.correct_answers)
+                        ? data.correct_answers
+                        : [data.correct_answer].filter(Boolean);
+                      return answers.join(" and ");
+                    }
+
+                    // Pronunciation → multiple possible pronunciations
+                    if (currentQuestion.question_type === "pronunciation") {
+                      const answers = Array.isArray(data.correct_answers)
+                        ? data.correct_answers
+                        : [data.correct_answer].filter(Boolean);
+                      return answers.join(" or ");
+                    }
+
+                    // MCQ → show letter + text (e.g., "B: went")
+                    if (currentQuestion.question_type === "mcq") {
+                      const correctAnswer = data.correct_answer;
+                      const options = data.options || [];
+                      const index = options.indexOf(correctAnswer);
+                      const letter = index !== -1 ? String.fromCharCode(65 + index) : "?";
+                      return `${letter}: ${correctAnswer}`;
+                    }
+
+                    // True/False → just show True or False
+                    return data.correct_answer?.toString().toUpperCase() || "N/A";
+                  })()}
+                </span>
               </p>
             </div>
           )}
 
+          
           {/* 🎤 Audio Controls */}
           <div className="flex items-center gap-3 mb-6">
             {!recording && !showNextButton ? (

@@ -12,6 +12,9 @@ import shutil
 import os
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+import secrets
+import glob
+import time
 
 
 router = APIRouter()
@@ -22,47 +25,83 @@ UPLOAD_DIR = "uploads/profile_images"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
+async def cleanup_task():
+    while True:
+        try:
+            for file in glob.glob("temp_uploads/voice_*"):
+                if os.path.exists(file) and (time.time() - os.path.getctime(file) > 3600):  # 1 hour old
+                    try:
+                        os.remove(file)
+                        print(f"Cleaned up old file: {file}")
+                    except:
+                        pass
+            await asyncio.sleep(600)  # Every 10 minutes
+        except Exception as e:
+            print(f"Cleanup error: {e}")
+            await asyncio.sleep(600)
+
+
+@router.on_event("startup")
+async def start_cleanup():
+    asyncio.create_task(cleanup_task())
+    print("Auto cleanup task started (every 10 minutes)")
+
 
 @router.post("/analyze-voice")
 async def analyze_voice(file: UploadFile = File(...)):
     temp_path = None
     try:
-        # ✅ 1. Validate file type
-        if not file.filename.endswith(('.mp3', '.wav', '.m4a', '.ogg', '.flac')):
-            raise HTTPException(status_code=400, detail="Only audio files allowed (.mp3, .wav, .m4a, .ogg, .flac)")
+        # 1. Validate content type & extension
+        allowed_types = {'audio/wav', 'audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/flac'}
+        if file.content_type not in allowed_types:
+            raise HTTPException(status_code=400, detail="Invalid audio format")
 
-        # ✅ 2. Save uploaded file temporarily
-        temp_path = f"temp_{file.filename}"
+        # 2. Generate secure random filename (prevents collision + attacks)
+        file_extension = ".wav"  # Force .wav — your frontend sends WAV
+        secure_filename = f"voice_{secrets.token_hex(12)}{file_extension}"
+        temp_path = os.path.join("temp_uploads", secure_filename)
+
+        # Ensure temp directory exists
+        os.makedirs("temp_uploads", exist_ok=True)
+
+        # 3. Save file safely
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # ✅ 3. Check file size (avoid huge uploads)
+        # 4. File size limit
         file_size = os.path.getsize(temp_path)
-        if file_size > 50 * 1024 * 1024:  # 50MB limit
-            raise HTTPException(status_code=413, detail="File too large (max 50MB)")
+        if file_size > 25 * 1024 * 1024:  # 25MB max (your recordings are tiny)
+            raise HTTPException(status_code=413, detail="File too large (max 25MB)")
 
-        # ✅ 4. Run heavy analyzer in thread pool (non-blocking)
+        # 5. Run analysis with TIMEOUT (CRITICAL!)
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(executor, analyzer.analyze_audio, temp_path)
+        try:
+            result = await asyncio.wait_for(
+                loop.run_in_executor(executor, analyzer.analyze_audio, temp_path),
+                timeout=15.0  # Max 15 seconds per audio
+            )
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=408, detail="Audio processing timed out")
 
         return {
             "status": "success",
-            "data": result
+            "data": result,
+            "message": "Voice analyzed successfully"
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error analyzing voice: {str(e)}")
+        print(f"Analyze voice error: {e}")
+        raise HTTPException(status_code=500, detail="Voice analysis failed")
     
     finally:
-        # ✅ 5. Always cleanup temp file
+        # Always clean up — even on crash
         if temp_path and os.path.exists(temp_path):
             try:
                 os.remove(temp_path)
-            except Exception as e:
-                print(f"⚠️ Cleanup warning: {e}")
-
+            except:
+                pass  # Never crash on cleanup
 
 
 class UserCreate(BaseModel):
@@ -200,25 +239,28 @@ async def create_user(user_data: UserCreate):
 async def bulk_create_users(
     file: UploadFile = File(...), 
     role: str = Form(...),
-    college_name: str = Form(None),  # From dropdown
-    department_name: str = Form(None)  # From dropdown
+    college_name: str = Form(None),
+    department_name: str = Form(None)
 ):
     if role != 'student':
         raise HTTPException(status_code=400, detail="Bulk creation only supported for 'student' role")
 
-    # Validate that college and department are provided
     if not college_name or not department_name:
-        raise HTTPException(status_code=400, detail="College name and department name are required for bulk student upload")
+        raise HTTPException(status_code=400, detail="College name and department name are required")
 
     conn = None
     try:
+        # Read Excel content
         content = await file.read()
         df = pd.read_excel(BytesIO(content))
 
-        # Updated required columns - only student details, no college/department
+        # Required columns
         required_cols = ['full_name', 'username', 'password']
         if not all(col in df.columns for col in required_cols):
-            raise HTTPException(status_code=400, detail=f"Excel must contain: {', '.join(required_cols)}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Excel must contain columns: {', '.join(required_cols)}"
+            )
 
         role_id = ROLE_MAP.get(role)
         valid_rows = []
@@ -231,32 +273,39 @@ async def bulk_create_users(
 
         with get_db() as conn:
             with conn.cursor() as cursor:
-                # College lookup - use the provided college_name from dropdown
+
+                # Fetch college_id
                 cursor.execute("SELECT college_id FROM colleges WHERE name = %s", (college_name,))
                 college_res = cursor.fetchone()
                 if not college_res:
                     raise HTTPException(status_code=400, detail=f"Invalid college '{college_name}'")
+
                 college_id = college_res['college_id']
 
-                # Department lookup - use the provided department_name from dropdown
+                # Fetch department_id (Scenario 1 version: using college_id column)
                 cursor.execute("""
-                    SELECT d.department_id
-                    FROM departments d
-                    JOIN college_departments cd ON cd.department_id = d.department_id
-                    WHERE d.department_name = %s AND cd.college_id = %s
+                    SELECT department_id
+                    FROM departments
+                    WHERE department_name = %s AND college_id = %s
                 """, (department_name, college_id))
+
                 dept_res = cursor.fetchone()
                 if not dept_res:
-                    raise HTTPException(status_code=400, detail=f"Invalid department '{department_name}' for college '{college_name}'")
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Department '{department_name}' does not belong to college '{college_name}'"
+                    )
+
                 dept_id = dept_res['department_id']
 
+                # Process each row
                 for idx, row in df.iterrows():
                     try:
-                        # Check if the entire row is empty (all required fields NaN) - skip silently
+                        # Skip fully empty rows
                         if pd.isna(row['full_name']) and pd.isna(row['username']) and pd.isna(row['password']):
-                            continue  # Silently skip truly empty rows
+                            continue
 
-                        # Check for partial/missing data - log error only if some data exists but not all
+                        # Detect missing fields
                         missing_fields = []
                         if pd.isna(row['full_name']):
                             missing_fields.append('full_name')
@@ -276,30 +325,31 @@ async def bulk_create_users(
                             continue
 
                         # Hash password
-                        password_hash = bcrypt.hashpw(str(row['password']).encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                        password_hash = bcrypt.hashpw(
+                            str(row['password']).encode('utf-8'),
+                            bcrypt.gensalt()
+                        ).decode('utf-8')
 
-                        # Use the same college_id and dept_id for ALL students
-                        full_row = (
+                        valid_rows.append((
                             row['username'],
                             password_hash,
                             row['full_name'],
-                            college_id,  # From dropdown
-                            dept_id,     # From dropdown
+                            college_id,
+                            dept_id,
                             role_id,
                             datetime.now()
-                        )
-                        valid_rows.append(full_row)
+                        ))
 
                     except Exception as row_err:
                         errors.append(f"Row {idx+1}: {str(row_err)}")
 
-                # Insert valid rows if any exist
+                # Insert valid rows
                 if valid_rows:
                     conn.begin()
                     cursor.executemany(insert_query, valid_rows)
                     conn.commit()
 
-                # SINGLE RETURN STATEMENT - This fixes the issue
+                # SINGLE return section
                 if valid_rows:
                     return {
                         "status": "partial" if errors else "success",
@@ -312,6 +362,7 @@ async def bulk_create_users(
                             "processed_rows": len(valid_rows)
                         }
                     }
+
                 else:
                     return {
                         "status": "error",
@@ -330,6 +381,7 @@ async def bulk_create_users(
             except:
                 pass
         raise HTTPException(status_code=500, detail=f"Error in bulk user creation: {str(e)}")
+
     
 
 

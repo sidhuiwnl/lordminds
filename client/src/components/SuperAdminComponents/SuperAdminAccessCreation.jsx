@@ -441,6 +441,7 @@ const SuperAdminAccessCreation = () => {
         setShowAddDeptModal(false);
         setDeptForm({ name: "", code: "" });
         await fetchDepartments();
+        window.location.reload();
         clearMessage();
       } else {
         setMessage({ type: "error", text: result.detail || "Department creation failed" });
@@ -471,6 +472,7 @@ const SuperAdminAccessCreation = () => {
         });
         const result = await res.json();
         setMessage({ type: res.ok ? "success" : "error", text: res.ok ? result.message : result.detail || "College onboarding failed" });
+         window.location.reload();
         if (res.ok) {
           setFormData(prev => ({ ...prev, collegeName: "", collegeAddress: "", selectedDepartments: [] }));
           await fetchCollegesWithDepts();
@@ -497,9 +499,11 @@ const SuperAdminAccessCreation = () => {
           });
           const result = await res.json();
           setMessage({ type: res.ok ? "success" : "error", text: res.ok ? result.message : result.detail || "User creation failed" });
+         
           if (res.ok) {
             setFormData(prev => ({ ...prev, name: "", department: "", username: "", password: "", college: "" }));
             await fetchStudents();
+            window.location.reload();
           }
         }
       }
@@ -536,6 +540,7 @@ const SuperAdminAccessCreation = () => {
           setFormData(prev => ({ ...prev, college: "", department: "", newTopics: [] }));
           setTopicInput("");
         }
+         window.location.reload();
       }
 
       else {
@@ -563,6 +568,7 @@ const SuperAdminAccessCreation = () => {
           });
           const fetchFunc = selectedAccessType === 'teacher' ? fetchTeachers : fetchAdmins;
           await fetchFunc();
+           window.location.reload();
         }
       }
 
@@ -1068,7 +1074,7 @@ const SuperAdminAccessCreation = () => {
           <div className="flex justify-center mt-6">
             <button
               type="submit"
-              disabled={loading || (selectedAccessType === "student" && selectedFile)}
+              disabled={loading}
               className="bg-yellow-400 text-gray-800 px-6 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? "Processing..." : getSubmitButtonText()}

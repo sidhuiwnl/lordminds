@@ -85,6 +85,7 @@ const OverviewTable = ({
         toast.success(data.message || "Overview updated successfully!");
         setIsModalOpen(false);
         if (refreshData) refreshData();
+        setTimeout(() => window.location.reload(), 1000);
       } else {
         toast.error(data.detail || "Failed to update overview.");
       }
@@ -115,6 +116,7 @@ const OverviewTable = ({
       if (response.ok) {
         toast.success(data.message || "Subtopic deactivated successfully!");
         if (refreshData) refreshData();
+        setTimeout(() => window.location.reload(), 1000);
       } else {
         toast.error(data.detail || "Failed to deactivate subtopic.");
       }

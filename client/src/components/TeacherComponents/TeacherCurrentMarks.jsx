@@ -242,7 +242,7 @@ const TeacherCurrentMarks = () => {
 
   // Filters section
   const renderFilters = () => (
-    <div className="mb-6 p-4 bg-white rounded-lg mt-30 shadow-sm border border-gray-200">
+    <div className="mb-6 p-4 bg-white rounded-lg shadow-sm border border-gray-200">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -394,6 +394,7 @@ const TeacherCurrentMarks = () => {
 
   return (
     <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
+      <h1 className="text-2xl font-bold text-gray-800 mt-20 mb-6">Current Marks</h1>
       {renderFilters()}
       {renderCurrentMarks()}
     </div>

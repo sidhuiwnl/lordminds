@@ -12,6 +12,8 @@ from config.database import get_db
 
 router = APIRouter()
 
+
+
 @router.get("/department/{college_id}/{department_id}/topic/{topic_id}/progress")
 async def get_specific_topic_progress(college_id: int, department_id: int, topic_id: int):
     """
