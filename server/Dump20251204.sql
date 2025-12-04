@@ -72,7 +72,7 @@ CREATE TABLE `assignments` (
   KEY `idx_assignment_dept` (`department_id`),
   KEY `idx_assignment_dates` (`start_date`,`end_date`),
   CONSTRAINT `assignments_ibfk_1` FOREIGN KEY (`department_id`) REFERENCES `departments` (`department_id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -81,7 +81,7 @@ CREATE TABLE `assignments` (
 
 LOCK TABLES `assignments` WRITE;
 /*!40000 ALTER TABLE `assignments` DISABLE KEYS */;
-INSERT INTO `assignments` VALUES (3,'1','Past Tense',2,1,NULL,'2025-11-23 00:00:00',NULL,'sample_question_upload1.xlsx','uploads/tests\\assignment\\e2178a5d-850d-4c15-8b81-392a9939b601.xlsx',1,'2025-11-23 13:17:07','2025-11-23 13:17:07'),(4,'2','Verbose',2,1,NULL,'2025-11-26 00:00:00',NULL,'sample_question_upload1.xlsx','uploads/tests\\assignment\\0afc08bf-a409-4b31-80a3-6fa585e771bf.xlsx',1,'2025-11-26 02:07:32','2025-11-26 02:07:32');
+INSERT INTO `assignments` VALUES (3,'1','Past Tense',2,1,NULL,'2025-11-23 00:00:00',NULL,'sample_question_upload1.xlsx','uploads/tests\\assignment\\e2178a5d-850d-4c15-8b81-392a9939b601.xlsx',1,'2025-11-23 13:17:07','2025-11-23 13:17:07'),(20,'2','Verbose',2,1,NULL,'2025-12-03 00:00:00',NULL,'question_template.xlsx','uploads/tests\\assignment\\6b7a1c09-c3ac-40fc-b6b0-73e667dacc39.xlsx',1,'2025-12-03 17:16:15','2025-12-03 17:29:54');
 /*!40000 ALTER TABLE `assignments` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -100,7 +100,7 @@ CREATE TABLE `colleges` (
   `is_active` tinyint(1) DEFAULT '1',
   PRIMARY KEY (`college_id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -109,7 +109,7 @@ CREATE TABLE `colleges` (
 
 LOCK TABLES `colleges` WRITE;
 /*!40000 ALTER TABLE `colleges` DISABLE KEYS */;
-INSERT INTO `colleges` VALUES (1,'Kgisl Institute of Technology','14/02 Marutham Nagar','2025-11-23 11:30:00',1),(5,'KCT instution','14/02 Marutham nagar,Nallampalayam Coimbatore','2025-11-24 14:48:44',1);
+INSERT INTO `colleges` VALUES (1,'Kgisl Institute of Technology','14/02 Marutham Nagar','2025-11-23 11:30:00',1),(5,'KCT instution','14/02 Marutham nagar,Nallampalayam Coimbatore','2025-11-24 14:48:44',1),(6,'PSG','Sanganoor','2025-11-30 06:25:23',1);
 /*!40000 ALTER TABLE `colleges` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -132,7 +132,7 @@ CREATE TABLE `departments` (
   UNIQUE KEY `college_dept_code` (`college_id`,`department_code`),
   KEY `idx_dept_code` (`department_code`),
   CONSTRAINT `fk_departments_college` FOREIGN KEY (`college_id`) REFERENCES `colleges` (`college_id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -141,7 +141,7 @@ CREATE TABLE `departments` (
 
 LOCK TABLES `departments` WRITE;
 /*!40000 ALTER TABLE `departments` DISABLE KEYS */;
-INSERT INTO `departments` VALUES (1,'Computer Science','COMP',1,1,'2025-11-23 11:30:00','2025-11-23 11:30:00'),(2,'Artificial Intelligence and Data Science','ARTI',1,1,'2025-11-23 11:30:00','2025-11-23 11:30:00'),(6,'Computer Science','COMP',5,1,'2025-11-24 14:48:44','2025-11-24 14:48:44');
+INSERT INTO `departments` VALUES (1,'Computer Science','COMP',1,1,'2025-11-23 11:30:00','2025-11-23 11:30:00'),(2,'Artificial Intelligence and Data Science','ARTI',1,1,'2025-11-23 11:30:00','2025-11-23 11:30:00'),(6,'Computer Science','COMP',5,1,'2025-11-24 14:48:44','2025-11-24 14:48:44'),(7,'Artificial Intelligence and Data Science','ARTI',6,1,'2025-11-30 06:25:23','2025-11-30 06:25:23');
 /*!40000 ALTER TABLE `departments` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -193,7 +193,7 @@ CREATE TABLE `questions` (
   KEY `question_type_id` (`question_type_id`),
   KEY `idx_test_scope_ref` (`test_scope`,`reference_id`),
   CONSTRAINT `questions_ibfk_2` FOREIGN KEY (`question_type_id`) REFERENCES `question_type` (`question_type_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=37 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -202,7 +202,7 @@ CREATE TABLE `questions` (
 
 LOCK TABLES `questions` WRITE;
 /*!40000 ALTER TABLE `questions` DISABLE KEYS */;
-INSERT INTO `questions` VALUES (4,'sub_topic',1,1,'Fluent communication means speaking with a natural rhythm and without breaks.','{\"options\": [true, false, \"Sometimes\", \"Never\"], \"correct_answer\": true}',1.00,1,'2025-11-23 11:33:04','2025-11-23 11:33:04',1),(5,'sub_topic',1,1,'Which of the following best defines fluency?','{\"options\": [\"Smooth speech flow\", \"Perfect grammar\", \"Loud voice\", \"Slow speaking\"], \"correct_answer\": \"Smooth speech flow\"}',1.00,2,'2025-11-23 11:33:04','2025-11-23 11:33:04',1),(6,'sub_topic',1,1,'What skill helps improve fluency in a language?','{\"options\": [\"Listening\", \"Writing\", \"Translation\", \"Memorization\"], \"correct_answer\": \"Listening\"}',1.00,3,'2025-11-23 11:33:04','2025-11-23 11:33:04',1),(10,'assignment',3,1,'Fluent communication means speaking with a natural rhythm and without breaks.','{\"options\": [true, false, \"Sometimes\", \"Never\"], \"correct_answer\": true}',1.00,1,'2025-11-23 13:17:07','2025-11-23 13:17:07',1),(11,'assignment',3,1,'Which of the following best defines fluency?','{\"options\": [\"Smooth speech flow\", \"Perfect grammar\", \"Loud voice\", \"Slow speaking\"], \"correct_answer\": \"Smooth speech flow\"}',1.00,2,'2025-11-23 13:17:07','2025-11-23 13:17:07',1),(12,'assignment',3,1,'What skill helps improve fluency in a language?','{\"options\": [\"Listening\", \"Writing\", \"Translation\", \"Memorization\"], \"correct_answer\": \"Listening\"}',1.00,3,'2025-11-23 13:17:07','2025-11-23 13:17:07',1),(13,'assignment',4,1,'Fluent communication means speaking with a natural rhythm and without breaks.','{\"options\": [true, false, \"Sometimes\", \"Never\"], \"correct_answer\": true}',1.00,1,'2025-11-26 02:07:33','2025-11-26 02:07:33',1),(14,'assignment',4,1,'Which of the following best defines fluency?','{\"options\": [\"Smooth speech flow\", \"Perfect grammar\", \"Loud voice\", \"Slow speaking\"], \"correct_answer\": \"Smooth speech flow\"}',1.00,2,'2025-11-26 02:07:33','2025-11-26 02:07:33',1),(15,'assignment',4,1,'What skill helps improve fluency in a language?','{\"options\": [\"Listening\", \"Writing\", \"Translation\", \"Memorization\"], \"correct_answer\": \"Listening\"}',1.00,3,'2025-11-26 02:07:33','2025-11-26 02:07:33',1),(16,'sub_topic',2,1,'Fluent communication means speaking with a natural rhythm and without breaks.','{\"options\": [true, false, \"Sometimes\", \"Never\"], \"correct_answer\": true}',1.00,1,'2025-11-27 00:54:18','2025-11-27 00:54:18',1),(17,'sub_topic',2,1,'Which of the following best defines fluency?','{\"options\": [\"Smooth speech flow\", \"Perfect grammar\", \"Loud voice\", \"Slow speaking\"], \"correct_answer\": \"Smooth speech flow\"}',1.00,2,'2025-11-27 00:54:18','2025-11-27 00:54:18',1),(18,'sub_topic',2,1,'What skill helps improve fluency in a language?','{\"options\": [\"Listening\", \"Writing\", \"Translation\", \"Memorization\"], \"correct_answer\": \"Listening\"}',1.00,3,'2025-11-27 00:54:18','2025-11-27 00:54:18',1);
+INSERT INTO `questions` VALUES (4,'sub_topic',1,1,'Fluent communication means speaking with a natural rhythm and without breaks.','{\"options\": [true, false, \"Sometimes\", \"Never\"], \"correct_answer\": true}',1.00,1,'2025-11-23 11:33:04','2025-11-23 11:33:04',1),(5,'sub_topic',1,1,'Which of the following best defines fluency?','{\"options\": [\"Smooth speech flow\", \"Perfect grammar\", \"Loud voice\", \"Slow speaking\"], \"correct_answer\": \"Smooth speech flow\"}',1.00,2,'2025-11-23 11:33:04','2025-11-23 11:33:04',1),(6,'sub_topic',1,1,'What skill helps improve fluency in a language?','{\"options\": [\"Listening\", \"Writing\", \"Translation\", \"Memorization\"], \"correct_answer\": \"Listening\"}',1.00,3,'2025-11-23 11:33:04','2025-11-23 11:33:04',1),(10,'assignment',3,1,'Fluent communication means speaking with a natural rhythm and without breaks.','{\"options\": [true, false, \"Sometimes\", \"Never\"], \"correct_answer\": true}',1.00,1,'2025-11-23 13:17:07','2025-11-23 13:17:07',1),(11,'assignment',3,1,'Which of the following best defines fluency?','{\"options\": [\"Smooth speech flow\", \"Perfect grammar\", \"Loud voice\", \"Slow speaking\"], \"correct_answer\": \"Smooth speech flow\"}',1.00,2,'2025-11-23 13:17:07','2025-11-23 13:17:07',1),(12,'assignment',3,1,'What skill helps improve fluency in a language?','{\"options\": [\"Listening\", \"Writing\", \"Translation\", \"Memorization\"], \"correct_answer\": \"Listening\"}',1.00,3,'2025-11-23 13:17:07','2025-11-23 13:17:07',1),(16,'sub_topic',2,1,'Fluent communication means speaking with a natural rhythm and without breaks.','{\"options\": [true, false, \"Sometimes\", \"Never\"], \"correct_answer\": true}',1.00,1,'2025-11-27 00:54:18','2025-11-27 00:54:18',1),(17,'sub_topic',2,1,'Which of the following best defines fluency?','{\"options\": [\"Smooth speech flow\", \"Perfect grammar\", \"Loud voice\", \"Slow speaking\"], \"correct_answer\": \"Smooth speech flow\"}',1.00,2,'2025-11-27 00:54:18','2025-11-27 00:54:18',1),(18,'sub_topic',2,1,'What skill helps improve fluency in a language?','{\"options\": [\"Listening\", \"Writing\", \"Translation\", \"Memorization\"], \"correct_answer\": \"Listening\"}',1.00,3,'2025-11-27 00:54:18','2025-11-27 00:54:18',1),(32,'assignment',20,3,'Match the animals with their sounds','{\"left\": [\"Dog\", \"Cat\", \"Cow\", \"Lion\"], \"right\": [\"barks\", \"meows\", \"moos\", \"roars\"], \"matches\": {\"A\": \"2\", \"B\": \"1\", \"C\": \"4\", \"D\": \"3\"}}',1.00,1,'2025-12-03 17:29:54','2025-12-03 17:29:54',1),(33,'assignment',20,1,'What is the past tense of \'go\'?','{\"options\": [\"go\", \"going\", \"went\", \"goed\"], \"correct_answer\": \"\"}',1.00,2,'2025-12-03 17:29:54','2025-12-03 17:29:54',1),(34,'assignment',20,8,'The sun rises in the east.','{\"options\": [\"True\", \"False\"], \"correct_answer\": \"false\"}',1.00,3,'2025-12-03 17:29:54','2025-12-03 17:29:54',1),(35,'assignment',20,2,'Accuracy is about using correct ______ and ______.','{\"correct_answers\": []}',1.00,4,'2025-12-03 17:29:54','2025-12-03 17:29:54',1),(36,'assignment',20,9,'Pronounce the given word.','{\"correct_answer\": \"\"}',1.00,5,'2025-12-03 17:29:54','2025-12-03 17:29:54',1);
 /*!40000 ALTER TABLE `questions` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -461,7 +461,7 @@ CREATE TABLE `sub_topics` (
   PRIMARY KEY (`sub_topic_id`),
   KEY `topic_id` (`topic_id`),
   CONSTRAINT `sub_topics_ibfk_1` FOREIGN KEY (`topic_id`) REFERENCES `topics` (`topic_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -470,7 +470,7 @@ CREATE TABLE `sub_topics` (
 
 LOCK TABLES `sub_topics` WRITE;
 /*!40000 ALTER TABLE `sub_topics` DISABLE KEYS */;
-INSERT INTO `sub_topics` VALUES (1,1,'Past Tense',1,'https://us7xgl2xx9.ufs.sh/f/NLwJvYRc8DXfBe34fsIZrb67gjCL5kFMaqTzV3evG81Ec0su','sample_question_upload1.xlsx','uploads/tests\\sub_topic\\85a81357-9e37-44df-816c-936f18051e25.xlsx','<p>Requirements of ElectCare</p><p><br></p><p><br></p><p><br></p><p></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p> <br></p><p><br></p><p><br></p>',1,'2025-11-23 11:32:30','2025-11-23 11:33:04'),(2,2,'Go Routine',1,'','sample_question_upload1.xlsx','uploads/tests\\sub_topic\\4a9b7bb3-951d-45bc-b90a-6023df36bf70.xlsx','<p>Requirements of ElectCare</p><p><br></p><p><br></p><p><br></p><p></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p> <br></p><p><br></p><p><br></p>',1,'2025-11-27 00:53:57','2025-11-27 00:54:17');
+INSERT INTO `sub_topics` VALUES (1,1,'Past Tense',1,'https://us7xgl2xx9.ufs.sh/f/NLwJvYRc8DXfBe34fsIZrb67gjCL5kFMaqTzV3evG81Ec0su','sample_question_upload1.xlsx','uploads/tests\\sub_topic\\85a81357-9e37-44df-816c-936f18051e25.xlsx','<p>Requirements of ElectCare</p><p><br></p><p><br></p><p><br></p><p></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p> <br></p><p><br></p><p><br></p>',1,'2025-11-23 11:32:30','2025-11-23 11:33:04'),(2,2,'Go Routine',1,'','sample_question_upload1.xlsx','uploads/tests\\sub_topic\\4a9b7bb3-951d-45bc-b90a-6023df36bf70.xlsx','<p>Requirements of ElectCare</p><p><br></p><p><br></p><p><br></p><p></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p><br></p><p> <br></p><p><br></p><p><br></p>',1,'2025-11-27 00:53:57','2025-11-27 00:54:17'),(3,5,'1',1,'https://us7xgl2xx9.ufs.sh/f/NLwJvYRc8DXfBe34fsIZrb67gjCL5kFMaqTzV3evG81Ec0su',NULL,NULL,'<p>This is great</p>',1,'2025-11-30 06:54:59','2025-11-30 06:55:18');
 /*!40000 ALTER TABLE `sub_topics` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -496,7 +496,7 @@ CREATE TABLE `topics` (
   KEY `department_id` (`department_id`),
   CONSTRAINT `topics_ibfk_1` FOREIGN KEY (`college_id`) REFERENCES `colleges` (`college_id`),
   CONSTRAINT `topics_ibfk_2` FOREIGN KEY (`department_id`) REFERENCES `departments` (`department_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -505,7 +505,7 @@ CREATE TABLE `topics` (
 
 LOCK TABLES `topics` WRITE;
 /*!40000 ALTER TABLE `topics` DISABLE KEYS */;
-INSERT INTO `topics` VALUES (1,'Tense',NULL,1,1,2,1,'2025-11-23 11:30:51','2025-11-23 11:32:30'),(2,'Golang',NULL,1,1,2,1,'2025-11-23 11:30:51','2025-11-27 00:53:57'),(3,'Zig',NULL,0,1,1,1,'2025-11-24 14:49:43','2025-11-24 14:49:43'),(4,'Zig',NULL,0,5,6,1,'2025-11-24 14:50:20','2025-11-24 14:50:20');
+INSERT INTO `topics` VALUES (1,'Tense',NULL,1,1,2,1,'2025-11-23 11:30:51','2025-11-23 11:32:30'),(2,'Golang',NULL,1,1,2,1,'2025-11-23 11:30:51','2025-11-27 00:53:57'),(3,'Zig',NULL,0,1,1,1,'2025-11-24 14:49:43','2025-11-24 14:49:43'),(4,'Zig',NULL,0,5,6,1,'2025-11-24 14:50:20','2025-11-24 14:50:20'),(5,'Table Info',NULL,1,6,7,1,'2025-11-30 06:54:26','2025-11-30 06:54:59');
 /*!40000 ALTER TABLE `topics` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -525,7 +525,7 @@ CREATE TABLE `user_sessions` (
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`),
   CONSTRAINT `user_sessions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=65 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=123 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -534,7 +534,7 @@ CREATE TABLE `user_sessions` (
 
 LOCK TABLES `user_sessions` WRITE;
 /*!40000 ALTER TABLE `user_sessions` DISABLE KEYS */;
-INSERT INTO `user_sessions` (`id`, `user_id`, `start_time`, `end_time`) VALUES (1,38,'2025-01-10 09:00:00','2025-01-10 10:00:00'),(2,38,'2025-01-11 14:30:00','2025-01-11 15:10:00'),(3,37,'2025-01-10 08:15:00','2025-01-10 09:00:00'),(4,37,'2025-01-11 16:00:00','2025-01-11 17:00:00'),(5,37,'2025-11-23 19:26:29',NULL),(6,37,'2025-11-23 19:26:29',NULL),(7,37,'2025-11-24 05:31:35',NULL),(8,37,'2025-11-24 05:31:35',NULL),(9,37,'2025-11-24 05:31:41',NULL),(10,37,'2025-11-24 05:31:41',NULL),(11,37,'2025-11-24 05:31:50',NULL),(12,37,'2025-11-24 05:31:50',NULL),(13,37,'2025-11-24 05:37:55',NULL),(14,37,'2025-11-24 05:37:55',NULL),(15,37,'2025-11-24 05:38:33',NULL),(16,37,'2025-11-24 05:38:33',NULL),(17,37,'2025-11-24 05:42:10',NULL),(18,37,'2025-11-24 05:42:10',NULL),(19,37,'2025-11-24 05:42:17',NULL),(20,37,'2025-11-24 05:42:17',NULL),(21,37,'2025-11-24 05:42:40',NULL),(22,37,'2025-11-24 05:42:40',NULL),(23,37,'2025-11-24 05:42:45',NULL),(24,37,'2025-11-24 05:42:45',NULL),(25,37,'2025-11-24 05:42:52',NULL),(26,37,'2025-11-24 05:42:52',NULL),(27,37,'2025-11-24 05:54:50',NULL),(28,37,'2025-11-24 05:54:50',NULL),(29,37,'2025-11-24 05:56:25',NULL),(30,37,'2025-11-24 05:56:25',NULL),(31,37,'2025-11-24 05:58:58',NULL),(32,37,'2025-11-24 05:58:58',NULL),(33,37,'2025-11-24 06:00:52',NULL),(34,37,'2025-11-24 06:00:52',NULL),(35,37,'2025-11-24 06:01:24',NULL),(36,37,'2025-11-24 06:01:24',NULL),(37,37,'2025-11-24 06:02:00',NULL),(38,37,'2025-11-24 06:02:00',NULL),(39,37,'2025-11-24 06:03:34',NULL),(40,37,'2025-11-24 06:03:34',NULL),(41,37,'2025-11-24 06:03:44',NULL),(42,37,'2025-11-24 06:03:44',NULL),(43,37,'2025-11-24 06:03:50',NULL),(44,37,'2025-11-24 06:03:50',NULL),(45,37,'2025-11-26 07:43:10',NULL),(46,37,'2025-11-26 07:43:10',NULL),(47,37,'2025-11-26 07:50:41',NULL),(48,37,'2025-11-26 07:50:41',NULL),(49,37,'2025-11-26 07:54:30',NULL),(50,37,'2025-11-26 07:54:30',NULL),(51,37,'2025-11-26 07:54:40',NULL),(52,37,'2025-11-26 07:54:40',NULL),(53,37,'2025-11-26 07:56:55',NULL),(54,37,'2025-11-26 07:56:56',NULL),(55,37,'2025-11-26 07:59:55',NULL),(56,37,'2025-11-26 07:59:55',NULL),(57,37,'2025-11-27 06:20:12',NULL),(58,37,'2025-11-27 06:20:12',NULL),(59,37,'2025-11-27 06:39:17',NULL),(60,37,'2025-11-27 06:39:17',NULL),(61,37,'2025-11-27 06:39:24',NULL),(62,37,'2025-11-27 06:39:24',NULL),(63,37,'2025-11-27 06:40:46',NULL),(64,37,'2025-11-27 06:40:46',NULL);
+INSERT INTO `user_sessions` (`id`, `user_id`, `start_time`, `end_time`) VALUES (1,38,'2025-01-10 09:00:00','2025-01-10 10:00:00'),(2,38,'2025-01-11 14:30:00','2025-01-11 15:10:00'),(3,37,'2025-01-10 08:15:00','2025-01-10 09:00:00'),(4,37,'2025-01-11 16:00:00','2025-01-11 17:00:00'),(5,37,'2025-11-23 19:26:29',NULL),(6,37,'2025-11-23 19:26:29',NULL),(7,37,'2025-11-24 05:31:35',NULL),(8,37,'2025-11-24 05:31:35',NULL),(9,37,'2025-11-24 05:31:41',NULL),(10,37,'2025-11-24 05:31:41',NULL),(11,37,'2025-11-24 05:31:50',NULL),(12,37,'2025-11-24 05:31:50',NULL),(13,37,'2025-11-24 05:37:55',NULL),(14,37,'2025-11-24 05:37:55',NULL),(15,37,'2025-11-24 05:38:33',NULL),(16,37,'2025-11-24 05:38:33',NULL),(17,37,'2025-11-24 05:42:10',NULL),(18,37,'2025-11-24 05:42:10',NULL),(19,37,'2025-11-24 05:42:17',NULL),(20,37,'2025-11-24 05:42:17',NULL),(21,37,'2025-11-24 05:42:40',NULL),(22,37,'2025-11-24 05:42:40',NULL),(23,37,'2025-11-24 05:42:45',NULL),(24,37,'2025-11-24 05:42:45',NULL),(25,37,'2025-11-24 05:42:52',NULL),(26,37,'2025-11-24 05:42:52',NULL),(27,37,'2025-11-24 05:54:50',NULL),(28,37,'2025-11-24 05:54:50',NULL),(29,37,'2025-11-24 05:56:25',NULL),(30,37,'2025-11-24 05:56:25',NULL),(31,37,'2025-11-24 05:58:58',NULL),(32,37,'2025-11-24 05:58:58',NULL),(33,37,'2025-11-24 06:00:52',NULL),(34,37,'2025-11-24 06:00:52',NULL),(35,37,'2025-11-24 06:01:24',NULL),(36,37,'2025-11-24 06:01:24',NULL),(37,37,'2025-11-24 06:02:00',NULL),(38,37,'2025-11-24 06:02:00',NULL),(39,37,'2025-11-24 06:03:34',NULL),(40,37,'2025-11-24 06:03:34',NULL),(41,37,'2025-11-24 06:03:44',NULL),(42,37,'2025-11-24 06:03:44',NULL),(43,37,'2025-11-24 06:03:50',NULL),(44,37,'2025-11-24 06:03:50',NULL),(45,37,'2025-11-26 07:43:10',NULL),(46,37,'2025-11-26 07:43:10',NULL),(47,37,'2025-11-26 07:50:41',NULL),(48,37,'2025-11-26 07:50:41',NULL),(49,37,'2025-11-26 07:54:30',NULL),(50,37,'2025-11-26 07:54:30',NULL),(51,37,'2025-11-26 07:54:40',NULL),(52,37,'2025-11-26 07:54:40',NULL),(53,37,'2025-11-26 07:56:55',NULL),(54,37,'2025-11-26 07:56:56',NULL),(55,37,'2025-11-26 07:59:55',NULL),(56,37,'2025-11-26 07:59:55',NULL),(57,37,'2025-11-27 06:20:12',NULL),(58,37,'2025-11-27 06:20:12',NULL),(59,37,'2025-11-27 06:39:17',NULL),(60,37,'2025-11-27 06:39:17',NULL),(61,37,'2025-11-27 06:39:24',NULL),(62,37,'2025-11-27 06:39:24',NULL),(63,37,'2025-11-27 06:40:46',NULL),(64,37,'2025-11-27 06:40:46',NULL),(65,37,'2025-11-30 12:50:17',NULL),(66,37,'2025-11-30 12:50:17',NULL),(67,37,'2025-12-03 20:37:40',NULL),(68,37,'2025-12-03 20:37:40',NULL),(69,37,'2025-12-03 20:46:25',NULL),(70,37,'2025-12-03 20:46:25',NULL),(71,37,'2025-12-03 20:46:32',NULL),(72,37,'2025-12-03 20:46:32',NULL),(73,37,'2025-12-03 20:51:13',NULL),(74,37,'2025-12-03 20:51:13',NULL),(75,37,'2025-12-03 23:00:08',NULL),(76,37,'2025-12-03 23:00:08',NULL),(77,37,'2025-12-03 23:06:04',NULL),(78,37,'2025-12-03 23:06:04',NULL),(79,37,'2025-12-03 23:12:30',NULL),(80,37,'2025-12-03 23:12:30',NULL),(81,37,'2025-12-03 23:12:39',NULL),(82,37,'2025-12-03 23:12:39',NULL),(83,37,'2025-12-03 23:12:49',NULL),(84,37,'2025-12-03 23:12:49',NULL),(85,37,'2025-12-03 23:14:26',NULL),(86,37,'2025-12-03 23:14:26',NULL),(87,37,'2025-12-03 23:16:28',NULL),(88,37,'2025-12-03 23:16:28',NULL),(89,37,'2025-12-03 23:16:56',NULL),(90,37,'2025-12-03 23:16:56',NULL),(91,37,'2025-12-03 23:17:14',NULL),(92,37,'2025-12-03 23:17:14',NULL),(93,37,'2025-12-03 23:17:18',NULL),(94,37,'2025-12-03 23:17:18',NULL),(95,37,'2025-12-03 23:18:06',NULL),(96,37,'2025-12-03 23:18:06',NULL),(97,37,'2025-12-03 23:18:28',NULL),(98,37,'2025-12-03 23:18:28',NULL),(99,37,'2025-12-03 23:18:32',NULL),(100,37,'2025-12-03 23:18:32',NULL),(101,37,'2025-12-04 06:19:37',NULL),(102,37,'2025-12-04 06:19:37',NULL),(103,37,'2025-12-04 06:19:49',NULL),(104,37,'2025-12-04 06:19:49',NULL),(105,37,'2025-12-04 06:25:05',NULL),(106,37,'2025-12-04 06:25:05',NULL),(107,37,'2025-12-04 06:25:33',NULL),(108,37,'2025-12-04 06:25:33',NULL),(109,37,'2025-12-04 06:29:06',NULL),(110,37,'2025-12-04 06:29:06',NULL),(111,37,'2025-12-04 06:31:01',NULL),(112,37,'2025-12-04 06:31:01',NULL),(113,37,'2025-12-04 06:32:01',NULL),(114,37,'2025-12-04 06:32:01',NULL),(115,37,'2025-12-04 06:32:15',NULL),(116,37,'2025-12-04 06:32:15',NULL),(117,37,'2025-12-04 06:32:32',NULL),(118,37,'2025-12-04 06:32:32',NULL),(119,37,'2025-12-04 06:36:30',NULL),(120,37,'2025-12-04 06:36:30',NULL),(121,37,'2025-12-04 06:40:21',NULL),(122,37,'2025-12-04 06:40:21',NULL);
 /*!40000 ALTER TABLE `user_sessions` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -569,7 +569,7 @@ CREATE TABLE `users` (
   CONSTRAINT `users_ibfk_1` FOREIGN KEY (`college_id`) REFERENCES `colleges` (`college_id`) ON DELETE RESTRICT,
   CONSTRAINT `users_ibfk_2` FOREIGN KEY (`department_id`) REFERENCES `departments` (`department_id`) ON DELETE SET NULL,
   CONSTRAINT `users_ibfk_3` FOREIGN KEY (`role_id`) REFERENCES `roles` (`role_id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=39 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=41 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -578,7 +578,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (3,'superadmin','$2b$12$Wo5oGArrRtR0zftzOY2Aoehl/4ipXHwLDG/cOSzxmkDf5Ew8o8Mi.','superadmin',NULL,NULL,NULL,1,1,'2025-10-24 17:39:39','2025-11-27 00:53:03','2025-11-27 06:23:03',NULL,NULL),(11,'Admin','$2a$12$zcJbM1QgIyl4f3TicukrWuhzo5BsRaLHvWihmG4VHt8zv8JpVfZcy','Admin',NULL,NULL,NULL,2,1,'2025-11-01 17:20:05','2025-11-25 17:21:29','2025-11-25 22:51:29',NULL,NULL),(33,'21AIBT38','$2a$12$sRxPs1HNmZ30VWuvLv1lrOA2lNUJRLaCDw2t5Tc/h1WMg13mWlqYW','Teacher',NULL,1,1,4,1,'2025-11-20 17:11:56','2025-11-25 16:59:07','2025-11-25 22:29:08',NULL,NULL),(36,'Sanjay','$2b$12$52N09bco7HKLUtFedYG.puqNAWp0ZszRn08iYQc6kaQnnfT5DNH0K','Sanjay',NULL,1,NULL,3,1,'2025-11-23 07:11:11','2025-11-25 17:18:30','2025-11-25 22:48:31',NULL,NULL),(37,'21AIB38','$2b$12$cibokiLERYbIVASZ6pMkye2GRH/GfLHjPnl4FDPE35uwmonumGi..','Sidharth Babu','sidharthiwnl@gmail.com',1,2,5,1,'2025-11-23 13:01:03','2025-11-27 02:20:02','2025-11-27 07:50:02','2025-11-27 07:48:53',NULL),(38,'21AIB30','$2b$12$JAbluczSFjAhi.ctJmpB7OOZOC/Lx/CvdZ7.yz0bpxcK3TpY8CJ3.','Sankar',NULL,1,1,5,1,'2025-11-23 13:01:32','2025-11-25 17:22:34','2025-11-25 22:52:31','2025-11-25 22:52:34',NULL);
+INSERT INTO `users` VALUES (3,'superadmin','$2b$12$Wo5oGArrRtR0zftzOY2Aoehl/4ipXHwLDG/cOSzxmkDf5Ew8o8Mi.','superadmin',NULL,NULL,NULL,1,1,'2025-10-24 17:39:39','2025-12-03 17:00:10','2025-12-03 22:30:10',NULL,NULL),(11,'Admin','$2a$12$zcJbM1QgIyl4f3TicukrWuhzo5BsRaLHvWihmG4VHt8zv8JpVfZcy','Admin',NULL,NULL,NULL,2,1,'2025-11-01 17:20:05','2025-11-25 17:21:29','2025-11-25 22:51:29',NULL,NULL),(33,'21AIBT38','$2a$12$sRxPs1HNmZ30VWuvLv1lrOA2lNUJRLaCDw2t5Tc/h1WMg13mWlqYW','Teacher',NULL,1,1,4,1,'2025-11-20 17:11:56','2025-11-30 07:08:31','2025-11-30 12:38:31',NULL,NULL),(36,'Sanjay','$2b$12$52N09bco7HKLUtFedYG.puqNAWp0ZszRn08iYQc6kaQnnfT5DNH0K','Sanjay',NULL,1,NULL,3,1,'2025-11-23 07:11:11','2025-11-30 07:05:31','2025-11-30 12:35:31',NULL,NULL),(37,'21AIB38','$2b$12$cibokiLERYbIVASZ6pMkye2GRH/GfLHjPnl4FDPE35uwmonumGi..','Sidharth Babu','sidharthiwnl@gmail.com',1,2,5,1,'2025-11-23 13:01:03','2025-12-04 01:00:56','2025-12-04 06:30:56','2025-12-03 22:30:01',NULL),(38,'21AIB30','$2b$12$JAbluczSFjAhi.ctJmpB7OOZOC/Lx/CvdZ7.yz0bpxcK3TpY8CJ3.','Sankar',NULL,1,1,5,1,'2025-11-23 13:01:32','2025-11-25 17:22:34','2025-11-25 22:52:31','2025-11-25 22:52:34',NULL),(39,'21AIB37','$2b$12$NgkAGDfFm4OWwvn3xxdfJenPJblK.hSE6EeYExBBWZBI65mQ3izLa','John Doe',NULL,6,7,5,1,'2025-11-30 07:03:46','2025-11-30 07:03:45',NULL,NULL,NULL),(40,'21AIB56','$2b$12$itHPXt68wcIE28X7IVOsk.Ut5UWZKVg4XJntlSYcmIBkpWeM7eJb6','Jane Smith',NULL,6,7,5,1,'2025-11-30 07:03:46','2025-11-30 07:03:45',NULL,NULL,NULL);
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -591,4 +591,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-11-27  7:50:48
+-- Dump completed on 2025-12-04  6:51:52
