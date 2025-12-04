@@ -485,60 +485,121 @@ def normalize_columns(df):
 
 
 def build_question_json(row, q_type):
-    """Generate question_data JSON based on question type."""
+    """
+    Build question_data JSON from Excel row.
+    Supports:
+      - mcq
+      - true_false
+      - fill_blank
+      - pronunciation
+      - match_following   ← NEW & PERFECT (uses Option_A-D + Extra_1)
+      - one_word
+      - own_response
+    """
+    q_type = q_type.lower().strip()
 
+    # Helper: extract non-empty options
+    def get_options():
+        opts = []
+        for col in ["option_a", "option_b", "option_c", "option_d"]:
+            val = str(row.get(col) or "").strip()
+            if val and val.lower() not in ["nan", "none"]:
+                opts.append(val)
+        return opts
+
+    # ──────────────────────────────────────────────────────────────
+    # 1. MCQ
+    # ──────────────────────────────────────────────────────────────
     if q_type == "mcq":
         return {
-            "options": [
-                row.get("option_a"),
-                row.get("option_b"),
-                row.get("option_c"),
-                row.get("option_d"),
-            ],
-            "correct_answer": row.get("correct_answer"),
+            "options": get_options(),
+            "correct_answer": str(row.get("Correct_Answer") or "").strip()
         }
 
-    if q_type == "fill_blank":
-        return {
-            "sentence": row.get("question_text"),
-            "correct_answers": [
-                x.strip() for x in str(row.get("correct_answer", "")).split(",") if x.strip()
-            ]
-        }
-
-    if q_type == "pronunciation":
-        return {
-            "word": row.get("pronunciation_word"),
-            "correct_answer": row.get("correct_answer")
-        }
-
+    # ──────────────────────────────────────────────────────────────
+    # 2. TRUE / FALSE
+    # ──────────────────────────────────────────────────────────────
     if q_type == "true_false":
+        correct = str(row.get("Correct_Answer") or "").strip().lower()
         return {
-            "statement": row.get("question_text"),
-            "correct_answer": str(row.get("correct_answer", "")).lower() in ["true", "1", "yes"]
+            "options": get_options(),  # usually ["True", "False"]
+            "correct_answer": correct if correct in ["true", "false"] else "false"
         }
 
+    # ──────────────────────────────────────────────────────────────
+    # 3. FILL IN THE BLANKS
+    # ──────────────────────────────────────────────────────────────
+    if q_type == "fill_blank":
+        answers = [a.strip() for a in str(row.get("Correct_Answer") or "").split(",") if a.strip()]
+        return {
+            "correct_answers": answers  # e.g. ["grammar", "vocabulary"]
+        }
+
+    # ──────────────────────────────────────────────────────────────
+    # 4. PRONUNCIATION
+    # ──────────────────────────────────────────────────────────────
+    if q_type == "pronunciation":
+        word = str(row.get("Correct_Answer") or row.get("Pronunciation_Word") or "").strip()
+        return {
+            "correct_answer": word
+        }
+
+    # ──────────────────────────────────────────────────────────────
+    # 5. MATCH THE FOLLOWING ← THIS IS THE ONE YOU WANT
+    # ──────────────────────────────────────────────────────────────
     if q_type == "match":
+        left_items = get_options()  # Now works with Option_A, Option A, etc.
+
+        # RIGHT COLUMN: Accept Column2 → becomes extra_1
+        right_text = str(row.get("column2") or "").strip()
+        right_items = [item.strip() for item in right_text.split(",") if item.strip()]
+
+        if len(left_items) == 0:
+            raise ValueError("Match the following: No items found in left column (Option_A–D)")
+        if len(right_items) == 0:
+            raise ValueError("Match the following: Right column is empty! Use 'Column2' or 'Extra_1' with comma-separated values")
+
+        if len(right_items) != len(left_items):
+            raise ValueError(f"Match the following: Left has {len(left_items)} items, Right has {len(right_items)} — must be equal!")
+
+        pairing_str = str(row.get("correct_answer") or "").strip().upper()
+        pairing_list = [p.strip() for p in pairing_str.split(",") if p.strip()]
+
+        if len(pairing_list) != len(left_items):
+            raise ValueError(f"Correct_Answer must have {len(left_items)} items (e.g. B,A,D,C)")
+
+        matches = {}
+        for i, target in enumerate(pairing_list):
+            left_letter = chr(65 + i)  # A, B, C, D
+            if target.isalpha() and len(target) == 1:
+                idx = ord(target) - 65
+                if 0 <= idx < len(right_items):
+                    matches[left_letter] = str(idx + 1)
+
         return {
-            "column_a": [x.strip() for x in str(row.get("option_a", "")).split(";") if x.strip()],
-            "column_b": [x.strip() for x in str(row.get("option_b", "")).split(";") if x.strip()],
-            "correct_pairs": dict(
-                pair.split("-") for pair in str(row.get("correct_answer", "")).split(",")
-                if "-" in pair and len(pair.split("-")) == 2
-            ),
+            "left": left_items,
+            "right": right_items,
+            "matches": matches
         }
 
-    if q_type == "own_response":
-        return {
-            "expected_keywords": [
-                x.strip() for x in str(row.get("extra_data", "")).split(",") if x.strip()
-            ]
-        }
-
+    # ──────────────────────────────────────────────────────────────
+    # 6. ONE WORD ANSWER
+    # ──────────────────────────────────────────────────────────────
     if q_type == "one_word":
         return {
-            "definition": row.get("question_text"),
-            "correct_answer": row.get("correct_answer")
+            "correct_answer": str(row.get("Correct_Answer") or "").strip()
         }
 
-    return {}  # fallback
+    # ──────────────────────────────────────────────────────────────
+    # 7. OWN RESPONSE (open-ended with keywords)
+    # ──────────────────────────────────────────────────────────────
+    if q_type == "own_response":
+        keywords = [k.strip() for k in str(row.get("Extra_1") or "").split(",") if k.strip()]
+        return {
+            "expected_keywords": keywords
+        }
+
+    # ──────────────────────────────────────────────────────────────
+    # Fallback
+    # ──────────────────────────────────────────────────────────────
+    return {}

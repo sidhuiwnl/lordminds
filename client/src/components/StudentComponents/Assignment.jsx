@@ -46,160 +46,172 @@ const Assignments = () => {
     }
   };
 
-  useEffect(() => {
-    /* -----------------------------------------------
-       1. Prevent PrintScreen (Clear Clipboard)
-    ------------------------------------------------ */
-    const handlePrintScreen = async (e) => {
-      if (e.key === "PrintScreen") {
-        e.preventDefault();
-        try {
-          await navigator.clipboard.writeText("");
-        } catch (_) { }
-        toast.error("⚠️ Screenshot attempt blocked!");
-        document.body.style.filter = "blur(50px)";
-        setTimeout(() => (document.body.style.filter = "none"), 1500);
-      }
-    };
+  // useEffect(() => {
+  //   /* -----------------------------------------------
+  //      1. Prevent PrintScreen (Clear Clipboard)
+  //   ------------------------------------------------ */
+  //   const handlePrintScreen = async (e) => {
+  //     if (e.key === "PrintScreen") {
+  //       e.preventDefault();
+  //       try {
+  //         await navigator.clipboard.writeText("");
+  //       } catch (_) { }
+  //       toast.error("⚠️ Screenshot attempt blocked!");
+  //       document.body.style.filter = "blur(50px)";
+  //       setTimeout(() => (document.body.style.filter = "none"), 1500);
+  //     }
+  //   };
 
-    /* -----------------------------------------------
-       2. Disable Copy / Cut / Select
-    ------------------------------------------------ */
-    const preventCopy = (e) => {
-      e.preventDefault();
-      toast.error("⚠️ Copying is disabled.");
-    };
+  //   /* -----------------------------------------------
+  //      2. Disable Copy / Cut / Select
+  //   ------------------------------------------------ */
+  //   const preventCopy = (e) => {
+  //     e.preventDefault();
+  //     toast.error("⚠️ Copying is disabled.");
+  //   };
 
-    const preventSelect = (e) => {
-      e.preventDefault();
-      toast.error("⚠️ Text selection is disabled.");
-      return false;
-    };
+  //   const preventSelect = (e) => {
+  //     e.preventDefault();
+  //     toast.error("⚠️ Text selection is disabled.");
+  //     return false;
+  //   };
 
-    /* -----------------------------------------------
-       3. Disable Right Click
-    ------------------------------------------------ */
-    const preventRightClick = (e) => {
-      e.preventDefault();
-      toast.error("⚠️ Right-click disabled.");
-    };
+  //   /* -----------------------------------------------
+  //      3. Disable Right Click
+  //   ------------------------------------------------ */
+  //   const preventRightClick = (e) => {
+  //     e.preventDefault();
+  //     toast.error("⚠️ Right-click disabled.");
+  //   };
 
-    /* -----------------------------------------------
-       4. Block Dangerous Keyboard Shortcuts
-    ------------------------------------------------ */
-    const blockKeys = (e) => {
-      const key = e.key.toLowerCase();
+  //   /* -----------------------------------------------
+  //      4. Block Dangerous Keyboard Shortcuts
+  //   ------------------------------------------------ */
+  //   const blockKeys = (e) => {
+  //     const key = e.key.toLowerCase();
 
-      // Ctrl + P/U/S and DevTools
-      if (
-        (e.ctrlKey && ["p", "u", "s"].includes(key)) ||
-        (e.ctrlKey && e.shiftKey && ["i", "j", "c"].includes(key))
-      ) {
-        e.preventDefault();
-        toast.error("⚠️ This action is disabled.");
-      }
-    };
+  //     // Ctrl + P/U/S and DevTools
+  //     if (
+  //       (e.ctrlKey && ["p", "u", "s"].includes(key)) ||
+  //       (e.ctrlKey && e.shiftKey && ["i", "j", "c"].includes(key))
+  //     ) {
+  //       e.preventDefault();
+  //       toast.error("⚠️ This action is disabled.");
+  //     }
+  //   };
 
-    /* -----------------------------------------------
-       5. Detect Tab Switching / Window Blur
-    ------------------------------------------------ */
-    const onBlur = () => {
-      if (blurHandled) return;
+  //   /* -----------------------------------------------
+  //      5. Detect Tab Switching / Window Blur
+  //   ------------------------------------------------ */
+  //   const onBlur = () => {
+  //     if (blurHandled) return;
 
-      setBlurHandled(true);
-      setTabSwitchCount(prev => {
-        const newCount = prev + 1;
+  //     setBlurHandled(true);
+  //     setTabSwitchCount(prev => {
+  //       const newCount = prev + 1;
 
-        if (newCount === 1) {
-          document.body.style.filter = "blur(50px)";
-          toast.error(`⚠️ Window switched! Warning ${newCount}/2`);
-        }
+  //       if (newCount === 1) {
+  //         document.body.style.filter = "blur(50px)";
+  //         toast.error(`⚠️ Window switched! Warning ${newCount}/2`);
+  //       }
 
-        if (newCount >= 2) {
-          document.body.style.filter = "none";
+  //       if (newCount >= 2) {
+  //         document.body.style.filter = "none";
 
-          Swal.fire({
-            title: "Test Terminated ❌",
-            text: "You switched tabs multiple times.",
-            icon: "error",
-            confirmButtonColor: "#d33",
-          }).then(() => {
-            navigate("/student/studenthome");
-          });
-        }
+  //         Swal.fire({
+  //           title: "Test Terminated ❌",
+  //           text: "You switched tabs multiple times.",
+  //           icon: "error",
+  //           confirmButtonColor: "#d33",
+  //         }).then(() => {
+  //           navigate("/student/studenthome");
+  //         });
+  //       }
 
-        return newCount;
-      });
-    };
-
-
-    const onFocus = () => {
-      document.body.style.filter = "none";
-      setBlurHandled(false); // Allow next blur event to fire one time
-    };
+  //       return newCount;
+  //     });
+  //   };
 
 
-    /* -----------------------------------------------
-       6. Detect Screen Capture Tools (Snipping Tool)
-    ------------------------------------------------ */
-    const snipDetection = setInterval(() => {
-      // Only check, don't trigger blur/toast spam
-      if (document.hidden || !document.hasFocus()) {
-        if (!blurHandled) {
-          document.body.style.filter = "blur(50px)";
-          toast.error("⚠️ Screen capturing detected!");
-        }
-      }
-    }, 500);
+  //   const onFocus = () => {
+  //     document.body.style.filter = "none";
+  //     setBlurHandled(false); // Allow next blur event to fire one time
+  //   };
 
-    /* -----------------------------------------------
-       7. Add all listeners once
-    ------------------------------------------------ */
-    window.addEventListener("keyup", handlePrintScreen);
-    window.addEventListener("keydown", blockKeys);
-    window.addEventListener("blur", onBlur);
-    window.addEventListener("focus", onFocus);
 
-    document.addEventListener("copy", preventCopy);
-    document.addEventListener("cut", preventCopy);
-    // document.addEventListener("selectstart", preventSelect);
-    document.addEventListener("contextmenu", preventRightClick);
+  //   /* -----------------------------------------------
+  //      6. Detect Screen Capture Tools (Snipping Tool)
+  //   ------------------------------------------------ */
+  //   const snipDetection = setInterval(() => {
+  //     // Only check, don't trigger blur/toast spam
+  //     if (document.hidden || !document.hasFocus()) {
+  //       if (!blurHandled) {
+  //         document.body.style.filter = "blur(50px)";
+  //         toast.error("⚠️ Screen capturing detected!");
+  //       }
+  //     }
+  //   }, 500);
 
-    /* -----------------------------------------------
-       Cleanup listeners on unmount
-    ------------------------------------------------ */
-    return () => {
-      window.removeEventListener("keyup", handlePrintScreen);
-      window.removeEventListener("keydown", blockKeys);
-      window.removeEventListener("blur", onBlur);
-      window.removeEventListener("focus", onFocus);
+  //   /* -----------------------------------------------
+  //      7. Add all listeners once
+  //   ------------------------------------------------ */
+  //   window.addEventListener("keyup", handlePrintScreen);
+  //   window.addEventListener("keydown", blockKeys);
+  //   window.addEventListener("blur", onBlur);
+  //   window.addEventListener("focus", onFocus);
 
-      document.removeEventListener("copy", preventCopy);
-      document.removeEventListener("cut", preventCopy);
-      // document.removeEventListener("selectstart", preventSelect);
-      document.removeEventListener("contextmenu", preventRightClick);
+  //   document.addEventListener("copy", preventCopy);
+  //   document.addEventListener("cut", preventCopy);
+  //   // document.addEventListener("selectstart", preventSelect);
+  //   document.addEventListener("contextmenu", preventRightClick);
 
-      clearInterval(snipDetection);
-    };
-  }, []);
+  //   /* -----------------------------------------------
+  //      Cleanup listeners on unmount
+  //   ------------------------------------------------ */
+  //   return () => {
+  //     window.removeEventListener("keyup", handlePrintScreen);
+  //     window.removeEventListener("keydown", blockKeys);
+  //     window.removeEventListener("blur", onBlur);
+  //     window.removeEventListener("focus", onFocus);
 
-  useEffect(() => {
-    const enterFullscreen = () => document.documentElement.requestFullscreen();
-    enterFullscreen();
+  //     document.removeEventListener("copy", preventCopy);
+  //     document.removeEventListener("cut", preventCopy);
+  //     // document.removeEventListener("selectstart", preventSelect);
+  //     document.removeEventListener("contextmenu", preventRightClick);
 
-    const onFSChange = () => {
-      // If fullscreen exited BECAUSE of a blur event, ignore it
-      if (blurHandled) return;
+  //     clearInterval(snipDetection);
+  //   };
+  // }, []);
 
-      if (!document.fullscreenElement) {
-        toast.error("⚠️ Fullscreen required! Exiting exam...");
-        navigate("/student/studenthome");
-      }
-    };
+  // useEffect(() => {
+  //   const enterFullscreen = () => document.documentElement.requestFullscreen();
+  //   enterFullscreen();
 
-    document.addEventListener("fullscreenchange", onFSChange);
-    return () => document.removeEventListener("fullscreenchange", onFSChange);
-  }, []);
+  //   const onFSChange = () => {
+  //     // If fullscreen exited BECAUSE of a blur event, ignore it
+  //     if (blurHandled) return;
+
+  //     if (!document.fullscreenElement) {
+  //       toast.error("⚠️ Fullscreen required! Exiting exam...");
+  //       navigate("/student/studenthome");
+  //     }
+  //   };
+
+  //   document.addEventListener("fullscreenchange", onFSChange);
+  //   return () => document.removeEventListener("fullscreenchange", onFSChange);
+  // }, []);
+
+
+  const mapQuestionType = (id) => {
+    switch (Number(id)) {
+      case 1: return "mcq";
+      case 8: return "true_false";
+      case 2: return "fill_blank";
+      case 9: return "pronunciation";
+      case 3: return "match";
+      default: return "unknown";
+    }
+  };
 
 
   // ✅ Fetch Questions
@@ -217,6 +229,7 @@ const Assignments = () => {
         if (Array.isArray(data)) {
           const parsed = data.map((q) => ({
             ...q,
+            question_type: mapQuestionType(q.question_type_id),  // ← FIX
             question_data:
               typeof q.question_data === "string"
                 ? JSON.parse(q.question_data || "{}")
@@ -391,6 +404,7 @@ const Assignments = () => {
   };
 
   // 🧠 Analyze Audio
+  // Analyze Audio — FULLY WORKING WITH MATCH THE FOLLOWING
   const sendAudioForAnalysis = async (audioBlob) => {
     setAnalyzing(true);
     setFeedback("Analyzing your answer...");
@@ -412,7 +426,10 @@ const Assignments = () => {
         result?.transcription ||
         result?.text ||
         ""
-      ).toLowerCase().replace(/[.,!?;:'"()]/g, '').trim();
+      )
+        .toLowerCase()
+        .replace(/[.,!?;:'"()]/g, '')
+        .trim();
 
       if (!transcript || transcript.includes("could not understand")) {
         setFeedback("Could not understand. Speak clearly.");
@@ -444,23 +461,16 @@ const Assignments = () => {
         correctText = correctAnswers.join(" or ");
       }
 
-      // 3. MCQ & TRUE/FALSE — FIXED & PERFECT
+      // 3. MCQ & TRUE/FALSE
       else if (["mcq", "true_false"].includes(currentQuestion.question_type)) {
         const correctAnswer = currentQuestion.question_data.correct_answer?.toString().toLowerCase().trim();
         const options = (currentQuestion.question_data.options || []).map(o => o.toString().toLowerCase().trim());
 
-        // Find which option is correct → get its letter
         const correctIndex = options.indexOf(correctAnswer);
         const correctLetter = correctIndex !== -1 ? String.fromCharCode(65 + correctIndex).toLowerCase() : "";
 
-        // What student can say to be correct
-        const acceptable = [
-          correctAnswer,                    // "went"
-          correctLetter,                    // "b"
-          correctLetter.toUpperCase(),      // "B"
-        ];
+        const acceptable = [correctAnswer, correctLetter, correctLetter.toUpperCase()];
 
-        // Extra for True/False
         if (currentQuestion.question_type === "true_false") {
           if (correctAnswer === "true") acceptable.push("yes");
           if (correctAnswer === "false") acceptable.push("no");
@@ -470,7 +480,40 @@ const Assignments = () => {
         correctText = correctAnswer.toUpperCase();
       }
 
-      // Final Result
+      // 4. MATCH THE FOLLOWING — FULL VOICE SUPPORT (BEST IN CLASS)
+      else if (currentQuestion.question_type === "match") {
+        const { left = [], right = [], matches = {} } = currentQuestion.question_data;
+
+        if (!left.length || !right.length || Object.keys(matches).length === 0) {
+          setFeedback("Question data error.");
+          setAnalyzing(false);
+          return;
+        }
+
+        const correctPairs = Object.entries(matches); // [["A","2"], ["B","1"], ...]
+        let matchedCount = 0;
+
+        correctPairs.forEach(([letter, correctNum]) => {
+          const leftText = (left[letter.charCodeAt(0) - 65] || "").toString().toLowerCase();
+          const rightText = (right[parseInt(correctNum) - 1] || "").toString().toLowerCase();
+
+          const patterns = [
+            `${letter.toLowerCase()}\\s*[-to\\s]*${correctNum}`,           // "a to 2", "a-2", "a 2"
+            `${correctNum}\\s*[-to\\s]*${letter.toLowerCase()}`,           // "2 to a"
+            new RegExp(`\\b${leftText}\\b.*\\b${rightText}\\b`),            // "dog barks"
+            new RegExp(`\\b${rightText}\\b.*\\b${leftText}\\b`),            // "barks dog"
+          ];
+
+          if (patterns.some(p => p.test ? p.test(transcript) : transcript.includes(p))) {
+            matchedCount++;
+          }
+        });
+
+        isCorrect = matchedCount === correctPairs.length;
+        correctText = correctPairs.map(([l, r]) => `${l}→${r}`).join(", ");
+      }
+
+      // Final Result — SAME FOR ALL TYPES
       if (isCorrect) {
         setFeedback("Correct Answer!");
         setAnalysisResults(prev => ({ ...prev, [qid]: { correctness: "correct" } }));
@@ -480,8 +523,8 @@ const Assignments = () => {
         if (newAttemptCount >= 2) {
           setFeedback(`Incorrect. Correct: ${correctText}`);
           setShowCorrectAnswer(prev => ({ ...prev, [qid]: true }));
-          setAnswers(prev => ({ ...prev, [`show-next-${qid}`]: true }));
-          speechSynthesis.speak(new SpeechSynthesisUtterance(`Wrong. The answer is ${correctText}`));
+          setAnswers(prev => ({ ...prev, [`show-next-${qid}`]: true, [`show-next-${qid}`]: true }));
+          speechSynthesis.speak(new SpeechSynthesisUtterance(`Wrong. The correct answer is ${correctText}`));
         } else {
           setFeedback(`Incorrect. Try again. Attempt ${newAttemptCount}/2`);
           speechSynthesis.speak(new SpeechSynthesisUtterance("Wrong. Try again"));
@@ -489,7 +532,7 @@ const Assignments = () => {
       }
 
     } catch (err) {
-      console.error(err);
+      console.error("Analysis error:", err);
       setFeedback("Analysis failed. Try again.");
     } finally {
       setAnalyzing(false);
@@ -631,32 +674,131 @@ const Assignments = () => {
             {currentStep}. {currentQuestion.question_text}
           </p>
 
-          {/* MCQ Options */}
-          <div className="space-y-3 mb-6">
-            {currentQuestion.question_data?.options?.map((option, index) => {
-              const optionLetter = String.fromCharCode(65 + index);
-              const isSelected = answers[currentQuestionId] === option;
-              return (
-                <label
-                  key={index}
-                  className={`flex items-center space-x-3 cursor-pointer p-3 border rounded-lg transition-colors ${isSelected ? "bg-yellow-100 border-yellow-400" : "hover:bg-gray-50"
-                    } ${isNavigationDisabled || showNextButton ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  <input
-                    type="radio"
-                    name={`answer-${currentQuestionId}`}
-                    value={option}
-                    checked={isSelected}
-                    onChange={() => !isNavigationDisabled && !showNextButton && handleOptionChange(option)}
-                    className="hidden"
-                    disabled={isNavigationDisabled || showNextButton}
-                  />
-                  <span className="text-sm text-gray-700">
-                    <strong>{optionLetter}:</strong> {option.toString()}
-                  </span>
-                </label>
-              );
-            })}
+          {/* ==================== QUESTION TYPE RENDERING ==================== */}
+          <div className="space-y-6 mb-8">
+
+            {/* 1. MCQ & TRUE/FALSE */}
+            {["mcq", "true_false"].includes(currentQuestion.question_type) && (
+              <div className="space-y-4">
+                {currentQuestion.question_data?.options?.map((option, index) => {
+                  const optionLetter = String.fromCharCode(65 + index);
+                  const isSelected = answers[currentQuestionId] === option;
+
+                  return (
+                    <label
+                      key={index}
+                      className={`flex items-center space-x-4 cursor-pointer p-5 border-2 rounded-2xl transition-all duration-300 
+              ${isSelected
+                          ? "bg-blue-50 border-blue-500 shadow-lg"
+                          : "bg-white border-gray-300 hover:border-blue-400 hover:shadow-md"
+                        }
+              ${isNavigationDisabled || showNextButton ? 'opacity-60 cursor-not-allowed' : ''}
+            `}
+                    >
+                      <input
+                        type="radio"
+                        name={`answer-${currentQuestionId}`}
+                        value={option}
+                        checked={isSelected}
+                        onChange={() => !isNavigationDisabled && !showNextButton && handleOptionChange(option)}
+                        className="w-6 h-6 text-blue-600"
+                        disabled={isNavigationDisabled || showNextButton}
+                      />
+                      <span className="text-lg font-medium text-gray-800">
+                        <strong className="text-xl">{optionLetter}.</strong> {option.toString()}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 2. MATCH THE FOLLOWING — BEAUTIFUL & VOICE READY */}
+            {currentQuestion.question_type === "match" && (
+              <div className="mt-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                  {/* Left Column */}
+                  <div>
+                    <h3 className="font-bold text-lg mb-4 text-blue-700">Column A</h3>
+                    {currentQuestion.question_data.left?.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-4 p-4 bg-blue-50 rounded-xl mb-3 border-2 border-blue-200"
+                      >
+                        <span className="font-bold text-xl text-blue-800 w-10">
+                          {String.fromCharCode(65 + idx)}.
+                        </span>
+                        <span className="text-lg font-medium text-gray-800">{item}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Right Column */}
+                  <div>
+                    <h3 className="font-bold text-lg mb-4 text-green-700">Column B</h3>
+                    {currentQuestion.question_data.right?.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-4 p-4 bg-green-50 rounded-xl mb-3 border-2 border-green-200"
+                      >
+                        <span className="font-bold text-xl text-green-800 w-10">
+                          {idx + 1}.
+                        </span>
+                        <span className="text-lg font-medium text-gray-800">{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Voice Instruction */}
+                {!showNextButton && (
+                  <div className="bg-purple-100 border-2 border-purple-400 rounded-xl p-6 text-center">
+                    <p className="text-purple-800 font-bold text-lg mb-2">
+                      Speak your answers clearly!
+                    </p>
+                    <p className="text-purple-700 text-base">
+                      Example: <strong>"A two, B one, C four, D three"</strong>
+                      <br />
+                      OR say: <strong>"Dog barks, Cat meows, Cow moos, Lion roars"</strong>
+                    </p>
+                  </div>
+                )}
+
+                {/* Show Correct Answer */}
+                {showCorrectAnswer[currentQuestionId] && (
+                  <div className="bg-green-100 border-2 border-green-400 rounded-xl p-6 mt-6">
+                    <p className="text-green-800 font-bold text-xl mb-3">Correct Matching:</p>
+                    <div className="space-y-3 text-lg">
+                      {Object.entries(currentQuestion.question_data.matches || {}).map(([letter, num]) => {
+                        const leftText = currentQuestion.question_data.left?.[letter.charCodeAt(0) - 65] || "?";
+                        const rightText = currentQuestion.question_data.right?.[parseInt(num) - 1] || "?";
+                        return (
+                          <div key={letter} className="flex items-center gap-4 font-medium">
+                            <span className="text-green-700 font-bold">{letter} → {num}</span>
+                            <span className="text-gray-700">
+                              ({leftText} → {rightText})
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 3. FILL IN BLANKS & PRONUNCIATION HINT */}
+            {currentQuestion.question_type !== "mcq" &&
+              currentQuestion.question_type !== "true_false" &&
+              currentQuestion.question_type !== "match" &&
+              !showNextButton && (
+                <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-5 mt-6">
+                  <p className="text-amber-800 font-semibold flex items-center gap-2">
+                    {currentQuestion.question_type === "fill_blank" && "Fill in the blanks by speaking all missing words clearly"}
+                    {currentQuestion.question_type === "pronunciation" && "Pronounce the word/phrase clearly"}
+                  </p>
+                </div>
+              )}
           </div>
 
           {/* Show correct answer when revealed (Supports ALL question types) */}
@@ -701,7 +843,7 @@ const Assignments = () => {
             </div>
           )}
 
-          
+
           {/* 🎤 Audio Controls */}
           <div className="flex items-center gap-3 mb-6">
             {!recording && !showNextButton ? (

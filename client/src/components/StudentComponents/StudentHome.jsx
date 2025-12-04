@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
+import address from "../../../public/assets/address.png";
 
 const StudentHome = () => {
   const navigate = useNavigate();
   const [assignmentData, setAssignmentData] = useState([]);
   const [topics, setTopics] = useState([]);
   const [userData, setUserData] = useState(null);
+  const [showMicHelpModal, setShowMicHelpModal] = useState(false);
+
 
   async function getUserDetails() {
     try {
@@ -93,29 +96,6 @@ const StudentHome = () => {
     }
   }
 
-  async function requestMicPermission() {
-  try {
-    const status = await navigator.permissions.query({ name: "microphone" });
-
-    if (status.state === "granted") {
-      return true; // Already granted
-    }
-
-    if (status.state === "denied") {
-      toast.error("Microphone is blocked. Enable it from the browser lock icon.");
-      return false;
-    }
-
-    // State is "prompt" → this triggers REAL browser permission popup
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.getTracks().forEach(track => track.stop());
-    return true;
-
-  } catch (err) {
-    console.error("Mic permission denied:", err);
-    return false;
-  }
-}
 
 
 
@@ -233,6 +213,30 @@ const StudentHome = () => {
   };
 
 
+  async function requestMicPermission() {
+    try {
+      const status = await navigator.permissions.query({ name: "microphone" });
+
+      if (status.state === "granted") return true;
+
+      if (status.state === "denied") {
+        setShowMicHelpModal(true); // <-- OPEN MODAL
+        return false;
+      }
+
+      // If "prompt", Chrome will show the system popup automatically
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop());
+      return true;
+
+    } catch (err) {
+      console.error("Mic permission denied:", err);
+      setShowMicHelpModal(true);
+      return false;
+    }
+  }
+
+
 
 
 
@@ -247,6 +251,36 @@ const StudentHome = () => {
 
   return (
     <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
+
+      {showMicHelpModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-2xl shadow-lg max-w-sm w-full">
+            <h2 className="text-lg font-bold text-gray-800 mb-3">Enable Microphone</h2>
+
+            <p className="text-sm text-gray-600 mb-4">
+              Chrome has blocked your microphone.
+              To continue, please allow mic access for this site.
+            </p>
+
+            <div className="bg-gray-100 p-3 rounded-lg text-sm text-gray-700 mb-4">
+              <ol className="list-decimal ml-4 space-y-1">
+                <li>Click the <strong>🔒 lock icon</strong> next to the address bar.</li>
+
+                <li>Select <strong>Site settings</strong>.</li>
+                <li>Find <strong>Microphone</strong> → Change to <strong>Allow</strong>.</li>
+                <li>Reload this page.</li>
+              </ol>
+            </div>
+
+            <button
+              onClick={() => setShowMicHelpModal(false)}
+              className="w-full py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
 
 
       {/* ===================== ASSIGNMENTS SECTION ===================== */}
