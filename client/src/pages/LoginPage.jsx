@@ -194,12 +194,12 @@ const LoginPage = () => {
 
             <hr className="my-4 lg:my-6 border-gray-200" />
 
-            <p className="text-center text-xs lg:text-sm text-blue-600">
+            {/* <p className="text-center text-xs lg:text-sm text-blue-600">
               Don't have an account?{" "}
               <a href="/onboard" className="underline font-semibold">
                 Create New Profile
               </a>
-            </p>
+            </p> */}
           </form>
         </div>
       </div>

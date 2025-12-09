@@ -10,3 +10,4 @@ librosa
 textblob
 uvicorn
 openpyxl
+cryptography

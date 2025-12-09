@@ -282,8 +282,8 @@ const SuperAdminUpload = () => {
       fd.append("no_of_sub_topics", formData.noOfSubTopic || 0);
       fd.append("video_link", formData.overviewVideo || "");
       fd.append("overview_content", formData.overviewText || "");
-      fd.append("sub_topic_id", formData.subTopicId || "");
-      fd.append("sub_topic_name", formData.subTopicName || "");
+      // fd.append("sub_topic_id", formData.subTopicId || "");
+      
 
       if (formData.overviewDocument) fd.append("file", formData.overviewDocument);
 
@@ -305,7 +305,6 @@ const SuperAdminUpload = () => {
         noOfSubTopic: "",
         overviewVideo: "",
         subTopicId: "",
-        subTopicName: "",
         overviewDocument: null,
         overviewText: "",
       }));
@@ -563,7 +562,7 @@ const SuperAdminUpload = () => {
             </div>
 
             <div className="flex justify-end gap-2">
-              <a href="/sample_question_upload.xlsx" download className="bg-gray-500 text-white px-6 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow">
+              <a href="/question_template.xlsx" download className="bg-gray-500 text-white px-6 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow">
                 Download Template
               </a>
               <button type="submit" className="bg-yellow-400 text-gray-800 px-6 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow">
@@ -742,7 +741,7 @@ const SuperAdminUpload = () => {
             </div>
 
             <div className="flex justify-end gap-2">
-              <a href="/sample_question_upload.xlsx" download className="bg-gray-500 text-white px-6 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow">
+              <a href="/question_template.xlsx" download className="bg-gray-500 text-white px-6 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow">
                 Download Template
               </a>
               <button type="submit" className="bg-yellow-400 text-gray-800 px-6 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow">

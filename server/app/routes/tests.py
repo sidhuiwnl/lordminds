@@ -492,89 +492,97 @@ def build_question_json(row, q_type):
       - true_false
       - fill_blank
       - pronunciation
-      - match_following   ← NEW & PERFECT (uses Option_A-D + Extra_1)
+      - match
       - one_word
       - own_response
     """
     q_type = q_type.lower().strip()
 
-    # Helper: extract non-empty options
+    # Helper: options from A–D
     def get_options():
         opts = []
         for col in ["option_a", "option_b", "option_c", "option_d"]:
-            val = str(row.get(col) or "").strip()
-            if val and val.lower() not in ["nan", "none"]:
+            val = row.get(col)
+            if pd.isna(val):
+                continue
+            val = str(val).strip()
+            if val:
                 opts.append(val)
         return opts
 
-    # ──────────────────────────────────────────────────────────────
+    # Common cleaned values (ALL LOWERCASE COLUMN NAMES!)
+    correct_raw = str(row.get("correct_answer") or "").strip()
+    pron_raw = str(row.get("pronunciation_word") or "").strip()
+    column2_raw = str(row.get("column2") or "").strip()
+    extra1_raw = str(row.get("extra_1") or "").strip()
+
     # 1. MCQ
-    # ──────────────────────────────────────────────────────────────
     if q_type == "mcq":
         return {
             "options": get_options(),
-            "correct_answer": str(row.get("Correct_Answer") or "").strip()
+            "correct_answer": correct_raw
         }
 
-    # ──────────────────────────────────────────────────────────────
     # 2. TRUE / FALSE
-    # ──────────────────────────────────────────────────────────────
     if q_type == "true_false":
-        correct = str(row.get("Correct_Answer") or "").strip().lower()
+        correct = correct_raw.lower()
+        if correct not in ["true", "false"]:
+            # try to guess from t / f
+            if correct.startswith("t"):
+                correct = "true"
+            elif correct.startswith("f"):
+                correct = "false"
+        if not correct:
+            correct = "false"
         return {
-            "options": get_options(),  # usually ["True", "False"]
-            "correct_answer": correct if correct in ["true", "false"] else "false"
+            "options": get_options() or ["True", "False"],
+            "correct_answer": correct
         }
 
-    # ──────────────────────────────────────────────────────────────
     # 3. FILL IN THE BLANKS
-    # ──────────────────────────────────────────────────────────────
     if q_type == "fill_blank":
-        answers = [a.strip() for a in str(row.get("Correct_Answer") or "").split(",") if a.strip()]
+        answers = [a.strip() for a in correct_raw.split(",") if a.strip()]
         return {
-            "correct_answers": answers  # e.g. ["grammar", "vocabulary"]
+            "correct_answers": answers
         }
 
-    # ──────────────────────────────────────────────────────────────
     # 4. PRONUNCIATION
-    # ──────────────────────────────────────────────────────────────
     if q_type == "pronunciation":
-        word = str(row.get("Correct_Answer") or row.get("Pronunciation_Word") or "").strip()
+        word = correct_raw or pron_raw
         return {
             "correct_answer": word
         }
 
-    # ──────────────────────────────────────────────────────────────
-    # 5. MATCH THE FOLLOWING ← THIS IS THE ONE YOU WANT
-    # ──────────────────────────────────────────────────────────────
+    # 5. MATCH THE FOLLOWING
     if q_type == "match":
-        left_items = get_options()  # Now works with Option_A, Option A, etc.
+        left_items = get_options()
+        right_source = column2_raw or extra1_raw
+        right_items = [r.strip() for r in right_source.split(",") if r.strip()]
 
-        # RIGHT COLUMN: Accept Column2 → becomes extra_1
-        right_text = str(row.get("column2") or "").strip()
-        right_items = [item.strip() for item in right_text.split(",") if item.strip()]
+        if not left_items:
+            raise ValueError("Match: no left items (Option_A–D)")
+        if not right_items:
+            raise ValueError("Match: right side (Column2/Extra_1) empty")
+        if len(left_items) != len(right_items):
+            raise ValueError(
+                f"Match: left has {len(left_items)}, right has {len(right_items)}"
+            )
 
-        if len(left_items) == 0:
-            raise ValueError("Match the following: No items found in left column (Option_A–D)")
-        if len(right_items) == 0:
-            raise ValueError("Match the following: Right column is empty! Use 'Column2' or 'Extra_1' with comma-separated values")
-
-        if len(right_items) != len(left_items):
-            raise ValueError(f"Match the following: Left has {len(left_items)} items, Right has {len(right_items)} — must be equal!")
-
-        pairing_str = str(row.get("correct_answer") or "").strip().upper()
-        pairing_list = [p.strip() for p in pairing_str.split(",") if p.strip()]
-
+        # Correct_Answer: e.g. "B,A,D,C"
+        pairing_list = [p.strip().upper() for p in correct_raw.split(",") if p.strip()]
         if len(pairing_list) != len(left_items):
-            raise ValueError(f"Correct_Answer must have {len(left_items)} items (e.g. B,A,D,C)")
+            raise ValueError(
+                f"Match: Correct_Answer must have {len(left_items)} letters (e.g. B,A,D,C)"
+            )
 
+        # Store mapping as A -> "2", B -> "1", ...
         matches = {}
-        for i, target in enumerate(pairing_list):
-            left_letter = chr(65 + i)  # A, B, C, D
-            if target.isalpha() and len(target) == 1:
-                idx = ord(target) - 65
-                if 0 <= idx < len(right_items):
-                    matches[left_letter] = str(idx + 1)
+        for i, target_letter in enumerate(pairing_list):
+            left_letter = chr(65 + i)        # A,B,C,D
+            idx = ord(target_letter) - 65    # B -> 1, A -> 0 ...
+            if idx < 0 or idx >= len(right_items):
+                raise ValueError(f"Match: invalid letter in Correct_Answer: {target_letter}")
+            matches[left_letter] = str(idx + 1)  # store as 1-based index string
 
         return {
             "left": left_items,
@@ -582,24 +590,18 @@ def build_question_json(row, q_type):
             "matches": matches
         }
 
-    # ──────────────────────────────────────────────────────────────
-    # 6. ONE WORD ANSWER
-    # ──────────────────────────────────────────────────────────────
+    # 6. ONE WORD
     if q_type == "one_word":
         return {
-            "correct_answer": str(row.get("Correct_Answer") or "").strip()
+            "correct_answer": correct_raw
         }
 
-    # ──────────────────────────────────────────────────────────────
-    # 7. OWN RESPONSE (open-ended with keywords)
-    # ──────────────────────────────────────────────────────────────
+    # 7. OWN RESPONSE
     if q_type == "own_response":
-        keywords = [k.strip() for k in str(row.get("Extra_1") or "").split(",") if k.strip()]
+        keywords = [k.strip() for k in extra1_raw.split(",") if k.strip()]
         return {
             "expected_keywords": keywords
         }
 
-    # ──────────────────────────────────────────────────────────────
     # Fallback
-    # ──────────────────────────────────────────────────────────────
     return {}
