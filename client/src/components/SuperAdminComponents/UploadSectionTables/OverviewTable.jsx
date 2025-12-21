@@ -60,17 +60,16 @@ const OverviewTable = ({
 
   /* ---------- UPDATE OVERVIEW ---------- */
   const handleUpdateOverview = async () => {
-    if (!videoUrl.trim() && !content.trim()) {
-      toast.error("Please enter a video URL or content to update!");
-      return;
-    }
-
     try {
       setIsSubmitting(true);
-
       const formData = new FormData();
-      if (videoUrl.trim()) formData.append("overview_video_url", videoUrl);
-      if (content.trim()) formData.append("overview_content", content);
+
+      // ALWAYS send both fields
+      // If user wants to clear video URL, send empty string
+      formData.append("overview_video_url", videoUrl);
+
+      // If user wants to clear content, send empty string  
+      formData.append("overview_content", content);
 
       const response = await fetch(
         `${import.meta.env.VITE_BACKEND_API_URL}/overviews/update-overview/${selectedOverview.sub_topic_id}`,
@@ -96,7 +95,6 @@ const OverviewTable = ({
       setIsSubmitting(false);
     }
   };
-
   /* ---------- DEACTIVATE SUBTOPIC ---------- */
   const handleDeactivate = async (overview) => {
     if (

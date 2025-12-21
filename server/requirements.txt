@@ -11,3 +11,4 @@ textblob
 uvicorn
 openpyxl
 cryptography
+pydantic[email]

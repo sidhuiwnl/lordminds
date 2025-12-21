@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, HTTPException, Form
 from config.database import get_db
 
@@ -5,21 +6,17 @@ router = APIRouter()
 
 @router.post("/upload", status_code=201)
 async def upload_overview(
-    college_id: int = Form(...),
-    department_id: int = Form(...),
-    topic_id: int = Form(...),   # <-- IMPORTANT
+    topic_id: int = Form(...),
     sub_topic_name: str = Form(...),
     no_of_sub_topics: int = Form(...),
     video_link: str = Form(None),
-    file_name: str = Form(None),
     overview_content: str = Form(None)
 ):
     """
-    Upload an overview for a topic that belongs to a specific
-    college + department. Topics are isolated per college/department.
+    Upload overview for a topic.
+    College + department are inferred from assignment.
     """
 
-    # Must have at least one content type
     if not video_link and not overview_content:
         raise HTTPException(
             status_code=400,
@@ -30,27 +27,29 @@ async def upload_overview(
         with get_db() as conn:
             with conn.cursor() as cursor:
 
-                # 1️⃣ VALIDATE: Topic belongs to this college + department
+                # 1️⃣ Validate topic is assigned somewhere (active)
                 cursor.execute("""
-                    SELECT topic_id FROM topics
-                    WHERE topic_id = %s AND college_id = %s AND department_id = %s AND is_active = 1
-                """, (topic_id, college_id, department_id))
+                    SELECT college_id, department_id
+                    FROM topic_college_department
+                    WHERE topic_id = %s AND is_active = 1
+                """, (topic_id,))
 
-                topic = cursor.fetchone()
-                if not topic:
+                assignment = cursor.fetchone()
+                if not assignment:
                     raise HTTPException(
                         status_code=404,
-                        detail="Topic does not belong to the given college/department."
+                        detail="Topic is not assigned to any college/department."
                     )
 
-                # 2️⃣ Update total_sub_topics (optional)
+                # 2️⃣ Update topic metadata
                 cursor.execute("""
-                    UPDATE topics 
-                    SET total_sub_topics = %s, updated_at = NOW()
+                    UPDATE topics
+                    SET total_sub_topics = %s,
+                        updated_at = NOW()
                     WHERE topic_id = %s
                 """, (no_of_sub_topics, topic_id))
 
-                # 3️⃣ Find next sub_topic_order
+                # 3️⃣ Next sub-topic order
                 cursor.execute("""
                     SELECT COALESCE(MAX(sub_topic_order), 0) + 1 AS next_order
                     FROM sub_topics
@@ -58,7 +57,7 @@ async def upload_overview(
                 """, (topic_id,))
                 next_order = cursor.fetchone()["next_order"]
 
-                # 4️⃣ Insert subtopic
+                # 4️⃣ Insert sub-topic
                 cursor.execute("""
                     INSERT INTO sub_topics (
                         topic_id,
@@ -71,8 +70,7 @@ async def upload_overview(
                         updated_at
                     )
                     VALUES (%s, %s, %s, %s, %s, 1, NOW(), NOW())
-                """,
-                (
+                """, (
                     topic_id,
                     sub_topic_name,
                     next_order,
@@ -80,27 +78,25 @@ async def upload_overview(
                     overview_content
                 ))
 
-                sub_topic_id = cursor.lastrowid
                 conn.commit()
 
                 return {
                     "status": "success",
-                    "message": "Overview created successfully.",
+                    "message": "Overview created successfully",
                     "topic_id": topic_id,
-                    "sub_topic_id": sub_topic_id,
-                    "sub_topic_order": next_order,
+                    "college_id": assignment["college_id"],
+                    "department_id": assignment["department_id"],
+                    "sub_topic_order": next_order
                 }
 
     except HTTPException:
         raise
-
     except Exception as e:
         conn.rollback()
         raise HTTPException(
             status_code=500,
             detail=f"Error creating overview: {str(e)}"
         )
-
 
 
 
@@ -220,16 +216,15 @@ async def deactivate_subtopic(sub_topic_id: int):
 
 
 
-
-
 @router.put("/update-overview/{sub_topic_id}")
 async def update_subtopic_overview(
     sub_topic_id: int,
-    overview_video_url: str = Form(None),
-    overview_content: str = Form(None),
+    overview_video_url: Optional[str] = Form(None),
+    overview_content: Optional[str] = Form(None),
 ):
     """
     Update overview video URL and/or overview content for a specific subtopic.
+    Allows empty strings to clear values.
     """
     try:
         with get_db() as conn:
@@ -244,24 +239,35 @@ async def update_subtopic_overview(
                 if not sub:
                     raise HTTPException(status_code=404, detail="Subtopic not found")
 
-                # 2️⃣ Validate: At least one field must be provided
-                if not overview_video_url and not overview_content:
+                # 2️⃣ Check if at least one field is provided (can be empty string)
+                if overview_video_url is None and overview_content is None:
                     raise HTTPException(
                         status_code=400,
-                        detail="At least one of overview_video_url or overview_content must be provided.",
+                        detail="At least one field must be provided for update.",
                     )
 
                 # 3️⃣ Build dynamic SQL update
                 update_fields = []
                 params = []
 
+                # Handle video URL - allow empty string to clear it
                 if overview_video_url is not None:
                     update_fields.append("overview_video_url = %s")
-                    params.append(overview_video_url)
+                    # Send NULL to database if empty string
+                    params.append(overview_video_url if overview_video_url.strip() != "" else None)
 
+                # Handle content - allow empty string to clear it
                 if overview_content is not None:
                     update_fields.append("overview_content = %s")
-                    params.append(overview_content)
+                    # Send NULL to database if empty string
+                    params.append(overview_content if overview_content.strip() != "" else None)
+
+                # If no fields to update (both were explicitly set to None)
+                if not update_fields:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="No fields selected for update.",
+                    )
 
                 params.append(sub_topic_id)
 
@@ -278,8 +284,8 @@ async def update_subtopic_overview(
             "status": "success",
             "message": f"Subtopic '{sub['sub_topic_name']}' overview updated successfully.",
             "updated_fields": {
-                "overview_video_url": overview_video_url,
-                "overview_content": "Updated" if overview_content else None,
+                "overview_video_url": "Cleared" if overview_video_url == "" else "Updated" if overview_video_url is not None else None,
+                "overview_content": "Cleared" if overview_content == "" else "Updated" if overview_content is not None else None,
             },
         }
 
@@ -287,4 +293,4 @@ async def update_subtopic_overview(
         raise
     except Exception as e:
         print("❌ Error updating subtopic overview:", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")

@@ -279,22 +279,25 @@ async def update_college(
     college_id: int,
     name: Optional[str] = Form(None),
     address: Optional[str] = Form(None),
-    department_names: Optional[str] = Form(None)   # e.g. "CSE, IT, ECE"
+    department_names: Optional[str] = Form(None)  # "CSE, IT, ECE"
 ):
     """
-    Update college info and optionally add NEW departments to the college using mapping tables.
-    Can map existing global departments OR create new ones.
+    Update college info and optionally add NEW departments
+    scoped strictly to this college.
     """
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
-                
+
                 # 1️⃣ Verify college exists
-                cursor.execute("SELECT college_id FROM colleges WHERE college_id = %s", (college_id,))
+                cursor.execute(
+                    "SELECT college_id FROM colleges WHERE college_id = %s AND is_active = 1",
+                    (college_id,)
+                )
                 if not cursor.fetchone():
                     raise HTTPException(status_code=404, detail="College not found")
 
-                # 2️⃣ Update basic college info
+                # 2️⃣ Update college fields
                 fields = []
                 values = []
 
@@ -308,74 +311,63 @@ async def update_college(
 
                 if fields:
                     values.append(college_id)
-                    query = f"UPDATE colleges SET {', '.join(fields)} WHERE college_id = %s"
-                    cursor.execute(query, values)
+                    cursor.execute(
+                        f"UPDATE colleges SET {', '.join(fields)} WHERE college_id = %s",
+                        values
+                    )
 
-                # 3️⃣ Process NEW departments for this college
+                # 3️⃣ Add NEW departments for this college
                 added_departments = []
+
                 if department_names:
                     dept_list = [d.strip() for d in department_names.split(",") if d.strip()]
 
                     for dept_name in dept_list:
-                        # Check if department exists GLOBALLY (in any college)
-                        cursor.execute(
-                            "SELECT department_id FROM departments WHERE department_name = %s",
-                            (dept_name,)
-                        )
-                        existing_dept = cursor.fetchone()
+                        # Check if department already exists FOR THIS COLLEGE
+                        cursor.execute("""
+                            SELECT department_id
+                            FROM departments
+                            WHERE department_name = %s
+                              AND college_id = %s
+                              AND is_active = 1
+                        """, (dept_name, college_id))
 
-                        if existing_dept:
-                            department_id = existing_dept["department_id"]
-                            # Check if already mapped to this college
-                            cursor.execute(
-                                "SELECT 1 FROM college_departments WHERE college_id = %s AND department_id = %s",
-                                (college_id, department_id)
+                        if cursor.fetchone():
+                            continue  # already exists
+
+                        dept_code = generate_department_code(dept_name)
+
+                        cursor.execute("""
+                            INSERT INTO departments (
+                                department_name,
+                                department_code,
+                                college_id,
+                                is_active,
+                                created_at,
+                                updated_at
                             )
-                            if not cursor.fetchone():
-                                # Map existing global department to this college
-                                cursor.execute(
-                                    """
-                                    INSERT INTO college_departments (college_id, department_id, created_at)
-                                    VALUES (%s, %s, %s)
-                                    """,
-                                    (college_id, department_id, datetime.now())
-                                )
-                                added_departments.append(f"{dept_name} (mapped existing)")
-                        else:
-                            # Create new global department
-                            dept_code = generate_department_code(dept_name)
-                            cursor.execute(
-                                """
-                                INSERT INTO departments 
-                                (department_name, department_code, is_active, created_at, updated_at)
-                                VALUES (%s, %s, %s, %s, %s)
-                                """,
-                                (dept_name, dept_code, True, datetime.now(), datetime.now())
-                            )
-                            department_id = cursor.lastrowid
-                            
-                            # Map the new department to this college
-                            cursor.execute(
-                                """
-                                INSERT INTO college_departments (college_id, department_id, created_at)
-                                VALUES (%s, %s, %s)
-                                """,
-                                (college_id, department_id, datetime.now())
-                            )
-                            added_departments.append(f"{dept_name} (created & mapped)")
+                            VALUES (%s, %s, %s, 1, NOW(), NOW())
+                        """, (dept_name, dept_code, college_id))
+
+                        added_departments.append(dept_name)
 
                 conn.commit()
 
-                # 4️⃣ Fetch updated college with departments
+                # 4️⃣ Fetch updated college + departments
                 cursor.execute("""
-                    SELECT c.*, 
-                           GROUP_CONCAT(d.department_name) as department_names
+                    SELECT 
+                        c.college_id,
+                        c.name,
+                        c.college_address,
+                        GROUP_CONCAT(d.department_name ORDER BY d.department_name) AS departments
                     FROM colleges c
-                    LEFT JOIN college_departments cd ON c.college_id = cd.college_id
-                    LEFT JOIN departments d ON cd.department_id = d.department_id
+                    LEFT JOIN departments d
+                        ON d.college_id = c.college_id
+                       AND d.is_active = 1
                     WHERE c.college_id = %s
                     GROUP BY c.college_id
                 """, (college_id,))
+
                 updated_college = cursor.fetchone()
 
                 return {
@@ -388,9 +380,12 @@ async def update_college(
     except HTTPException:
         raise
     except Exception as e:
-        if conn:
-            conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Error updating college: {str(e)}")
+        conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error updating college: {str(e)}"
+        )
+
 
 def generate_department_code(dept_name: str) -> str:
     """Generate a department code based on department name"""

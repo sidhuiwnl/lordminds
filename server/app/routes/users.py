@@ -1,7 +1,7 @@
 
 from fastapi import APIRouter, HTTPException, Form, File, UploadFile
 from config.database import get_db
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator,EmailStr
 from typing import Optional, List
 import bcrypt
 import pandas as pd
@@ -138,7 +138,7 @@ ROLE_MAP = {
 }
 
 
-@router.post("/")
+@router.post("/create")
 async def create_user(user_data: UserCreate):
     """Create a single user based on role type"""
     conn = None
@@ -384,67 +384,206 @@ async def bulk_create_users(
 
     
 
-
 @router.post("/login")
 async def login(username: str = Form(...), password: str = Form(...)):
-    """Authenticate user, update last login, and return basic info"""
+    """
+    Authenticate user and validate college / department
+    based on role rules.
+    """
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
-                # Fetch ACTIVE user with role
+
+                # 1️⃣ Fetch user + role + org status
                 cursor.execute("""
                     SELECT 
-                        u.user_id, 
-                        u.username, 
-                        u.password_hash, 
-                        u.is_active,
-                        r.name AS role, 
-                        u.last_login
+                        u.user_id,
+                        u.username,
+                        u.password_hash,
+                        u.is_active AS user_active,
+                        u.college_id,
+                        u.department_id,
+
+                        r.name AS role,
+
+                        c.is_active AS college_active,
+                        d.is_active AS department_active
+
                     FROM users u
-                    JOIN roles r ON u.role_id = r.role_id
+                    JOIN roles r 
+                        ON u.role_id = r.role_id
+
+                    LEFT JOIN colleges c 
+                        ON u.college_id = c.college_id
+
+                    LEFT JOIN departments d 
+                        ON u.department_id = d.department_id
+
                     WHERE u.username = %s
                 """, (username,))
 
                 user = cursor.fetchone()
 
-                # Validate user exists
+                # 2️⃣ User exists?
                 if not user:
-                    raise HTTPException(status_code=401, detail="Invalid username or password")
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Invalid username or password"
+                    )
 
-                # ❌ Block inactive users
-                if user["is_active"] == 0:
-                    raise HTTPException(status_code=403, detail="User is inactive. Contact admin.")
+                # 3️⃣ User active?
+                if user["user_active"] != 1:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="User is inactive. Contact admin."
+                    )
 
-                # Validate password
-                if not bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
-                    raise HTTPException(status_code=401, detail="Invalid username or password")
+                # 4️⃣ Password check
+                if not bcrypt.checkpw(
+                    password.encode("utf-8"),
+                    user["password_hash"].encode("utf-8")
+                ):
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Invalid username or password"
+                    )
 
-                # ✅ Update last_login timestamp
+                role = user["role"].lower()
+
+                # 5️⃣ College validation
+                if role in ["administrator", "teacher", "student"]:
+                    if not user["college_id"] or user["college_active"] != 1:
+                        raise HTTPException(
+                            status_code=403,
+                            detail="Assigned college is inactive or missing."
+                        )
+
+                # 6️⃣ Department validation
+                if role in ["teacher", "student"]:
+                    if not user["department_id"] or user["department_active"] != 1:
+                        raise HTTPException(
+                            status_code=403,
+                            detail="Assigned department is inactive or missing."
+                        )
+
+                # 7️⃣ Update last login
+                now = datetime.now()
                 cursor.execute(
                     "UPDATE users SET last_login = %s WHERE user_id = %s",
-                    (datetime.now(), user['user_id'])
+                    (now, user["user_id"])
                 )
                 conn.commit()
 
-                # Return response
+                # 8️⃣ Success response
                 return {
                     "status": "success",
                     "message": "Login successful",
                     "data": {
-                        "user_id": user['user_id'],
-                        "username": user['username'],
-                        "role": user['role'],
-                        "last_login": datetime.now().strftime("%d/%m/%y - %I:%M %p")
+                        "user_id": user["user_id"],
+                        "username": user["username"],
+                        "role": user["role"],
+                        "last_login": now.strftime("%d/%m/%y - %I:%M %p")
                     }
                 }
 
     except HTTPException:
         raise
     except Exception as e:
-        print("❌ Error during login:", e)
-        raise HTTPException(status_code=500, detail=f"Error during login: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error during login: {str(e)}"
+        )
 
 
+
+class CreateAdminUserRequest(BaseModel):
+    username: str
+    password: str
+    full_name: str
+    email: Optional[EmailStr] = None
+    role: str  # "super_admin" or "admin"
+
+
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(
+        password.encode("utf-8"),
+        bcrypt.gensalt()
+    ).decode("utf-8")
+
+
+
+@router.post("/create-admin")
+async def create_superadmin_or_admin(payload: CreateAdminUserRequest):
+    """
+    Create Super Admin or Admin user
+    """
+    role_map = {
+        "super_admin": 1,
+        "admin": 2
+    }
+
+    if payload.role not in role_map:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid role. Allowed: super_admin, admin"
+        )
+
+    role_id = role_map[payload.role]
+    password_hash = hash_password(payload.password)
+
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cursor:
+
+                # Check duplicate username
+                cursor.execute(
+                    "SELECT user_id FROM users WHERE username = %s",
+                    (payload.username,)
+                )
+                if cursor.fetchone():
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Username already exists"
+                    )
+
+                cursor.execute(
+                    """
+                    INSERT INTO users (
+                        username,
+                        password_hash,
+                        full_name,
+                        email,
+                        role_id,
+                        is_active,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, 1, NOW(), NOW())
+                    """,
+                    (
+                        payload.username,
+                        password_hash,
+                        payload.full_name,
+                        payload.email,
+                        role_id
+                    )
+                )
+
+                conn.commit()
+
+                return {
+                    "status": "success",
+                    "message": f"{payload.role.replace('_', ' ').title()} created successfully"
+                }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error creating user: {str(e)}"
+        )
 
 
 @router.get("/{user_id}")
@@ -671,52 +810,77 @@ async def get_assignments_by_department(
         )
 
 
-
 @router.get("/{student_id}/topics-progress")
 async def get_student_topic_progress(student_id: int):
-
+    """
+    Fetch topic-wise progress for a student
+    using NEW schema (topic_college_department mapping).
+    """
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
 
+                # 1️⃣ Validate student + get college & department
+                cursor.execute("""
+                    SELECT college_id, department_id
+                    FROM users
+                    WHERE user_id = %s
+                      AND is_active = 1
+                """, (student_id,))
+                user = cursor.fetchone()
+
+                if not user:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Student not found or inactive"
+                    )
+
+                college_id = user["college_id"]
+                department_id = user["department_id"]
+
+                # 2️⃣ Fetch topic progress via mapping table
                 query = """
                     SELECT
                         t.topic_id,
                         t.topic_name,
                         t.total_sub_topics,
+
                         d.department_name,
                         c.name AS college_name,
 
-                        stp.completed_sub_topics,
-                        stp.total_sub_topics,
-                        stp.progress_percent,
-                        stp.average_score,
-                        stp.status,
+                        COALESCE(stp.completed_sub_topics, 0) AS completed_sub_topics,
+                        COALESCE(stp.total_sub_topics, t.total_sub_topics) AS total_sub_topics,
+                        COALESCE(stp.progress_percent, 0) AS progress_percent,
+                        COALESCE(stp.average_score, 0) AS average_score,
+                        COALESCE(stp.status, 'not_started') AS status,
                         stp.last_updated
 
-                    FROM topics t
-                    JOIN departments d 
-                        ON d.department_id = t.department_id
+                    FROM topic_college_department tcd
+
+                    JOIN topics t
+                        ON t.topic_id = tcd.topic_id
+                       AND t.is_active = 1
+
+                    JOIN departments d
+                        ON d.department_id = tcd.department_id
+                       AND d.is_active = 1
+
                     JOIN colleges c
-                        ON c.college_id = t.college_id
+                        ON c.college_id = tcd.college_id
+                       AND c.is_active = 1
 
                     LEFT JOIN student_topic_progress stp
                         ON stp.topic_id = t.topic_id
-                        AND stp.student_id = %s
+                       AND stp.student_id = %s
 
-                    WHERE t.is_active = 1
-                        AND d.is_active = 1
-                        AND t.college_id = (
-                            SELECT college_id FROM users WHERE user_id = %s
-                        )
-                        AND t.department_id = (
-                            SELECT department_id FROM users WHERE user_id = %s
-                        )
+                    WHERE tcd.college_id = %s
+                      AND tcd.department_id = %s
+                      AND tcd.is_active = 1
 
                     ORDER BY t.topic_name
                 """
 
-                cursor.execute(query, (student_id, student_id, student_id))
+                cursor.execute(query, (student_id, college_id, department_id))
                 topics = cursor.fetchall() or []
 
                 return {
@@ -725,8 +889,13 @@ async def get_student_topic_progress(student_id: int):
                     "data": topics
                 }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching topic progress: {str(e)}"
+        )
 
 
 
@@ -945,10 +1114,9 @@ async def get_questions_by_subtopic(sub_topic_id: int):
             detail=f"Error fetching questions for subtopic {sub_topic_id}: {str(e)}"
         )
     
-
 @router.get("/get/students")
 async def get_all_students():
-    """Fetch all ACTIVE students"""
+    """Fetch all ACTIVE students from ACTIVE colleges"""
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
@@ -966,6 +1134,7 @@ async def get_all_students():
                     LEFT JOIN departments d ON u.department_id = d.department_id
                     WHERE r.name = 'student'
                       AND u.is_active = 1
+                      AND c.is_active = 1  -- ADD THIS LINE
                     ORDER BY u.created_at DESC
                 """)
                 students = cursor.fetchall()
@@ -979,7 +1148,7 @@ async def get_all_students():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching students: {str(e)}")
     
-    
+
 
 @router.get("/get/teachers")
 async def get_all_teachers():

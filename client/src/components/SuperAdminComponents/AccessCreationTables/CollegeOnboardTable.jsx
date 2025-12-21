@@ -32,14 +32,14 @@ const EditCollegeModal = ({ college, onClose, onUpdateSuccess }) => {
   }, []);
 
   // 🔹 Prepare department dropdown options (excluding already assigned ones)
-const departmentOptions = departments
-  .filter(
-    (dept) => !college.departments.some((cd) => cd.department_id === dept.department_id)
-  )
-  .map((dept) => ({
-    value: dept.department_id,
-    label: dept.department_name,
-  }));
+  const departmentOptions = departments
+    .filter(
+      (dept) => !college.departments.some((cd) => cd.department_id === dept.department_id)
+    )
+    .map((dept) => ({
+      value: dept.department_id,
+      label: dept.department_name,
+    }));
 
 
   const handleSubmit = async (e) => {
@@ -51,17 +51,26 @@ const departmentOptions = departments
 
     if (name !== college.name) formData.append("name", name);
     if (location !== college.college_address)
-      formData.append("location", location);
-    if (selectedDepartments.length > 0)
-      formData.append(
-        "department_ids",
-        selectedDepartments.map((d) => d.value).join(",")
-      );
+      formData.append("address", location); // Changed from "location" to "address"
+
+    if (selectedDepartments.length > 0) {
+      // Get department names from the selected IDs
+      const departmentNames = selectedDepartments
+        .map(dept => {
+          // Find the department object from all departments
+          const departmentObj = departments.find(d => d.department_id === dept.value);
+          return departmentObj ? departmentObj.department_name : null;
+        })
+        .filter(name => name !== null)
+        .join(",");
+
+      formData.append("department_names", departmentNames); // Changed from "department_ids"
+    }
 
     if (
       !formData.has("name") &&
-      !formData.has("location") &&
-      !formData.has("department_ids")
+      !formData.has("address") &&
+      !formData.has("department_names")
     ) {
       setError("No changes detected.");
       setIsLoading(false);
@@ -237,18 +246,18 @@ export const CollegeTable = ({
 
   /* 🔍 Combine filters + search */
   const filteredColleges = useMemo(() =>
-  (collegesWithDepts || []).filter((college) => {
-    const query = searchQuery.toLowerCase();
+    (collegesWithDepts || []).filter((college) => {
+      const query = searchQuery.toLowerCase();
 
-    return (
-      college.name.toLowerCase().includes(query) ||
-      college.departments.some((d) =>
-        (d.department_name || d.name)?.toLowerCase().includes(query)
-      )
-    );
-  }),
-  [collegesWithDepts, searchQuery]
-);
+      return (
+        college.name.toLowerCase().includes(query) ||
+        college.departments.some((d) =>
+          (d.department_name || d.name)?.toLowerCase().includes(query)
+        )
+      );
+    }),
+    [collegesWithDepts, searchQuery]
+  );
 
 
   const total = filteredColleges.length;
@@ -277,81 +286,81 @@ export const CollegeTable = ({
     window.location.reload();
   };
 
- 
-const handleDeleteCollege = async (college) => {
-  // Confirm popup
-  const result = await Swal.fire({
-    title: "Are you sure?",
-    text: `Do you want to delete "${college.name}"?`,
-    icon: "warning",
-    showCancelButton: true,
-    confirmButtonText: "Yes, delete it!",
-    cancelButtonText: "Cancel",
-    confirmButtonColor: "#d33",
-    cancelButtonColor: "#3085d6",
-  });
 
-  if (!result.isConfirmed) return;
+  const handleDeleteCollege = async (college) => {
+    // Confirm popup
+    const result = await Swal.fire({
+      title: "Are you sure?",
+      text: `Do you want to delete "${college.name}"?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Yes, delete it!",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+    });
 
-  try {
-    const res = await axios.delete(
-      `${import.meta.env.VITE_BACKEND_API_URL}/colleges/delete/${college.college_id}`
-    );
+    if (!result.isConfirmed) return;
 
-    if (res.data.status === "success") {
-      Swal.fire({
-        toast: true,
-        icon: "success",
-        title: `${college.name} deleted successfully!`,
-        position: "top-end",
-        showConfirmButton: false,
-        timer: 1800,
-      });
+    try {
+      const res = await axios.delete(
+        `${import.meta.env.VITE_BACKEND_API_URL}/colleges/delete/${college.college_id}`
+      );
 
-      setTimeout(() => {
-        if (refreshData) refreshData();
-        window.location.reload();
-      }, 1000);
-    } else {
-      Swal.fire({
-        toast: true,
-        icon: "error",
-        title: res.data.message || "Failed to delete college.",
-        position: "top-end",
-        showConfirmButton: false,
-        timer: 1800,
-      });
+      if (res.data.status === "success") {
+        Swal.fire({
+          toast: true,
+          icon: "success",
+          title: `${college.name} deleted successfully!`,
+          position: "top-end",
+          showConfirmButton: false,
+          timer: 1800,
+        });
+
+        setTimeout(() => {
+          if (refreshData) refreshData();
+          window.location.reload();
+        }, 1000);
+      } else {
+        Swal.fire({
+          toast: true,
+          icon: "error",
+          title: res.data.message || "Failed to delete college.",
+          position: "top-end",
+          showConfirmButton: false,
+          timer: 1800,
+        });
+      }
+    } catch (err) {
+      console.error("Delete error:", err);
+
+      const errorMessage =
+        err.response?.data?.message ||
+        err.response?.data?.detail ||
+        err.message;
+
+      if (errorMessage?.includes("1451") || errorMessage?.includes("foreign key")) {
+        Swal.fire({
+          toast: true,
+          icon: "error",
+          title:
+            "Cannot delete this college because students or teachers are mapped to it.",
+          position: "top-end",
+          showConfirmButton: false,
+          timer: 2200,
+        });
+      } else {
+        Swal.fire({
+          toast: true,
+          icon: "error",
+          title: "An unexpected error occurred while deleting.",
+          position: "top-end",
+          showConfirmButton: false,
+          timer: 2000,
+        });
+      }
     }
-  } catch (err) {
-    console.error("Delete error:", err);
-
-    const errorMessage =
-      err.response?.data?.message ||
-      err.response?.data?.detail ||
-      err.message;
-
-    if (errorMessage?.includes("1451") || errorMessage?.includes("foreign key")) {
-      Swal.fire({
-        toast: true,
-        icon: "error",
-        title:
-          "Cannot delete this college because students or teachers are mapped to it.",
-        position: "top-end",
-        showConfirmButton: false,
-        timer: 2200,
-      });
-    } else {
-      Swal.fire({
-        toast: true,
-        icon: "error",
-        title: "An unexpected error occurred while deleting.",
-        position: "top-end",
-        showConfirmButton: false,
-        timer: 2000,
-      });
-    }
-  }
-};
+  };
 
 
   const formatDate = (dateStr) => {

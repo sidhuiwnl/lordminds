@@ -2,59 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import Swal from "sweetalert2";
 
-/* ---------------- SearchableSelect Component ---------------- */
-const SearchableSelect = ({ options, value, onChange }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [search, setSearch] = useState("");
 
-  const filtered = options.filter((opt) =>
-    opt.toLowerCase().includes(search.toLowerCase())
-  );
-
-  return (
-    <div className="relative z-50">
-      <div
-        onClick={() => {
-          setIsOpen(!isOpen);
-          setSearch("");
-        }}
-        className="px-3 py-2 border border-gray-300 rounded-md cursor-pointer bg-white"
-      >
-        {value}
-      </div>
-
-      {isOpen && (
-        <div className="absolute mt-1 w-full bg-white shadow-lg rounded-md border border-gray-300 max-h-48 overflow-y-auto">
-          <input
-            autoFocus
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search..."
-            className="px-3 py-2 w-full border-b border-gray-200 text-sm outline-none"
-          />
-
-          {filtered.length > 0 ? (
-            filtered.map((opt) => (
-              <div
-                key={opt}
-                onClick={() => {
-                  onChange(opt);
-                  setIsOpen(false);
-                }}
-                className="px-3 py-2 cursor-pointer hover:bg-gray-100 text-sm"
-              >
-                {opt}
-              </div>
-            ))
-          ) : (
-            <div className="px-3 py-2 text-sm text-gray-500">No results</div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
 
 /* ---------------- EditTopicModal Component ---------------- */
 const EditTopicModal = ({ topic, onClose, onUpdateSuccess }) => {

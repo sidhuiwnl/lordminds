@@ -6,47 +6,100 @@ from config.database import get_db
 
 
 router = APIRouter()
-
 @router.get("/department/{college_id}/{department_id}/topics-progress")
 async def get_department_topics_average_progress(college_id: int, department_id: int):
     """
-    Fetch average progress and score for all topics under a specific department of a college.
+    Fetch average progress and score for all topics
+    under a specific department of a college
+    using NEW schema (topic_college_department).
     """
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
+
+                # 1️⃣ Validate college + department relationship
+                cursor.execute("""
+                    SELECT d.department_name
+                    FROM departments d
+                    WHERE d.department_id = %s
+                      AND d.is_active = 1
+                """, (department_id,))
+                if not cursor.fetchone():
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Department not found or inactive"
+                    )
+
+                # 2️⃣ Fetch topic-wise averages
                 query = """
-                    SELECT 
+                    SELECT
                         t.topic_id,
                         t.topic_name,
-                        COUNT(stp.student_id) AS total_students,
+
+                        COUNT(DISTINCT stp.student_id) AS total_students,
+
                         ROUND(AVG(stp.progress_percent), 2) AS avg_progress_percent,
                         ROUND(AVG(stp.average_score), 2) AS avg_score,
-                        SUM(CASE WHEN stp.status = 'Completed' THEN 1 ELSE 0 END) AS completed_students,
-                        SUM(CASE WHEN stp.status = 'Not Started' THEN 1 ELSE 0 END) AS not_started_students
-                    FROM topics t
-                    LEFT JOIN student_topic_progress stp 
-                        ON t.topic_id = stp.topic_id
-                    WHERE t.department_id = %s 
-                      AND t.college_id = %s
-                    GROUP BY t.topic_id, t.topic_name
+
+                        SUM(
+                            CASE 
+                                WHEN stp.status = 'Completed' THEN 1 
+                                ELSE 0 
+                            END
+                        ) AS completed_students,
+
+                        SUM(
+                            CASE 
+                                WHEN stp.status = 'Not Started' THEN 1 
+                                ELSE 0 
+                            END
+                        ) AS not_started_students
+
+                    FROM topic_college_department tcd
+
+                    JOIN topics t
+                        ON t.topic_id = tcd.topic_id
+                       AND t.is_active = 1
+
+                    LEFT JOIN student_topic_progress stp
+                        ON stp.topic_id = t.topic_id
+
+                    WHERE tcd.college_id = %s
+                      AND tcd.department_id = %s
+                      AND tcd.is_active = 1
+
+                    GROUP BY
+                        t.topic_id,
+                        t.topic_name
+
                     ORDER BY t.topic_name ASC
                 """
 
-                cursor.execute(query, (department_id, college_id))
+                cursor.execute(query, (college_id, department_id))
                 topics = cursor.fetchall()
 
                 if not topics:
-                    raise HTTPException(status_code=404, detail="No topics found for this department")
+                    return {
+                        "status": "success",
+                        "count": 0,
+                        "data": []
+                    }
 
                 return {
                     "status": "success",
+                    "college_id": college_id,
+                    "department_id": department_id,
+                    "count": len(topics),
                     "data": topics
                 }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching topic progress: {str(e)}")
-
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching topic progress: {str(e)}"
+        )
 
 
 @router.get("/teacher-details/{user_id}")

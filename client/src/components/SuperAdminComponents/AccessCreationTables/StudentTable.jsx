@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import Swal from "sweetalert2";
-
+import { toast } from "react-toastify";
 
 /* ------------------ Searchable Dropdown Component ------------------ */
 const SearchableDropdown = ({ options, value, onChange, placeholder, disabled = false }) => {
@@ -57,18 +57,16 @@ const SearchableDropdown = ({ options, value, onChange, placeholder, disabled = 
           readOnly
           value={selectedOption ? selectedOption.label : ""}
           onClick={handleToggle}
-          className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${
-            disabled
+          className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${disabled
               ? "bg-gray-100 cursor-not-allowed"
               : "focus:ring-blue-500 border-gray-300 cursor-pointer hover:border-gray-400"
-          }`}
+            }`}
           placeholder={placeholder}
           disabled={disabled}
         />
         <svg
-          className={`absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-transform ${
-            isOpen ? "rotate-180" : ""
-          } ${disabled ? "text-gray-400" : "text-gray-500"}`}
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""
+            } ${disabled ? "text-gray-400" : "text-gray-500"}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -142,8 +140,8 @@ const EditStudentModal = ({ student, onClose, onUpdateSuccess }) => {
       );
 
       if (res.data.status === "success") {
-        toast.success("Student updated successfully!");
-        onUpdateSuccess();
+        toast.success(res.data.message || "Student updated successfully!");
+        onUpdateSuccess(); // This will reload the page
         onClose();
       } else {
         setError(res.data.detail || "Update failed.");
@@ -354,61 +352,61 @@ export const StudentTable = ({
   };
 
   const handleDeleteStudent = async (student) => {
-  // Confirm popup
-  const result = await Swal.fire({
-    title: "Are you sure?",
-    text: `Do you want to delete "${student.full_name}"?`,
-    icon: "warning",
-    showCancelButton: true,
-    confirmButtonText: "Yes, delete!",
-    cancelButtonText: "Cancel",
-    confirmButtonColor: "#d33",
-    cancelButtonColor: "#3085d6",
-  });
+    // Confirm popup
+    const result = await Swal.fire({
+      title: "Are you sure?",
+      text: `Do you want to delete "${student.full_name}"?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Yes, delete!",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+    });
 
-  if (!result.isConfirmed) return;
+    if (!result.isConfirmed) return;
 
-  try {
-    const res = await axios.delete(
-      `${import.meta.env.VITE_BACKEND_API_URL}/student/delete/${student.user_id}`
-    );
+    try {
+      const res = await axios.delete(
+        `${import.meta.env.VITE_BACKEND_API_URL}/student/delete/${student.user_id}`
+      );
 
-    if (res.data.status === "success") {
-      Swal.fire({
-        toast: true,
-        icon: "success",
-        title: `${student.full_name} deleted successfully!`,
-        position: "top-end",
-        showConfirmButton: false,
-        timer: 1800,
-      });
+      if (res.data.status === "success") {
+        Swal.fire({
+          toast: true,
+          icon: "success",
+          title: `${student.full_name} deleted successfully!`,
+          position: "top-end",
+          showConfirmButton: false,
+          timer: 1800,
+        });
 
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
-    } else {
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } else {
+        Swal.fire({
+          toast: true,
+          icon: "error",
+          title: res.data.detail || "Failed to delete student.",
+          position: "top-end",
+          showConfirmButton: false,
+          timer: 2000,
+        });
+      }
+    } catch (err) {
+      console.error("Delete error:", err);
+
       Swal.fire({
         toast: true,
         icon: "error",
-        title: res.data.detail || "Failed to delete student.",
+        title: "Unexpected error while deleting student.",
         position: "top-end",
         showConfirmButton: false,
         timer: 2000,
       });
     }
-  } catch (err) {
-    console.error("Delete error:", err);
-
-    Swal.fire({
-      toast: true,
-      icon: "error",
-      title: "Unexpected error while deleting student.",
-      position: "top-end",
-      showConfirmButton: false,
-      timer: 2000,
-    });
-  }
-};
+  };
 
 
   const formatDate = (dateStr) => {

@@ -10,7 +10,6 @@ from config.database import get_db
 
 router = APIRouter()
 
-# Directory setup
 UPLOAD_DIR = "uploads/tests"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -19,6 +18,7 @@ async def create_test(
     test_type: str = Form(...),
     file: UploadFile = File(...),
 
+    # Assignment fields
     college_id: int = Form(None),
     department_id: int = Form(None),
     assignment_number: str = Form(None),
@@ -26,118 +26,184 @@ async def create_test(
     start_date: str = Form(None),
     end_date: str = Form(None),
 
-    topic_name: str = Form(None),
-    sub_topic_name: str = Form(None),
-    file_name: str = Form(None),
+    # Sub-topic MCQ
+    sub_topic_id: int = Form(None),
 ):
+    # ===============================
+    # 1️⃣ Validate file
+    # ===============================
     if not file.filename.endswith((".xlsx", ".xls")):
         raise HTTPException(400, "Only Excel files allowed")
 
     unique_id = str(uuid.uuid4())
-    saved_filename = f"{unique_id}{os.path.splitext(file.filename)[1]}"
     save_folder = os.path.join(UPLOAD_DIR, test_type)
     os.makedirs(save_folder, exist_ok=True)
-    file_path = os.path.join(save_folder, saved_filename)
+
+    stored_filename = f"{unique_id}{os.path.splitext(file.filename)[1]}"
+    file_path = os.path.join(save_folder, stored_filename)
 
     async with aiofiles.open(file_path, "wb") as out:
-        while data := await file.read(1024 * 1024):
-            await out.write(data)
-    end_date = end_date or None
-    start_date = start_date or None
+        while chunk := await file.read(1024 * 1024):
+            await out.write(chunk)
+
+    original_file_name = file.filename
 
     try:
         with get_db() as conn:
             with conn.cursor() as cursor:
 
-                # CREATE ASSIGNMENT
+                # ===============================
+                # 2️⃣ ASSIGNMENT TEST
+                # ===============================
                 if test_type == "assignment":
+
                     if not all([college_id, department_id, assignment_number, assignment_topic]):
-                        raise HTTPException(400, "Missing required assignment fields")
-                    
+                        raise HTTPException(400, "Missing assignment fields")
 
                     cursor.execute("""
-                        INSERT INTO assignments
-                        (assignment_number, assignment_topic, college_id, department_id, start_date,
-                         end_date, file_name, file_path, created_at, updated_at)
+                        INSERT INTO assignments (
+                            assignment_number,
+                            assignment_topic,
+                            college_id,
+                            department_id,
+                            start_date,
+                            end_date,
+                            file_name,
+                            file_path,
+                            created_at,
+                            updated_at
+                        )
                         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NOW())
                     """, (
-                        assignment_number, assignment_topic, college_id, department_id,
-                        start_date, end_date, file.filename, file_path
+                        assignment_number,
+                        assignment_topic,
+                        college_id,
+                        department_id,
+                        start_date,
+                        end_date,
+                        original_file_name,
+                        file_path
                     ))
-                    ref_id = cursor.lastrowid
+
+                    reference_id = cursor.lastrowid
                     test_scope = "assignment"
 
-                # CREATE SUBTOPIC TEST
+                # ===============================
+                # 3️⃣ SUB-TOPIC MCQ TEST
+                # ===============================
                 elif test_type == "sub_topic":
-                    cursor.execute("SELECT topic_id FROM topics WHERE topic_name=%s", (topic_name,))
-                    topic = cursor.fetchone()
-                    if not topic:
-                        raise HTTPException(400, "Topic not found")
 
-                    topic_id = topic["topic_id"]
+                    if not sub_topic_id:
+                        raise HTTPException(400, "sub_topic_id is required")
 
                     cursor.execute("""
-                        INSERT INTO sub_topics
-                        (topic_id, sub_topic_name, file_name, test_file, created_at, updated_at)
-                        VALUES (%s,%s,%s,%s,NOW(),NOW())
-                    """, (topic_id, sub_topic_name, file.filename, file_path))
+                        SELECT sub_topic_id
+                        FROM sub_topics
+                        WHERE sub_topic_id = %s AND is_active = 1
+                    """, (sub_topic_id,))
 
-                    ref_id = cursor.lastrowid
+                    if not cursor.fetchone():
+                        raise HTTPException(404, "Sub-topic not found")
+
+                    # 🔑 Store MCQ file against sub_topic
+                    cursor.execute("""
+                        UPDATE sub_topics
+                        SET
+                            file_name = %s,
+                            test_file = %s,
+                            updated_at = NOW()
+                        WHERE sub_topic_id = %s
+                    """, (
+                        original_file_name,
+                        file_path,
+                        sub_topic_id
+                    ))
+
+                    reference_id = sub_topic_id
                     test_scope = "sub_topic"
 
-                # Parse Excel
+                else:
+                    raise HTTPException(400, "Invalid test_type")
+
+                # ===============================
+                # 4️⃣ PARSE EXCEL
+                # ===============================
                 df = pd.read_excel(file_path)
-                df = normalize_columns(df)
+                df.columns = [c.strip().lower() for c in df.columns]
 
                 if "question_type" not in df.columns or "question_text" not in df.columns:
-                    raise HTTPException(400, "Excel missing Question_Type or Question_Text")
+                    raise HTTPException(
+                        400,
+                        "Excel must contain 'question_type' and 'question_text'"
+                    )
 
                 question_rows = []
                 question_type_cache = {}
 
                 for idx, row in df.iterrows():
-                    if pd.isna(row.get("question_type")):
+                    if pd.isna(row["question_text"]):
                         continue
 
-                    q_type = str(row.get("question_type")).strip().lower()
+                    q_type = str(row["question_type"]).strip().lower()
 
                     if q_type not in question_type_cache:
-                        cursor.execute("SELECT question_type_id FROM question_type WHERE question_type=%s", (q_type,))
+                        cursor.execute(
+                            "SELECT question_type_id FROM question_type WHERE question_type=%s",
+                            (q_type,)
+                        )
                         qt = cursor.fetchone()
                         if not qt:
                             raise HTTPException(400, f"Invalid question type: {q_type}")
                         question_type_cache[q_type] = qt["question_type_id"]
 
-                    qd = build_question_json(row, q_type)
+                    question_data = {
+                        k: row[k]
+                        for k in df.columns
+                        if k not in ["question_type", "question_text"]
+                        and not pd.isna(row[k])
+                    }
 
                     question_rows.append((
                         test_scope,
-                        ref_id,
+                        reference_id,
                         question_type_cache[q_type],
-                        row.get("question_text"),
-                        json.dumps(qd),
+                        row["question_text"],
+                        json.dumps(question_data),
                         float(row.get("marks", 1)),
                         int(row.get("order_no", idx + 1)),
                     ))
 
+                if not question_rows:
+                    raise HTTPException(400, "No valid questions found")
+
                 cursor.executemany("""
-                    INSERT INTO questions
-                    (test_scope,reference_id,question_type_id,question_text,question_data,
-                     marks,order_no,created_at,updated_at)
+                    INSERT INTO questions (
+                        test_scope,
+                        reference_id,
+                        question_type_id,
+                        question_text,
+                        question_data,
+                        marks,
+                        order_no,
+                        created_at,
+                        updated_at
+                    )
                     VALUES (%s,%s,%s,%s,%s,%s,%s,NOW(),NOW())
                 """, question_rows)
+
                 conn.commit()
 
-        return {"status": "success", "message": "Test created", "reference_id": ref_id}
+        return {
+            "status": "success",
+            "message": f"{len(question_rows)} questions uploaded successfully",
+            "test_scope": test_scope,
+            "reference_id": reference_id
+        }
 
     except Exception as e:
         if os.path.exists(file_path):
             os.remove(file_path)
-        raise HTTPException(500, f"Error: {str(e)}")
-
-
-
-
+        raise HTTPException(500, f"Error creating test: {str(e)}")
 
 
 

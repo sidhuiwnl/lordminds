@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import Swal from "sweetalert2";
+import { toast } from "react-toastify";
 
 
 /* ---------------- Edit Teacher Modal ---------------- */
@@ -27,25 +28,29 @@ const EditTeacherModal = ({ teacher, onClose, onUpdateSuccess }) => {
 
     try {
       const res = await axios.put(
-        `${import.meta.env.VITE_BACKEND_API_URL}/teachers/update/${teacher.user_id}`,
+        `${import.meta.env.VITE_BACKEND_API_URL}/teacher/update/${teacher.user_id}`,
         formData,
         { headers: { "Content-Type": "multipart/form-data" } }
       );
 
+      console.log("Update response:", res.data); // Debug log
+
       if (res.data.status === "success") {
-        toast.success("Teacher updated successfully!");
+        toast.success(res.data.message || "Teacher updated successfully!");
         onUpdateSuccess();
         onClose();
       } else {
-        setError(res.data.detail || "Update failed.");
+        setError(res.data.detail || res.data.message || "Update failed.");
       }
     } catch (err) {
       console.error("Error updating teacher:", err);
-      setError(err.response?.data?.detail || "Unexpected error occurred.");
+      console.error("Error response:", err.response?.data);
+      setError(err.response?.data?.detail || err.response?.data?.message || "Unexpected error occurred.");
     } finally {
       setIsLoading(false);
     }
   };
+
 
   return (
     <div

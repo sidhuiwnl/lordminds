@@ -118,7 +118,7 @@ const McqTable = ({
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 lg:p-6 border-b border-gray-200 gap-4">
         <h2 className="text-lg font-semibold text-gray-800">
-          List of Uploaded MCQs
+          List of Uploaded Questions
         </h2>
         <input
           type="text"

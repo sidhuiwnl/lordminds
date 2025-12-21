@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import Swal from "sweetalert2";
+import { toast } from "react-toastify";
 
 
 /* ---------------- Edit Admin Modal ---------------- */
@@ -27,7 +28,7 @@ const EditAdminModal = ({ admin, onClose, onUpdateSuccess }) => {
 
     try {
       const res = await axios.put(
-        `${import.meta.env.VITE_BACKEND_API_URL}/admins/update/${admin.user_id}`,
+        `${import.meta.env.VITE_BACKEND_API_URL}/administrator/update/${admin.user_id}`,
         formData,
         { headers: { "Content-Type": "multipart/form-data" } }
       );

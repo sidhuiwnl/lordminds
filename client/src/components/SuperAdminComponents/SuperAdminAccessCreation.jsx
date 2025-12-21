@@ -472,7 +472,7 @@ const SuperAdminAccessCreation = () => {
         });
         const result = await res.json();
         setMessage({ type: res.ok ? "success" : "error", text: res.ok ? result.message : result.detail || "College onboarding failed" });
-         window.location.reload();
+        window.location.reload();
         if (res.ok) {
           setFormData(prev => ({ ...prev, collegeName: "", collegeAddress: "", selectedDepartments: [] }));
           await fetchCollegesWithDepts();
@@ -499,7 +499,7 @@ const SuperAdminAccessCreation = () => {
           });
           const result = await res.json();
           setMessage({ type: res.ok ? "success" : "error", text: res.ok ? result.message : result.detail || "User creation failed" });
-         
+
           if (res.ok) {
             setFormData(prev => ({ ...prev, name: "", department: "", username: "", password: "", college: "" }));
             await fetchStudents();
@@ -509,18 +509,19 @@ const SuperAdminAccessCreation = () => {
       }
 
       else if (selectedAccessType === "topic") {
-        if (!formData.college || !formData.department || formData.newTopics.length === 0) {
-          setMessage({ type: "error", text: "Select college, department and add at least one topic" });
+        if (!formData.college || !formData.department || formData.selectedTopics.length === 0) {
+          setMessage({ type: "error", text: "Select college, department and at least one topic" });
           setLoading(false);
           return;
         }
 
-        const college = colleges.find(c => c.college_id === formData.college);
+
+
 
         const payload = {
-          college_name: college.name,
-          department_name: formData.department,
-          topics: formData.newTopics
+          college_id: formData.college,
+          department_id: formDepartments.find(d => d.department_name === formData.department)?.department_id,
+          topic_ids: formData.selectedTopics
         };
 
         const res = await fetch(`${API_BASE}/topics/assign-topics`, {
@@ -537,10 +538,16 @@ const SuperAdminAccessCreation = () => {
         });
 
         if (res.ok) {
-          setFormData(prev => ({ ...prev, college: "", department: "", newTopics: [] }));
+          setFormData(prev => ({
+            ...prev,
+            college: "",
+            department: "",
+            selectedTopics: []
+          }));
+
           setTopicInput("");
         }
-         window.location.reload();
+        window.location.reload();
       }
 
       else {
@@ -568,7 +575,7 @@ const SuperAdminAccessCreation = () => {
           });
           const fetchFunc = selectedAccessType === 'teacher' ? fetchTeachers : fetchAdmins;
           await fetchFunc();
-           window.location.reload();
+          window.location.reload();
         }
       }
 
@@ -587,7 +594,7 @@ const SuperAdminAccessCreation = () => {
       student: "Student Access",
       teacher: "Teachers Access",
       admin: "Administrator Access",
-      topic: "Topic Creation"
+      topic: "Topic Assigning"
     };
     return titles[selectedAccessType];
   };
@@ -797,34 +804,21 @@ const SuperAdminAccessCreation = () => {
                 3. Topics
               </label>
 
-              <div className="flex-1">
-                <div className="border border-gray-300 rounded-lg p-2 min-h-[50px] flex flex-wrap gap-2">
-                  {formData.newTopics.map((topic, idx) => (
-                    <div key={idx} className="flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
-                      <span>{topic}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveTopic(idx)}
-                        className="text-red-600 font-bold"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
+              <Select
+                isMulti
+                options={topics.map(t => ({
+                  value: t.topic_id,
+                  label: t.topic_name
+                }))}
+                onChange={(selected) =>
+                  setFormData(prev => ({
+                    ...prev,
+                    selectedTopics: selected ? selected.map(s => s.value) : []
+                  }))
+                }
+                placeholder="Select Topics"
+              />
 
-                  <input
-                    type="text"
-                    value={topicInput}
-                    onChange={(e) => setTopicInput(e.target.value)}
-                    onKeyDown={handleTopicInputKey}
-                    className="flex-1 min-w-[120px] px-2 py-1 outline-none text-sm"
-                    placeholder="Type topic & press Enter"
-                  />
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Press <b>Enter</b> to add topic.
-                </p>
-              </div>
             </div>
 
           </div>

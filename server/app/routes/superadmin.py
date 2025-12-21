@@ -9,8 +9,8 @@ async def get_superadmin_report():
     SUPER ADMIN DASHBOARD REPORT
     -----------------------------------
     1️⃣ Total Active Colleges
-    2️⃣ Total Active Students
-    3️⃣ Topic-wise student count (based on topics table mapping)
+    2️⃣ Total Active Students (from ACTIVE colleges only)
+    3️⃣ Topic-wise student count (from ACTIVE colleges only)
     """
     try:
         with get_db() as conn:
@@ -24,44 +24,51 @@ async def get_superadmin_report():
                 """)
                 total_colleges = cursor.fetchone()["total_colleges"]
 
-                # 2️⃣ Total Active Students
+                # 2️⃣ Total Active Students from ACTIVE colleges only
                 cursor.execute("""
                     SELECT COUNT(*) AS total_students
-                    FROM users
-                    WHERE role_id = 5
-                      AND is_active = 1
+                    FROM users u
+                    JOIN colleges c ON u.college_id = c.college_id
+                    WHERE u.role_id = 5
+                      AND u.is_active = 1
+                      AND c.is_active = 1  -- ADD THIS: Only count students from active colleges
                 """)
                 total_students = cursor.fetchone()["total_students"]
 
-                # 3️⃣ Topic → Active Students Count
+                # 3️⃣ Topic → Active Students Count (from ACTIVE colleges only)
                 cursor.execute("""
                     SELECT 
                         t.topic_id,
                         t.topic_name,
-
                         COUNT(DISTINCT u.user_id) AS total_students
-
                     FROM topics t
 
-                    JOIN departments d 
-                        ON d.department_id = t.department_id
-                        AND d.is_active = 1
+                    JOIN topic_college_department tcd
+                        ON tcd.topic_id = t.topic_id
+                       AND tcd.is_active = 1
 
-                    JOIN colleges c
-                        ON c.college_id = t.college_id
-                        AND c.is_active = 1
+                    JOIN colleges c_topic  -- College for topic mapping
+                        ON c_topic.college_id = tcd.college_id
+                       AND c_topic.is_active = 1
+
+                    JOIN departments d
+                        ON d.department_id = tcd.department_id
+                       AND d.is_active = 1
 
                     LEFT JOIN users u
-                        ON u.department_id = t.department_id
-                        AND u.college_id = t.college_id
-                        AND u.role_id = 5
-                        AND u.is_active = 1
+                        ON u.college_id = tcd.college_id
+                       AND u.department_id = tcd.department_id
+                       AND u.role_id = 5
+                       AND u.is_active = 1
+                    
+                    LEFT JOIN colleges c_student  -- Student's college for active check
+                        ON c_student.college_id = u.college_id
+                       AND c_student.is_active = 1
 
                     WHERE t.is_active = 1
+                      AND c_student.college_id IS NOT NULL  -- Only count if student's college is active
 
-                    GROUP BY 
-                        t.topic_id, t.topic_name
-
+                    GROUP BY t.topic_id, t.topic_name
                     ORDER BY t.topic_name ASC
                 """)
 
@@ -81,7 +88,8 @@ async def get_superadmin_report():
             status_code=500,
             detail=f"Error fetching superadmin report: {str(e)}"
         )
-
+    
+    
 
 @router.get("/students-by-college")
 async def get_students_by_college():
