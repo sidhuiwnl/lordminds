@@ -568,6 +568,9 @@ async def get_user_subtopics(user_id: int):
             status_code=500,
             detail=f"Error fetching subtopic progress: {str(e)}"
         )
+    
+
+
 
 @router.get("/{user_id}/subtopics/{topic_id}")
 async def get_user_subtopics_by_topic(user_id: int, topic_id: int):
@@ -821,12 +824,10 @@ async def get_overall_report(college_id: int, department_id: int):
 
 
 
-
 @router.get("/topic-with-department")
-async def get_topics_with_college_department():
+async def get_topics_with_department_detailed():
     """
-    Fetch all topics with their assigned college and department
-    (NEW schema using topic_college_department mapping table)
+    Fetch topics with detailed status information
     """
     try:
         with get_db() as conn:
@@ -838,30 +839,47 @@ async def get_topics_with_college_department():
                         t.topic_name,
                         t.topic_number,
                         t.total_sub_topics,
-
+                        t.is_active AS topic_active,
+                        
                         c.college_id,
                         c.name AS college_name,
-
+                        c.is_active AS college_active,
+                        
                         d.department_id,
                         d.department_name,
-
-                        tcd.assigned_at
+                        d.is_active AS department_active,
+                        
+                        tcd.is_active AS mapping_active,
+                        tcd.assigned_at,
+                        
+                        -- Overall status
+                        CASE 
+                            WHEN t.is_active = TRUE 
+                                 AND c.is_active = TRUE 
+                                 AND d.is_active = TRUE 
+                                 AND tcd.is_active = TRUE 
+                            THEN 'ACTIVE'
+                            ELSE 'INACTIVE'
+                        END AS overall_status
                     FROM topic_college_department tcd
                     JOIN topics t ON t.topic_id = tcd.topic_id
                     JOIN colleges c ON c.college_id = tcd.college_id
                     JOIN departments d ON d.department_id = tcd.department_id
-                    WHERE t.is_active = TRUE
-                      AND tcd.is_active = TRUE
                     ORDER BY c.name, d.department_name, t.topic_name
                 """
 
                 cursor.execute(query)
                 rows = cursor.fetchall()
-
+                
+                # Separate active and inactive
+                active_rows = [row for row in rows if row["overall_status"] == "ACTIVE"]
+                
                 return {
                     "status": "success",
-                    "count": len(rows),
-                    "data": rows
+                    "active_count": len(active_rows),
+                    "total_count": len(rows),
+                    "data": active_rows,  # Return only active ones
+                    "inactive_count": len(rows) - len(active_rows)
                 }
 
     except Exception as e:
@@ -869,6 +887,7 @@ async def get_topics_with_college_department():
             status_code=500,
             detail=f"Error fetching topics: {str(e)}"
         )
+    
 
 
 

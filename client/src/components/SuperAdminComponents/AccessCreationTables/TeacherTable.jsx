@@ -226,8 +226,7 @@ export const TeacherTable = ({ teachers, rowsPerPage = 10, onPageChange, refresh
 
       setTimeout(() => {
         if (refreshData) refreshData();
-        // Consider removing window.location.reload() if refreshData() properly updates the UI
-        // window.location.reload();
+        window.location.reload();
       }, 1000);
 
     } else {

@@ -290,16 +290,23 @@ async def delete_teacher(user_id: int):
                 if not teacher:
                     raise HTTPException(status_code=404, detail="Teacher not found")
 
-                # Soft delete → set is_active = 0
+                # Get teacher's name before deletion for response message
+                teacher_name = teacher["full_name"]
+
+                # Permanently delete the teacher record
                 cursor.execute(
-                    "UPDATE users SET is_active = 0 WHERE user_id = %s AND role_id = 4",
+                    "DELETE FROM users WHERE user_id = %s AND role_id = 4",
                     (user_id,)
                 )
                 conn.commit()
 
+                # Check if any rows were affected
+                if cursor.rowcount == 0:
+                    raise HTTPException(status_code=404, detail="Teacher could not be deleted")
+
         return {
             "status": "success",
-            "message": f"Teacher '{teacher['full_name']}' deactivated successfully",
+            "message": f"Teacher '{teacher_name}' permanently deleted successfully",
         }
 
     except HTTPException as e:
@@ -307,5 +314,5 @@ async def delete_teacher(user_id: int):
     except Exception as e:
         raise HTTPException(
             status_code=500, 
-            detail=f"Error deactivating teacher: {str(e)}"
+            detail=f"Error deleting teacher: {str(e)}"
         )

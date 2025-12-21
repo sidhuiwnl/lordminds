@@ -805,6 +805,7 @@ const AdminAccessCreation = () => {
 
               <Select
                 isMulti
+                className="flex-1 w-full"
                 options={topics.map(t => ({
                   value: t.topic_id,
                   label: t.topic_name
