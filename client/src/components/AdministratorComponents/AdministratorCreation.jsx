@@ -491,7 +491,7 @@ const SuperAdminAccessCreation = () => {
             username: formData.username,
             password: formData.password,
           };
-          const res = await fetch(`${API_BASE}/users`, {
+          const res = await fetch(`${API_BASE}/users/create`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
@@ -561,7 +561,7 @@ const SuperAdminAccessCreation = () => {
         };
         if (["teacher"].includes(selectedAccessType)) payload.department_name = formData.department;
 
-        const res = await fetch(`${API_BASE}/users`, {
+        const res = await fetch(`${API_BASE}/users/create`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
