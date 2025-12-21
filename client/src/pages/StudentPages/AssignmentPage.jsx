@@ -20,16 +20,16 @@ const AssignmentPage = () => {
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - ALWAYS CLOSED for assignments */}
       <Sidebar 
-        isOpen={isMobileMenuOpen} 
+        isOpen={false}  // Force close sidebar for assignments
         onClose={toggleMobileMenu} 
         isMobile={true}
       />
 
       {/* Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
+        {/* Header - You might want to disable menu toggle for assignments */}
         {/* <StudentHeader onMenuToggle={toggleMobileMenu} /> */}
 
         {/* Main Content */}

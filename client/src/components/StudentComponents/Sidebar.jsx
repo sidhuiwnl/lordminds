@@ -6,6 +6,10 @@ const Sidebar = ({ isOpen, onClose, isMobile = false }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Check if current route is a test/assignment page
+  const isTestPage = location.pathname.includes("/student/assignment/") || 
+                     location.pathname.includes("/assessments");
+
   // Detect active menu from route
   const activeMenu = (() => {
     if (location.pathname.includes("/student/studenthome")) return "home";
@@ -28,6 +32,11 @@ const Sidebar = ({ isOpen, onClose, isMobile = false }) => {
     navigate(path);
     if (isMobile && onClose) onClose();
   };
+
+  // If on test/assessment page, don't render the sidebar
+  if (isTestPage) {
+    return null; // Completely hide sidebar on test/assessment pages
+  }
 
   const sidebarClasses = `
     flex flex-col h-full bg-gradient-to-b from-[#1b65a6] to-[#0d4a8a] text-white shadow-2xl overflow-y-auto transition-transform duration-300 ease-in-out

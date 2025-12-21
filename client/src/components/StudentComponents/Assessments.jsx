@@ -952,35 +952,9 @@ const Assessments = () => {
     return () => document.removeEventListener("fullscreenchange", onFSChange);
   }, [blurHandled, navigate]);
 
-  // ===============================
-  // QUESTION TYPE MAPPING
-  // ===============================
-  const mapQuestionType = (type) => {
-    switch (type?.toLowerCase()) {
-      case "mcq":
-      case "multiple choice":
-        return "mcq";
-      case "true_false":
-      case "true false":
-      case "true/false":
-        return "true_false";
-      case "fill_blank":
-      case "fill in blank":
-      case "fill in the blank":
-        return "fill_blank";
-      case "pronunciation":
-        return "pronunciation";
-      case "match":
-      case "matching":
-        return "match";
-      default:
-        return "mcq"; // default to mcq
-    }
-  };
 
-  // ===============================
-  // SPEECH FUNCTION
-  // ===============================
+
+
   const speakText = (text) => {
     if (!("speechSynthesis" in window)) return;
     try {
@@ -994,9 +968,52 @@ const Assessments = () => {
     }
   };
 
-  // ===============================
-  // FETCH QUESTIONS WITH PROCESSING
-  // ===============================
+
+  // Helper function to determine question type from data structure
+  const determineQuestionType = (questionData) => {
+    // Check for match type
+    if (questionData.left && questionData.right && questionData.matches) {
+      return "match";
+    }
+
+    // Check for MCQ type (has options and correct_answer)
+    if (questionData.options && questionData.correct_answer &&
+      Array.isArray(questionData.options) && questionData.options.length >= 2) {
+      return "mcq";
+    }
+
+    // Check for True/False type
+    if (questionData.options && Array.isArray(questionData.options) &&
+      questionData.options.length === 2 &&
+      questionData.correct_answer &&
+      (questionData.options.includes("True") || questionData.options.includes("true") ||
+        questionData.options.includes("False") || questionData.options.includes("false"))) {
+      return "true_false";
+    }
+
+    // Check for Fill in the blanks type
+    if (questionData.correct_answers ||
+      (questionData.correct_answer &&
+        !questionData.options &&
+        !questionData.left &&
+        !questionData.right)) {
+      return "fill_blank";
+    }
+
+    // Check for Pronunciation type
+    if (questionData.correct_answer &&
+      !questionData.options &&
+      !questionData.correct_answers &&
+      !questionData.left &&
+      !questionData.right) {
+      return "pronunciation";
+    }
+
+    // Default to mcq if we can't determine
+    return "mcq";
+  };
+
+  // ✅ Fetch Questions - with MATCH RHS shuffle and FILL_BLANK options shuffle
   useEffect(() => {
     if (testCompleted) {
       setLoading(false);
@@ -1014,16 +1031,31 @@ const Assessments = () => {
 
         const data = await res.json();
         if (data.status === "success" && Array.isArray(data.data)) {
-          const parsed = data.data.map((q) => ({
-            ...q,
-            question_type: mapQuestionType(q.question_type),
-            question_data: typeof q.question_data === "string"
-              ? JSON.parse(q.question_data || "{}")
-              : q.question_data || {},
-          }));
+          // Parse and convert the backend format
+          const processed = data.data.map((q) => {
+            // Parse question_data from JSON string
+            let questionData = {};
+            try {
+              questionData = typeof q.question_data === 'string'
+                ? JSON.parse(q.question_data || "{}")
+                : q.question_data || {};
+            } catch (err) {
+              console.error("Error parsing question_data:", err);
+              questionData = {};
+            }
 
-          // Process questions (shuffle options for match and fill_blank)
-          const processed = parsed.map((q) => {
+            // Determine question type from the data structure
+            const questionType = determineQuestionType(questionData);
+
+            return {
+              ...q,
+              question_type: questionType,
+              question_data: questionData,
+            };
+          });
+
+          // Apply question-specific processing
+          const fullyProcessed = processed.map((q) => {
             // 1. Shuffle RIGHT side for MATCH questions
             if (q.question_type === "match") {
               const { left = [], right = [], matches = {} } = q.question_data || {};
@@ -1067,7 +1099,7 @@ const Assessments = () => {
               };
             }
 
-            // 2. For FILL_BLANK questions, shuffle options
+            // 2. For FILL_BLANK questions, ensure options exist
             if (q.question_type === "fill_blank") {
               const questionData = q.question_data || {};
 
@@ -1076,42 +1108,64 @@ const Assessments = () => {
                 ? questionData.correct_answers
                 : [questionData.correct_answer].filter(Boolean);
 
-              // If options exist, shuffle them
-              if (Array.isArray(questionData.options) && questionData.options.length > 0) {
-                const allOptions = [...new Set([...questionData.options, ...correctAnswers])];
-                const shuffledOptions = [...allOptions].sort(() => Math.random() - 0.5);
+              // If options don't exist, create them
+              if (!Array.isArray(questionData.options) || questionData.options.length === 0) {
+                const options = [
+                  ...correctAnswers,
+                  ...generateDistractors(correctAnswers)
+                ].sort(() => Math.random() - 0.5);
 
                 return {
                   ...q,
                   question_data: {
                     ...questionData,
-                    options: shuffledOptions,
+                    options: options,
                     correct_answers: correctAnswers,
                   },
                 };
               }
 
-              // If no options provided, create options
-              const defaultOptions = [
-                ...correctAnswers,
-                ...generateDistractors(correctAnswers)
-              ].sort(() => Math.random() - 0.5);
-
+              // If options exist, ensure correct_answers is set
               return {
                 ...q,
                 question_data: {
                   ...questionData,
-                  options: defaultOptions,
                   correct_answers: correctAnswers,
                 },
               };
             }
 
+            // 3. For MCQ and TRUE_FALSE, ensure options array exists
+            if (["mcq", "true_false"].includes(q.question_type)) {
+              if (!Array.isArray(q.question_data.options)) {
+                // Convert option_a, option_b, etc. to array if needed
+                const options = [];
+                for (let i = 0; i < 10; i++) {
+                  const key = `option_${String.fromCharCode(97 + i)}`; // a, b, c, ...
+                  if (q.question_data[key]) {
+                    options.push(q.question_data[key]);
+                  } else {
+                    break;
+                  }
+                }
+
+                if (options.length > 0) {
+                  return {
+                    ...q,
+                    question_data: {
+                      ...q.question_data,
+                      options: options,
+                    },
+                  };
+                }
+              }
+            }
+
             return q;
           });
 
-          setOriginalQuestions(processed);
-          
+          setOriginalQuestions(fullyProcessed);
+
           // Shuffle question order
           const orderKey = `assessment_${subtopic}_order`;
           const saved = localStorage.getItem(orderKey);
@@ -1124,10 +1178,10 @@ const Assessments = () => {
               const { order, timestamp } = JSON.parse(saved);
               if (now - timestamp < twoHours) {
                 const ordered = order
-                  .map((id) => processed.find((q) => q.question_id === id))
+                  .map((id) => fullyProcessed.find((q) => q.question_id === id))
                   .filter(Boolean);
 
-                if (ordered.length === processed.length) {
+                if (ordered.length === fullyProcessed.length) {
                   shuffledQuestions = ordered;
                 }
               }
@@ -1137,7 +1191,7 @@ const Assessments = () => {
           }
 
           if (!shuffledQuestions) {
-            shuffledQuestions = [...processed].sort(() => Math.random() - 0.5);
+            shuffledQuestions = [...fullyProcessed].sort(() => Math.random() - 0.5);
             localStorage.setItem(orderKey, JSON.stringify({
               order: shuffledQuestions.map((q) => q.question_id),
               timestamp: now,
@@ -1189,6 +1243,7 @@ const Assessments = () => {
       fetchSubTopicDetails();
     }
   }, [subtopic, API_URL, testCompleted, sessionId, sessionEnded]);
+
 
   // Helper function for fill_blank distractors
   const generateDistractors = (correctAnswers) => {

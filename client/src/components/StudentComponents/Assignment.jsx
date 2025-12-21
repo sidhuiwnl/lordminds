@@ -227,6 +227,43 @@ const Assignments = () => {
     }
   };
 
+  // Helper function to generate options for fill-blank questions
+  const generateFillBlankOptions = (correctAnswers) => {
+    if (!correctAnswers || correctAnswers.length === 0) return [];
+
+    const commonDistractors = [
+      "is", "are", "was", "were", "has", "have", "had",
+      "do", "does", "did", "can", "could", "will", "would",
+      "shall", "should", "may", "might", "must",
+      "the", "a", "an", "this", "that", "these", "those",
+      "in", "on", "at", "by", "with", "from", "to", "for",
+      "and", "but", "or", "nor", "so", "yet",
+      "quickly", "slowly", "carefully", "happily", "sadly",
+      "good", "bad", "big", "small", "happy", "sad",
+      "run", "walk", "jump", "talk", "speak", "listen",
+      "man", "woman", "child", "people", "person"
+    ];
+
+    // Get unique distractors that are not correct answers
+    const usedWords = new Set(correctAnswers.map(a => a.toLowerCase()));
+    const availableDistractors = commonDistractors.filter(
+      word => !usedWords.has(word.toLowerCase())
+    );
+
+    // Combine correct answers with distractors
+    const allOptions = [...correctAnswers];
+
+    // Add 3-5 distractors
+    const shuffledDistractors = [...availableDistractors]
+      .sort(() => Math.random() - 0.5)
+      .slice(0, Math.min(5, availableDistractors.length));
+
+    allOptions.push(...shuffledDistractors);
+
+    // Shuffle all options together
+    return [...allOptions].sort(() => Math.random() - 0.5);
+  };
+
   // ✅ Fetch Questions - with MATCH RHS shuffle and FILL_BLANK options shuffle
   useEffect(() => {
     const fetchQuestions = async () => {
@@ -242,108 +279,109 @@ const Assignments = () => {
         const data = await res.json();
 
         if (Array.isArray(data)) {
-          const parsed = data.map((q) => ({
-            ...q,
-            question_type: mapQuestionType(q.question_type_id),
-            question_data:
-              typeof q.question_data === "string"
-                ? JSON.parse(q.question_data || "{}")
-                : q.question_data || {},
-          }));
+          // Convert backend format to frontend format
+          const processed = data.map((q) => {
+            const questionType = mapQuestionType(q.question_type_id);
+            let questionData = q.question_data || {};
 
-          // 🔁 Process questions
-          const processed = parsed.map((q) => {
-            // 1. Shuffle RIGHT side for MATCH questions & rebuild matches
-            if (q.question_type === "match") {
-              const { left = [], right = [], matches = {} } = q.question_data || {};
-              if (
-                !Array.isArray(left) ||
-                !Array.isArray(right) ||
-                !left.length ||
-                !right.length ||
-                !matches ||
-                Object.keys(matches).length === 0
-              ) {
-                return q;
-              }
+            // Convert based on question type
+            let convertedData = questionData;
 
-              // Shuffle right column indices
-              const indices = right.map((_, idx) => idx);
-              indices.sort(() => Math.random() - 0.5);
-              const shuffledRight = indices.map((i) => right[i]);
+            if (questionType === "match") {
+              // Convert match question format
+              const left = [];
+              const right = [];
 
-              // Rebuild matches
-              const newMatches = {};
-              Object.entries(matches).forEach(([letter, num]) => {
-                const originalIndex = parseInt(num, 10) - 1;
-                if (isNaN(originalIndex) || originalIndex < 0 || originalIndex >= right.length) {
-                  return;
-                }
-                const text = right[originalIndex];
-                const newIndex = shuffledRight.indexOf(text);
-                if (newIndex !== -1) {
-                  newMatches[letter] = String(newIndex + 1);
+              // Extract left column from option_a, option_b, etc.
+              ["option_a", "option_b", "option_c", "option_d", "option_e", "option_f"].forEach(key => {
+                if (questionData[key]) {
+                  left.push(questionData[key]);
                 }
               });
 
-              return {
-                ...q,
-                question_data: {
-                  ...q.question_data,
-                  right: shuffledRight,
-                  matches: newMatches,
-                },
-              };
-            }
-
-            // 2. For FILL_BLANK questions, shuffle options if they exist
-            if (q.question_type === "fill_blank") {
-              const questionData = q.question_data || {};
-
-              // Get correct answers as array
-              const correctAnswers = Array.isArray(questionData.correct_answers)
-                ? questionData.correct_answers
-                : [questionData.correct_answer].filter(Boolean);
-
-              // If options exist, shuffle them
-              if (Array.isArray(questionData.options) && questionData.options.length > 0) {
-                // Make sure all correct answers are in options
-                const allOptions = [...new Set([...questionData.options, ...correctAnswers])];
-
-                // Shuffle the options
-                const shuffledOptions = [...allOptions].sort(() => Math.random() - 0.5);
-
-                return {
-                  ...q,
-                  question_data: {
-                    ...questionData,
-                    options: shuffledOptions,
-                    correct_answers: correctAnswers,
-                  },
-                };
+              // Extract right column from column2
+              if (questionData.column2) {
+                right.push(...questionData.column2.split(",").map(item => item.trim()));
               }
 
-              // If no options provided, create options from correct answers plus some distractors
-              const defaultOptions = [
-                ...correctAnswers,
-                ...generateDistractors(correctAnswers)
-              ].sort(() => Math.random() - 0.5);
+              // Convert correct answer format "D,B,C,A" to matches object
+              const matches = {};
+              if (questionData.correct_answer) {
+                const answers = questionData.correct_answer.split(",").map(item => item.trim());
+                answers.forEach((rightLetter, index) => {
+                  const leftLetter = String.fromCharCode(65 + index); // A, B, C, D
+                  const rightIndex = rightLetter.charCodeAt(0) - 64; // A=1, B=2, C=3, D=4
+                  matches[leftLetter] = String(rightIndex);
+                });
+              }
 
-              return {
-                ...q,
-                question_data: {
-                  ...questionData,
-                  options: defaultOptions,
-                  correct_answers: correctAnswers,
-                },
+              convertedData = { left, right, matches };
+
+            } else if (questionType === "mcq") {
+              // Convert MCQ format
+              const options = [];
+              ["option_a", "option_b", "option_c", "option_d", "option_e"].forEach(key => {
+                if (questionData[key]) {
+                  options.push(questionData[key]);
+                }
+              });
+
+              convertedData = {
+                options,
+                correct_answer: questionData.correct_answer
+              };
+
+            } else if (questionType === "true_false") {
+              // Convert True/False format
+              const options = [];
+              ["option_a", "option_b"].forEach(key => {
+                if (questionData[key]) {
+                  options.push(questionData[key]);
+                }
+              });
+
+              // Ensure correct_answer is lowercase for consistency
+              const correctAnswer = questionData.correct_answer
+                ? questionData.correct_answer.toString().toLowerCase()
+                : "";
+
+              convertedData = {
+                options,
+                correct_answer: correctAnswer
+              };
+
+            } else if (questionType === "fill_blank") {
+              // Convert Fill in blanks format
+              const correctAnswers = questionData.correct_answer
+                ? questionData.correct_answer.split(",").map(item => item.trim())
+                : [];
+
+              // Generate options from correct answers + some distractors
+              const options = generateFillBlankOptions(correctAnswers);
+
+              convertedData = {
+                correct_answers: correctAnswers,
+                options: options
+              };
+
+            } else if (questionType === "pronunciation") {
+              // Convert Pronunciation format
+              const correctAnswer = questionData.correct_answer || questionData.pronunciation_word;
+              convertedData = {
+                correct_answer: correctAnswer,
+                correct_answers: [correctAnswer]  // For consistency with other question types
               };
             }
 
-            return q;
+            return {
+              ...q,
+              question_type: questionType,
+              question_data: convertedData,
+            };
           });
 
           setOriginalQuestions(processed);
-          setHeading(processed[0]?.assignment_heading || "Assignment");
+
 
           // Initialize states
           const initialAttempts = {};
@@ -377,29 +415,7 @@ const Assignments = () => {
     fetchQuestions();
   }, [assignment, API_URL, sessionId, sessionEnded]);
 
-  // Helper function to generate distractors for fill-in-the-blank
-  const generateDistractors = (correctAnswers) => {
-    const commonDistractors = [
-      "is", "are", "was", "were", "has", "have", "had",
-      "do", "does", "did", "can", "could", "will", "would",
-      "shall", "should", "may", "might", "must",
-      "the", "a", "an", "this", "that", "these", "those",
-      "in", "on", "at", "by", "with", "from", "to", "for",
-      "and", "but", "or", "nor", "so", "yet",
-      "quickly", "slowly", "carefully", "happily", "sadly"
-    ];
 
-    // Get unique distractors that are not correct answers
-    const usedWords = new Set(correctAnswers.map(a => a.toLowerCase()));
-    const availableDistractors = commonDistractors.filter(
-      word => !usedWords.has(word.toLowerCase())
-    );
-
-    // Shuffle and return 3-5 distractors
-    return [...availableDistractors]
-      .sort(() => Math.random() - 0.5)
-      .slice(0, Math.min(5, availableDistractors.length));
-  };
 
   // ✅ Question shuffle (order of questions only)
   useEffect(() => {
