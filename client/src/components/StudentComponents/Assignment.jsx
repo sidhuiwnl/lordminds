@@ -4,6 +4,12 @@ import RecordRTC from "recordrtc";
 import { ToastContainer, toast } from "react-toastify";
 import Swal from "sweetalert2";
 
+
+const escapeRegExp = (string) => {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
+
 const Assignments = () => {
   const { assignment } = useParams();
   const navigate = useNavigate();
@@ -30,6 +36,8 @@ const Assignments = () => {
   const API_URL = import.meta.env.VITE_BACKEND_API_URL;
   const user = JSON.parse(localStorage.getItem("user"));
   const userId = user?.user_id;
+
+
 
   // ✅ Retry function
   const retryFetch = async (fetchFn, maxRetries = 2, baseDelay = 1000) => {
@@ -552,6 +560,8 @@ const Assignments = () => {
     }
   };
 
+
+
   // 🧠 Analyze Audio - ALL types (MCQ, TF, Fill, Pronunciation, Match)
   const sendAudioForAnalysis = async (audioBlob) => {
     if (!currentQuestion) return;
@@ -653,75 +663,135 @@ const Assignments = () => {
       else if (currentQuestion.question_type === "true_false") {
         const correctAnswer = currentQuestion.question_data.correct_answer;
 
-        // Normalize to a real boolean safely
+        // Normalize correct answer to boolean
         const isCorrectBool =
-          typeof correctAnswer === "boolean"
-            ? correctAnswer
-            : correctAnswer?.toString().toLowerCase() === "true";
+          correctAnswer === true ||
+          correctAnswer === "true" ||
+          correctAnswer === "True" ||
+          correctAnswer === "TRUE" ||
+          (typeof correctAnswer === 'string' && correctAnswer.toLowerCase() === 'true');
 
-        let transcriptBool = null;
-        const t = transcript.toLowerCase();
+        // Normalize transcript
+        const t = transcript.toLowerCase().trim();
 
-        if (t.includes("true") || t.includes("yes") || t.includes("correct")) {
-          transcriptBool = true;
-        } else if (t.includes("false") || t.includes("no") || t.includes("wrong")) {
-          transcriptBool = false;
-        }
-
-        // If we couldn't confidently parse, treat as wrong
-        if (transcriptBool === null) {
-          isCorrect = false;
+        // Check what the user said
+        let userSaidTrue = false;
+        if (t.includes("true") || t.includes("yes") || t.includes("correct") || t.includes("right")) {
+          userSaidTrue = true;
+        } else if (t.includes("false") || t.includes("no") || t.includes("wrong") || t.includes("incorrect")) {
+          userSaidTrue = false;
         } else {
-          isCorrect = isCorrectBool === transcriptBool;
+          // If we can't determine, treat as wrong
+          isCorrect = false;
+          correctText = isCorrectBool ? "TRUE" : "FALSE";
+          userAnswer = transcript;
+
+          // Handle wrong answer logic
+          if (newAttemptCount >= 2) {
+            setFeedback(`❌ Could not understand. Correct answer is: ${correctText}`);
+            setShowCorrectAnswer(prev => ({ ...prev, [qid]: true }));
+            setAnswers(prev => ({ ...prev, [`show-next-${qid}`]: true }));
+            speakText(`Could not understand. The correct answer is ${correctText}`);
+          } else {
+            setFeedback(`❌ Could not understand. Try again. Attempt ${newAttemptCount}/2`);
+            speakText("Could not understand. Please say True or False");
+          }
+
+          setAnalysisResults(prev => ({
+            ...prev,
+            [qid]: {
+              correctness: "incorrect",
+              userAnswer: transcript,
+              correctAnswer: correctText,
+            },
+          }));
+
+          setAnalyzing(false);
+          return;
         }
 
+        // Compare user answer with correct answer
+        isCorrect = (userSaidTrue === isCorrectBool);
         correctText = isCorrectBool ? "TRUE" : "FALSE";
+        userAnswer = userSaidTrue ? "True" : "False";
 
-        setAnswers((prev) => ({
+        setAnswers(prev => ({
           ...prev,
-          [`text-${qid}`]: transcriptBool === null
-            ? transcript
-            : transcriptBool
-              ? "True"
-              : "False",
+          [`text-${qid}`]: userSaidTrue ? "True" : "False",
         }));
       }
 
-      // 4. MCQ (voice only)
+
+
       else if (currentQuestion.question_type === "mcq") {
-        const correctAnswer =
-          currentQuestion.question_data.correct_answer
-            ?.toString()
-            .toLowerCase()
-            .trim();
+        const correctAnswer = currentQuestion.question_data.correct_answer
+          ?.toString()
+          .toLowerCase()
+          .trim();
         const options = (currentQuestion.question_data.options || []).map(
           (o) => o.toString().toLowerCase().trim()
         );
 
         const correctIndex = options.indexOf(correctAnswer);
-        const correctLetter =
-          correctIndex !== -1
-            ? String.fromCharCode(65 + correctIndex).toLowerCase()
-            : "";
+        const correctLetter = correctIndex !== -1
+          ? String.fromCharCode(65 + correctIndex).toLowerCase()
+          : "";
 
-        const acceptable = [
-          correctAnswer,
-          correctLetter,
-          correctLetter.toUpperCase(),
-        ];
+        // Clean transcript - remove any extra words
+        const cleanTranscript = transcript.toLowerCase().trim();
 
-        isCorrect = acceptable.some((ans) => transcript.includes(ans));
-        const displayAnswer =
-          correctIndex !== -1
-            ? `${String.fromCharCode(65 + correctIndex)}: ${currentQuestion.question_data.options[correctIndex]
-            }`
-            : correctAnswer?.toUpperCase();
+        // Check for letter first (A, B, C, D, E)
+        const letterPattern = /[a-e]/i;
+        const letterMatch = cleanTranscript.match(letterPattern);
+
+        // Check if user said the exact option text
+        const exactOptionMatch = options.find(option =>
+          cleanTranscript === option || // Exact match
+          option.includes(cleanTranscript) || // Option contains what user said
+          cleanTranscript.includes(option) // What user said contains option
+        );
+
+        let userSelectedOption = null;
+
+        // Priority 1: User said a letter
+        if (letterMatch) {
+          const saidLetter = letterMatch[0].toLowerCase();
+          const letterIndex = saidLetter.charCodeAt(0) - 97; // a=0, b=1, c=2, d=3, e=4
+          if (letterIndex < options.length) {
+            userSelectedOption = options[letterIndex];
+          }
+        }
+        // Priority 2: User said an exact option word
+        else if (exactOptionMatch) {
+          userSelectedOption = exactOptionMatch;
+        }
+        // Priority 3: User said something close to correct answer
+        else if (cleanTranscript.includes(correctAnswer) ||
+          correctAnswer.includes(cleanTranscript) ||
+          levenshteinDistance(cleanTranscript, correctAnswer) <= 2) {
+          userSelectedOption = correctAnswer;
+        }
+
+        // Determine correctness
+        if (userSelectedOption) {
+          isCorrect = userSelectedOption === correctAnswer;
+        } else {
+          isCorrect = false;
+        }
+
+        const displayAnswer = correctIndex !== -1
+          ? `${String.fromCharCode(65 + correctIndex)}: ${currentQuestion.question_data.options[correctIndex]}`
+          : correctAnswer?.toUpperCase();
         correctText = displayAnswer || "";
 
-        setAnswers((prev) => ({ ...prev, [`text-${qid}`]: transcript }));
+        // Store what the user said
+        setAnswers((prev) => ({
+          ...prev,
+          [`text-${qid}`]: userSelectedOption || cleanTranscript
+        }));
       }
 
-      // 5. MATCH THE FOLLOWING (voice only)
+
       else if (currentQuestion.question_type === "match") {
         const { left = [], right = [], matches = {} } =
           currentQuestion.question_data || {};
@@ -742,32 +812,44 @@ const Assignments = () => {
         const correctPairs = Object.entries(matches); // [ ["A","2"], ... ]
         let matchedCount = 0;
 
-        correctPairs.forEach(([letter, correctNum]) => {
-          const leftText =
-            (left[letter.charCodeAt(0) - 65] || "")
-              .toString()
-              .toLowerCase();
-          const rightText =
-            (right[parseInt(correctNum, 10) - 1] || "")
-              .toString()
-              .toLowerCase();
+        // Clean up transcript for better matching
+        const cleanTranscript = transcript
+          .toLowerCase()
+          .replace(/[.,!?;:'"()]/g, "")
+          .replace(/\s+/g, ' ') // Normalize spaces
+          .trim();
 
+        // Check each pair
+        correctPairs.forEach(([letter, correctNum]) => {
+          const leftText = (left[letter.charCodeAt(0) - 65] || "").toString().toLowerCase();
+          const rightText = (right[parseInt(correctNum, 10) - 1] || "").toString().toLowerCase();
+
+          // Convert letter to lowercase for matching
+          const letterLower = letter.toLowerCase();
+
+          // Multiple patterns to match
           const patterns = [
-            new RegExp(
-              `\\b${letter.toLowerCase()}\\s*(?:to|-)?\\s*${correctNum}\\b`
-            ),
-            new RegExp(
-              `\\b${correctNum}\\s*(?:to|-)?\\s*${letter.toLowerCase()}\\b`
-            ),
-            new RegExp(`\\b${leftText}\\b.*\\b${rightText}\\b`),
-            new RegExp(`\\b${rightText}\\b.*\\b${leftText}\\b`),
+            // Pattern: "A 2", "A to 2", "A-2", "A: 2"
+            new RegExp(`${letterLower}\\s*(?:to|\\-|:|\\s)\\s*${correctNum}\\b`, 'i'),
+            new RegExp(`${correctNum}\\s*(?:to|\\-|:|\\s)\\s*${letterLower}\\b`, 'i'),
+
+            // Pattern: match left and right text
+            new RegExp(`\\b${escapeRegExp(leftText)}\\b.*\\b${escapeRegExp(rightText)}\\b`, 'i'),
+            new RegExp(`\\b${escapeRegExp(rightText)}\\b.*\\b${escapeRegExp(leftText)}\\b`, 'i'),
+
+            // Pattern: "first is second" style
+            new RegExp(`${letterLower}\\s+(?:is|goes\\s+to|matches)\\s+${correctNum}`, 'i'),
+            new RegExp(`${correctNum}\\s+(?:is|goes\\s+to|matches)\\s+${letterLower}`, 'i'),
           ];
 
-          if (patterns.some((p) => p.test(transcript))) {
+          if (patterns.some((p) => p.test(cleanTranscript))) {
             matchedCount++;
           }
         });
 
+
+
+        // Determine if all pairs were matched
         isCorrect = matchedCount === correctPairs.length;
         correctText = correctPairs
           .map(([l, r]) => {
@@ -1080,6 +1162,17 @@ const Assignments = () => {
                         </div>
                       );
                     }
+                  )}
+
+                  {currentQuestion.question_type === "mcq" && (
+                    <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-4 mb-4">
+                      <p className="text-blue-800 font-semibold flex items-center gap-2">
+                        💡 Instructions: Say the <strong>letter</strong> (A, B, C, D) or the <strong>option word</strong>
+                      </p>
+                      <p className="text-blue-700 text-sm mt-1">
+                        Example: Say <strong>"A"</strong> or say <strong>"Apple"</strong> (if "Apple" is option A)
+                      </p>
+                    </div>
                   )}
                 </div>
               )}

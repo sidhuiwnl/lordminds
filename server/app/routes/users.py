@@ -1079,7 +1079,6 @@ async def get_subtopic_details(sub_topic_id: int):
         raise HTTPException(status_code=500, detail=f"Error fetching subtopic {sub_topic_id}: {str(e)}")  
       
     
-
 @router.get("/subtopic/{sub_topic_id}/questions")
 async def get_questions_by_subtopic(sub_topic_id: int):
     """Fetch all active questions for a given subtopic"""
@@ -1088,18 +1087,20 @@ async def get_questions_by_subtopic(sub_topic_id: int):
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT 
-                        question_id,
-                        question_text,
-                        question_data,
-                        marks,
-                        order_no,
-                        created_at
-                    FROM questions 
-                    WHERE test_scope = 'sub_topic' 
-                      AND reference_id = %s
+                        q.question_id,
+                        q.question_text,
+                        q.question_data,
+                        q.marks,
+                        q.order_no,
+                        q.created_at,
+                        qt.question_type  -- GET THE QUESTION TYPE NAME
+                    FROM questions q
+                    JOIN question_type qt ON q.question_type_id = qt.question_type_id
+                    WHERE q.test_scope = 'sub_topic' 
+                      AND q.reference_id = %s
+                    ORDER BY q.order_no
                 """, (sub_topic_id,))
                 
-                # Fetch all results directly as list of dicts
                 questions = cursor.fetchall()
 
                 return {
@@ -1113,6 +1114,8 @@ async def get_questions_by_subtopic(sub_topic_id: int):
             status_code=500,
             detail=f"Error fetching questions for subtopic {sub_topic_id}: {str(e)}"
         )
+    
+    
     
 @router.get("/get/students")
 async def get_all_students():

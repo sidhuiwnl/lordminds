@@ -311,7 +311,7 @@ const AdminUpload = () => {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      toast.success("MCQ uploaded successfully!");
+      toast.success("Questions uploaded successfully!");
       setFormData((prev) => ({ 
         ...prev, 
         mcqFile: null, 
@@ -321,7 +321,7 @@ const AdminUpload = () => {
       window.location.reload();
     } catch (err) {
       console.error(err);
-      toast.error("Failed to upload MCQ");
+      toast.error("Failed to upload Questions");
     }
   };
 
@@ -728,7 +728,7 @@ const AdminUpload = () => {
 
             <div className="grid grid-cols-1 gap-4 lg:gap-6 mb-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">MCQ's File Upload</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Questions's File Upload</label>
                 <input
                   type="file"
                   name="mcqFile"
