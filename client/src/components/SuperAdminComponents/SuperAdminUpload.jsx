@@ -532,7 +532,7 @@ const SuperAdminUpload = () => {
 
             <div className="flex justify-end gap-2">
               <a
-                href="/question_template.xlsx"
+                href="/questions.xlsx"
                 download
                 className="bg-gray-500 text-white px-6 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow"
               >
@@ -741,7 +741,7 @@ const SuperAdminUpload = () => {
 
             <div className="flex justify-end gap-2">
               <a
-                href="/question_template.xlsx"
+                href="/questions.xlsx"
                 download
                 className="bg-gray-500 text-white px-6 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow"
               >

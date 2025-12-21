@@ -1016,7 +1016,7 @@ const SuperAdminAccessCreation = () => {
                 <div className="flex gap-3">
                   <a
                     download
-                    href="/sample_students.xlsx"
+                    href="/students.xlsx"
                     className="bg-gray-500 text-white px-5 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow flex items-center gap-1"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
