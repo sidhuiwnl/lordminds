@@ -1,14 +1,45 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import RecordRTC from "recordrtc";
 import { ToastContainer, toast } from "react-toastify";
 import Swal from "sweetalert2";
 
-
 const escapeRegExp = (string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
+// Levenshtein distance helper function
+const levenshteinDistance = (a, b) => {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+
+  const matrix = [];
+
+  // Initialize matrix
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  // Fill matrix
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          matrix[i][j - 1] + 1,     // insertion
+          matrix[i - 1][j] + 1      // deletion
+        );
+      }
+    }
+  }
+
+  return matrix[b.length][a.length];
+};
 
 const Assignments = () => {
   const { assignment } = useParams();
@@ -37,10 +68,8 @@ const Assignments = () => {
   const user = JSON.parse(localStorage.getItem("user"));
   const userId = user?.user_id;
 
-
-
   // ✅ Retry function
-  const retryFetch = async (fetchFn, maxRetries = 2, baseDelay = 1000) => {
+  const retryFetch = useCallback(async (fetchFn, maxRetries = 2, baseDelay = 1000) => {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         return await fetchFn();
@@ -50,10 +79,10 @@ const Assignments = () => {
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
-  };
+  }, []);
 
+  // Security features useEffect
   useEffect(() => {
-
     /* -----------------------------------------------
      * 1. Prevent PrintScreen (Clear Clipboard)
      * ----------------------------------------------- */
@@ -78,9 +107,6 @@ const Assignments = () => {
       e.preventDefault();
       toast.error("⚠️ Copying is disabled.");
     };
-
-
-
 
     /* -----------------------------------------------
      * 4. Disable Right-Click
@@ -163,7 +189,6 @@ const Assignments = () => {
 
     document.addEventListener("copy", preventCopy);
     document.addEventListener("cut", preventCopy);
-
     document.addEventListener("contextmenu", preventRightClick);
 
     /* -----------------------------------------------
@@ -177,27 +202,28 @@ const Assignments = () => {
 
       document.removeEventListener("copy", preventCopy);
       document.removeEventListener("cut", preventCopy);
-
       document.removeEventListener("contextmenu", preventRightClick);
 
       clearInterval(snipDetection);
     };
-
   }, [blurHandled, navigate]);
-
-
 
   // ===============================
   // FULLSCREEN ENFORCEMENT
   // ===============================
   useEffect(() => {
-    const enterFullscreen = () =>
-      document.documentElement.requestFullscreen();
+    const enterFullscreen = () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+          console.log("Fullscreen request failed:", err);
+        });
+      }
+    };
 
-    enterFullscreen();
+    // Wait for component to mount
+    const timeoutId = setTimeout(enterFullscreen, 100);
 
     const onFSChange = () => {
-      // If fullscreen exited because of tab blur, ignore it
       if (blurHandled) return;
 
       if (!document.fullscreenElement) {
@@ -208,10 +234,13 @@ const Assignments = () => {
 
     document.addEventListener("fullscreenchange", onFSChange);
 
-    return () => document.removeEventListener("fullscreenchange", onFSChange);
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener("fullscreenchange", onFSChange);
+    };
   }, [blurHandled, navigate]);
 
-  const mapQuestionType = (id) => {
+  const mapQuestionType = useCallback((id) => {
     switch (Number(id)) {
       case 1: return "mcq";
       case 8: return "true_false";
@@ -220,9 +249,9 @@ const Assignments = () => {
       case 3: return "match";
       default: return "unknown";
     }
-  };
+  }, []);
 
-  const speakText = (text) => {
+  const speakText = useCallback((text) => {
     if (!("speechSynthesis" in window)) return;
     try {
       window.speechSynthesis.cancel();
@@ -233,10 +262,10 @@ const Assignments = () => {
     } catch (e) {
       console.error("Speech error:", e);
     }
-  };
+  }, []);
 
   // Helper function to generate options for fill-blank questions
-  const generateFillBlankOptions = (correctAnswers) => {
+  const generateFillBlankOptions = useCallback((correctAnswers) => {
     if (!correctAnswers || correctAnswers.length === 0) return [];
 
     const commonDistractors = [
@@ -270,9 +299,9 @@ const Assignments = () => {
 
     // Shuffle all options together
     return [...allOptions].sort(() => Math.random() - 0.5);
-  };
+  }, []);
 
-  // ✅ Fetch Questions - with MATCH RHS shuffle and FILL_BLANK options shuffle
+  // ✅ Fetch Questions
   useEffect(() => {
     const fetchQuestions = async () => {
       try {
@@ -377,7 +406,7 @@ const Assignments = () => {
               const correctAnswer = questionData.correct_answer || questionData.pronunciation_word;
               convertedData = {
                 correct_answer: correctAnswer,
-                correct_answers: [correctAnswer]  // For consistency with other question types
+                correct_answers: [correctAnswer]
               };
             }
 
@@ -389,7 +418,6 @@ const Assignments = () => {
           });
 
           setOriginalQuestions(processed);
-
 
           // Initialize states
           const initialAttempts = {};
@@ -421,9 +449,7 @@ const Assignments = () => {
     };
 
     fetchQuestions();
-  }, [assignment, API_URL, sessionId, sessionEnded]);
-
-
+  }, [assignment, API_URL, sessionId, sessionEnded, mapQuestionType, generateFillBlankOptions, retryFetch]);
 
   // ✅ Question shuffle (order of questions only)
   useEffect(() => {
@@ -462,21 +488,27 @@ const Assignments = () => {
         timestamp: now,
       })
     );
-  }, [originalQuestions]);
+  }, [originalQuestions, assignment]);
 
   const currentQuestion = questions[currentStep - 1];
 
   // ✅ Start Session
   const startSession = async () => {
-    if (!userId || sessionEnded) return;
+    if (!userId || sessionEnded || sessionId) return;
     try {
       const res = await retryFetch(async () => {
         const response = await fetch(`${API_URL}/tests/start/${userId}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: parseInt(userId) }),
+          body: JSON.stringify({ 
+            user_id: parseInt(userId),
+            assignment_id: parseInt(assignment) 
+          }),
         });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
         return response;
       });
       const data = await res.json();
@@ -485,6 +517,7 @@ const Assignments = () => {
         console.log("✅ Assignment session started:", data.session_id);
       } else {
         console.error("Failed to start session:", data.message);
+        toast.error("Failed to start session. Please try again.");
       }
     } catch (err) {
       console.error("Error starting session:", err);
@@ -499,6 +532,7 @@ const Assignments = () => {
       await retryFetch(async () => {
         const response = await fetch(`${API_URL}/tests/end/${sessionId}`, {
           method: "PUT",
+          headers: { "Content-Type": "application/json" }
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response;
@@ -536,19 +570,29 @@ const Assignments = () => {
   // 🎤 Stop Recording → Analyze
   const stopRecording = async () => {
     if (!recorderRef.current) return;
+    
+    const recorder = recorderRef.current;
+    const stream = recorder.stream;
+    
     try {
-      await recorderRef.current.stopRecording(async () => {
-        const blob = recorderRef.current.getBlob();
+      await recorder.stopRecording(async () => {
+        const blob = recorder.getBlob();
         setRecording(false);
+        
+        // Clean up stream
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+        }
+        
+        // Clear reference
+        recorderRef.current = null;
+        
+        // Store audio answer
         if (currentQuestion) {
           setAnswers((prev) => ({
             ...prev,
             [`audio-${currentQuestion.question_id}`]: blob,
           }));
-        }
-
-        if (recorderRef.current.stream) {
-          recorderRef.current.stream.getTracks().forEach((track) => track.stop());
         }
 
         speakText("Analyzing your answer");
@@ -557,10 +601,34 @@ const Assignments = () => {
     } catch (err) {
       console.error("Error stopping recording:", err);
       setRecording(false);
+      recorderRef.current = null;
     }
   };
 
-
+  // ===============================
+  // CLEANUP ON UNMOUNT
+  // ===============================
+  useEffect(() => {
+    return () => {
+      // Clean up speech synthesis
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      
+      // Clean up session
+      if (sessionId && !sessionEnded) {
+        endSession();
+      }
+      
+      // Clean up recording
+      if (recorderRef.current) {
+        if (recorderRef.current.stream) {
+          recorderRef.current.stream.getTracks().forEach(track => track.stop());
+        }
+        recorderRef.current = null;
+      }
+    };
+  }, [sessionId, sessionEnded]);
 
   // 🧠 Analyze Audio - ALL types (MCQ, TF, Fill, Pronunciation, Match)
   const sendAudioForAnalysis = async (audioBlob) => {
@@ -721,8 +789,7 @@ const Assignments = () => {
         }));
       }
 
-
-
+      // 4. MCQ
       else if (currentQuestion.question_type === "mcq") {
         const correctAnswer = currentQuestion.question_data.correct_answer
           ?.toString()
@@ -791,7 +858,7 @@ const Assignments = () => {
         }));
       }
 
-
+      // 5. MATCH THE FOLLOWING
       else if (currentQuestion.question_type === "match") {
         const { left = [], right = [], matches = {} } =
           currentQuestion.question_data || {};
@@ -847,8 +914,6 @@ const Assignments = () => {
           }
         });
 
-
-
         // Determine if all pairs were matched
         isCorrect = matchedCount === correctPairs.length;
         correctText = correctPairs
@@ -871,13 +936,21 @@ const Assignments = () => {
             correctAnswer: correctText,
           },
         }));
-        setAnswers((prev) => ({ ...prev, [`show-next-${qid}`]: true }));
+        setAnswers((prev) => ({ 
+          ...prev, 
+          [`show-next-${qid}`]: true,
+          [`text-${qid}`]: userAnswer 
+        }));
         speakText("Correct");
       } else {
         if (newAttemptCount >= 2) {
           setFeedback(`❌ Incorrect. Correct: ${correctText}`);
           setShowCorrectAnswer((prev) => ({ ...prev, [qid]: true }));
-          setAnswers((prev) => ({ ...prev, [`show-next-${qid}`]: true }));
+          setAnswers((prev) => ({ 
+            ...prev, 
+            [`show-next-${qid}`]: true,
+            [`text-${qid}`]: userAnswer 
+          }));
           setAnalysisResults((prev) => ({
             ...prev,
             [qid]: {
@@ -911,12 +984,11 @@ const Assignments = () => {
   };
 
   // 🗣 Click handler for options – ONLY SPEAKS, NO VALIDATION
-  const handleOptionSpeak = (optionText) => {
+  const handleOptionSpeak = useCallback((optionText) => {
     if (!currentQuestion) return;
     speakText(optionText);
-
     // No answer storage or validation - just speak
-  };
+  }, [currentQuestion, speakText]);
 
   const handlePrevious = () => {
     if (currentStep > 1) setCurrentStep((s) => s - 1);
@@ -930,14 +1002,14 @@ const Assignments = () => {
     }
   };
 
-  const calculateScore = () => {
+  const calculateScore = useCallback(() => {
     let marksObtained = 0;
     questions.forEach((q) => {
       const analysis = analysisResults[q.question_id];
       if (analysis?.correctness === "correct") marksObtained++;
     });
     return { marks_obtained: marksObtained, max_marks: questions.length };
-  };
+  }, [questions, analysisResults]);
 
   const handleSubmit = async () => {
     const score = calculateScore();
@@ -1002,36 +1074,8 @@ const Assignments = () => {
     }
   };
 
-  if (loading)
-    return (
-      <div className="flex justify-center items-center h-screen text-gray-600">
-        Loading questions...
-      </div>
-    );
-  if (error)
-    return (
-      <div className="flex justify-center items-center h-screen text-red-500">
-        Error: {error}
-      </div>
-    );
-  if (questions.length === 0)
-    return (
-      <div className="flex justify-center items-center h-screen text-gray-600">
-        No questions found.
-      </div>
-    );
-
-  const isNavigationDisabled = recording || analyzing;
-  const currentQuestionId = currentQuestion?.question_id;
-  const showNextButton = currentQuestionId
-    ? answers[`show-next-${currentQuestionId}`]
-    : false;
-  const allQuestionsCompleted = questions.every(
-    (q) => answers[`show-next-${q.question_id}`]
-  );
-
   // Get correct answer text for display
-  const getCorrectAnswerText = () => {
+  const getCorrectAnswerText = useCallback(() => {
     if (!currentQuestion) return "";
     const data = currentQuestion.question_data;
 
@@ -1076,7 +1120,38 @@ const Assignments = () => {
       default:
         return data.correct_answer?.toString() || "N/A";
     }
-  };
+  }, [currentQuestion]);
+
+  if (loading)
+    return (
+      <div className="flex flex-col justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
+        <p className="text-gray-600">Loading assignment questions...</p>
+      </div>
+    );
+    
+  if (error)
+    return (
+      <div className="flex justify-center items-center h-screen text-red-500">
+        Error: {error}
+      </div>
+    );
+    
+  if (questions.length === 0)
+    return (
+      <div className="flex justify-center items-center h-screen text-gray-600">
+        No questions found.
+      </div>
+    );
+
+  const isNavigationDisabled = recording || analyzing;
+  const currentQuestionId = currentQuestion?.question_id;
+  const showNextButton = currentQuestionId
+    ? answers[`show-next-${currentQuestionId}`]
+    : false;
+  const allQuestionsCompleted = questions.every(
+    (q) => answers[`show-next-${q.question_id}`]
+  );
 
   return (
     <div className="p-4 lg:p-6 bg-gray-50 mt-30 min-h-screen">
@@ -1119,7 +1194,8 @@ const Assignments = () => {
                       const rawCorrect = currentQuestion.question_data.correct_answer;
                       const isCorrectOption =
                         rawCorrect !== undefined &&
-                        option.toString().toLowerCase() === rawCorrect.toString().toLowerCase();
+                        option.toString().trim().toLowerCase() === 
+                        rawCorrect.toString().trim().toLowerCase();
 
                       return (
                         <div
@@ -1179,13 +1255,11 @@ const Assignments = () => {
 
               {currentQuestion.question_type === "pronunciation" && (
                 <div className="my-4 p-4 bg-blue-50 border border-blue-200 rounded-xl text-center">
-
                   <p className="text-3xl font-bold text-blue-900 mt-2">
                     {currentQuestion.question_data.correct_answer}
                   </p>
                 </div>
               )}
-
 
               {/* 2. FILL IN BLANKS - Display Options for Speaking Only */}
               {currentQuestion.question_type === "fill_blank" && (
@@ -1203,7 +1277,7 @@ const Assignments = () => {
                           ? currentQuestion.question_data.correct_answers
                           : [currentQuestion.question_data.correct_answer].filter(Boolean);
                         const isCorrectOption = correctAnswers.some(correct =>
-                          option.toString().toLowerCase() === correct.toString().toLowerCase()
+                          option.toString().trim().toLowerCase() === correct.toString().trim().toLowerCase()
                         );
 
                         return (

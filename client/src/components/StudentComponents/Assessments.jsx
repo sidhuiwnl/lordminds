@@ -1,10 +1,12 @@
-
-
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import RecordRTC from "recordrtc";
 import { ToastContainer, toast } from "react-toastify";
 import Swal from "sweetalert2";
+
+const escapeRegExp = (string) => {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
 
 const Assessments = () => {
   const { subtopic } = useParams();
@@ -35,6 +37,112 @@ const Assessments = () => {
   const user = JSON.parse(localStorage.getItem("user"));
   const userId = user?.user_id;
 
+  const processQuestionData = (questionType, rawData) => {
+    if (!rawData) return {};
+
+    try {
+      let convertedData = rawData;
+
+      // 1. MATCH QUESTIONS
+      if (questionType === "match") {
+        const left = [];
+        const right = [];
+        const matches = {};
+
+        // Extract left column from option_a, option_b, etc.
+        ["option_a", "option_b", "option_c", "option_d", "option_e", "option_f"].forEach(key => {
+          if (rawData[key]) {
+            left.push(rawData[key]);
+          }
+        });
+
+        // Extract right column from column2
+        if (rawData.column2) {
+          right.push(...rawData.column2.split(",").map(item => item.trim()));
+        }
+
+        // Convert correct answer format "D,B,C,A" to matches object
+        if (rawData.correct_answer) {
+          const answers = rawData.correct_answer.split(",").map(item => item.trim());
+          answers.forEach((rightLetter, index) => {
+            if (index < left.length) {
+              const leftLetter = String.fromCharCode(65 + index); // A, B, C, D
+              const rightIndex = rightLetter.charCodeAt(0) - 64; // A=1, B=2, C=3, D=4
+              matches[leftLetter] = String(rightIndex);
+            }
+          });
+        }
+
+        convertedData = { left, right, matches };
+      }
+
+      else if (questionType === "fill_blank") {
+        const correctAnswers = rawData.correct_answer
+          ? rawData.correct_answer.split(",").map(item => item.trim())
+          : [];
+
+        // Use generateFillBlankOptions instead of generateDistractors
+        const options = generateFillBlankOptions(correctAnswers);
+
+        convertedData = {
+          correct_answers: correctAnswers,
+          options: options
+        };
+      }
+      // 3. PRONUNCIATION QUESTIONS
+      else if (questionType === "pronunciation") {
+        const correctAnswer = rawData.correct_answer || rawData.pronunciation_word;
+        convertedData = {
+          correct_answer: correctAnswer,
+        };
+      }
+
+      // 4. MCQ QUESTIONS
+      else if (questionType === "mcq") {
+        const options = [];
+        ["option_a", "option_b", "option_c", "option_d", "option_e"].forEach(key => {
+          if (rawData[key]) {
+            options.push(rawData[key]);
+          }
+        });
+
+        convertedData = {
+          options,
+          correct_answer: rawData.correct_answer
+        };
+      }
+
+      // 5. TRUE/FALSE QUESTIONS
+      else if (questionType === "true_false") {
+        const options = [];
+        ["option_a", "option_b"].forEach(key => {
+          if (rawData[key]) {
+            options.push(rawData[key]);
+          }
+        });
+
+        // Ensure correct_answer is lowercase for consistency
+        const correctAnswer = rawData.correct_answer
+          ? rawData.correct_answer.toString().toLowerCase()
+          : "";
+
+        convertedData = {
+          options,
+          correct_answer: correctAnswer
+        };
+      }
+
+      return convertedData;
+    } catch (error) {
+      console.error(`Error processing ${questionType} question:`, error, rawData);
+      return {
+        error: true,
+        message: "Failed to process question data",
+        rawData
+      };
+    }
+  };
+
   // 🔁 Retry wrapper
   const retryFetch = async (fetchFn, maxRetries = 3, baseDelay = 1000) => {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -49,7 +157,7 @@ const Assessments = () => {
   };
 
   // ===============================
-  // SECURITY FEATURES (same as Assignments)
+  // SECURITY FEATURES
   // ===============================
   useEffect(() => {
     /* -----------------------------------------------
@@ -181,8 +289,16 @@ const Assessments = () => {
   // FULLSCREEN ENFORCEMENT
   // ===============================
   useEffect(() => {
-    const enterFullscreen = () => document.documentElement.requestFullscreen();
-    enterFullscreen();
+    const enterFullscreen = () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+          console.log("Fullscreen request failed:", err);
+        });
+      }
+    };
+
+    // Wait for component to mount
+    const timeoutId = setTimeout(enterFullscreen, 100);
 
     const onFSChange = () => {
       if (blurHandled) return;
@@ -194,13 +310,14 @@ const Assessments = () => {
     };
 
     document.addEventListener("fullscreenchange", onFSChange);
-    return () => document.removeEventListener("fullscreenchange", onFSChange);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener("fullscreenchange", onFSChange);
+    };
   }, [blurHandled, navigate]);
 
-
-
-
-  const speakText = (text) => {
+  const speakText = useCallback((text) => {
     if (!("speechSynthesis" in window)) return;
     try {
       window.speechSynthesis.cancel();
@@ -211,12 +328,44 @@ const Assessments = () => {
     } catch (e) {
       console.error("Speech error:", e);
     }
-  };
+  }, []);
 
+  // Add this function (similar to Assignments)
+  const generateFillBlankOptions = useCallback((correctAnswers) => {
+    if (!correctAnswers || correctAnswers.length === 0) return [];
 
+    const commonDistractors = [
+      "is", "are", "was", "were", "has", "have", "had",
+      "do", "does", "did", "can", "could", "will", "would",
+      "shall", "should", "may", "might", "must",
+      "the", "a", "an", "this", "that", "these", "those",
+      "in", "on", "at", "by", "with", "from", "to", "for",
+      "and", "but", "or", "nor", "so", "yet",
+      "quickly", "slowly", "carefully", "happily", "sadly",
+      "good", "bad", "big", "small", "happy", "sad",
+      "run", "walk", "jump", "talk", "speak", "listen",
+      "man", "woman", "child", "people", "person"
+    ];
 
+    // Get unique distractors that are not correct answers
+    const usedWords = new Set(correctAnswers.map(a => a.toLowerCase()));
+    const availableDistractors = commonDistractors.filter(
+      word => !usedWords.has(word.toLowerCase())
+    );
 
+    // Combine correct answers with distractors
+    const allOptions = [...correctAnswers];
 
+    // Add 3-5 distractors
+    const shuffledDistractors = [...availableDistractors]
+      .sort(() => Math.random() - 0.5)
+      .slice(0, Math.min(5, availableDistractors.length));
+
+    allOptions.push(...shuffledDistractors);
+
+    // Shuffle all options together
+    return [...allOptions].sort(() => Math.random() - 0.5);
+  }, []);
 
   // ✅ Fetch Questions - with MATCH RHS shuffle and FILL_BLANK options shuffle
   useEffect(() => {
@@ -236,24 +385,14 @@ const Assessments = () => {
 
         const data = await res.json();
         if (data.status === "success" && Array.isArray(data.data)) {
-          // Parse and convert the backend format
-          // Parse and convert the backend format
           const processed = data.data.map((q) => {
-            // Parse question_data from JSON string
-            let questionData = {};
-            try {
-              questionData = typeof q.question_data === 'string'
-                ? JSON.parse(q.question_data || "{}")
-                : q.question_data || {};
-            } catch (err) {
-              console.error("Error parsing question_data:", err);
-              questionData = {};
-            }
+            const questionType = q.question_type;
+            const rawData = q.question_data || {};
+            const processedData = processQuestionData(questionType, rawData);
 
             return {
               ...q,
-              question_type: q.question_type, // Use from backend directly
-              question_data: questionData,
+              question_data: processedData,
             };
           });
 
@@ -315,7 +454,7 @@ const Assessments = () => {
               if (!Array.isArray(questionData.options) || questionData.options.length === 0) {
                 const options = [
                   ...correctAnswers,
-                  ...generateDistractors(correctAnswers)
+                  ...generateFillBlankOptions(correctAnswers)
                 ].sort(() => Math.random() - 0.5);
 
                 return {
@@ -334,6 +473,21 @@ const Assessments = () => {
                 question_data: {
                   ...questionData,
                   correct_answers: correctAnswers,
+                },
+              };
+            }
+
+            if (q.question_type === "pronunciation") {
+              // Remove any options or correct_answers array
+              const { options, correct_answers, ...restData } = q.question_data || {};
+              return {
+                ...q,
+                question_data: {
+                  ...restData,
+                  // Ensure we only have correct_answer (not an array)
+                  correct_answer: q.question_data.correct_answer ||
+                    (Array.isArray(q.question_data.correct_answers) ?
+                      q.question_data.correct_answers[0] : ""),
                 },
               };
             }
@@ -445,30 +599,7 @@ const Assessments = () => {
       fetchQuestions();
       fetchSubTopicDetails();
     }
-  }, [subtopic, API_URL, testCompleted, sessionId, sessionEnded]);
-
-
-  // Helper function for fill_blank distractors
-  const generateDistractors = (correctAnswers) => {
-    const commonDistractors = [
-      "is", "are", "was", "were", "has", "have", "had",
-      "do", "does", "did", "can", "could", "will", "would",
-      "shall", "should", "may", "might", "must",
-      "the", "a", "an", "this", "that", "these", "those",
-      "in", "on", "at", "by", "with", "from", "to", "for",
-      "and", "but", "or", "nor", "so", "yet",
-      "quickly", "slowly", "carefully", "happily", "sadly"
-    ];
-
-    const usedWords = new Set(correctAnswers.map(a => a.toLowerCase()));
-    const availableDistractors = commonDistractors.filter(
-      word => !usedWords.has(word.toLowerCase())
-    );
-
-    return [...availableDistractors]
-      .sort(() => Math.random() - 0.5)
-      .slice(0, Math.min(5, availableDistractors.length));
-  };
+  }, [subtopic, API_URL, testCompleted, sessionId, sessionEnded, generateFillBlankOptions]);
 
   const currentQuestion = questions[currentStep - 1];
 
@@ -476,15 +607,21 @@ const Assessments = () => {
   // SESSION MANAGEMENT
   // ===============================
   const startSession = async () => {
-    if (!userId || sessionEnded) return;
+    if (!userId || sessionEnded || sessionId) return;
     try {
       const res = await retryFetch(async () => {
         const response = await fetch(`${API_URL}/tests/start/${userId}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: parseInt(userId) }),
+          body: JSON.stringify({ 
+            user_id: parseInt(userId),
+            subtopic_id: parseInt(subtopic) 
+          }),
         });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
         return response;
       });
       const data = await res.json();
@@ -493,6 +630,7 @@ const Assessments = () => {
         console.log("✅ Test session started:", data.session_id);
       } else {
         console.error("Failed to start session:", data.message);
+        toast.error("Failed to start session. Please try again.");
       }
     } catch (err) {
       console.error("Error starting session:", err);
@@ -504,7 +642,10 @@ const Assessments = () => {
     if (!sessionId || sessionEnded) return;
     try {
       await retryFetch(async () => {
-        const response = await fetch(`${API_URL}/tests/end/${sessionId}`, { method: "PUT" });
+        const response = await fetch(`${API_URL}/tests/end/${sessionId}`, { 
+          method: "PUT",
+          headers: { "Content-Type": "application/json" }
+        });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response;
       });
@@ -542,29 +683,67 @@ const Assessments = () => {
 
   const stopRecording = async () => {
     if (!recorderRef.current) return;
+    
+    const recorder = recorderRef.current;
+    const stream = recorder.stream;
+    
     try {
-      await recorderRef.current.stopRecording(async () => {
-        const blob = recorderRef.current.getBlob();
+      await recorder.stopRecording(async () => {
+        const blob = recorder.getBlob();
         setRecording(false);
+        
+        // Clean up stream properly
+        if (stream) {
+          stream.getTracks().forEach(track => {
+            track.stop();
+          });
+        }
+        
+        // Clear the reference
+        recorderRef.current = null;
+        
+        // Store audio answer
         if (currentQuestion) {
           setAnswers((prev) => ({
             ...prev,
             [`audio-${currentQuestion.question_id}`]: blob,
           }));
         }
-
-        if (recorderRef.current.stream) {
-          recorderRef.current.stream.getTracks().forEach(track => track.stop());
-        }
-
+        
         speakText("Analyzing your answer");
         await sendAudioForAnalysis(blob);
       });
     } catch (err) {
       console.error("Error stopping recording:", err);
       setRecording(false);
+      recorderRef.current = null;
     }
   };
+
+  // ===============================
+  // CLEANUP ON UNMOUNT
+  // ===============================
+  useEffect(() => {
+    return () => {
+      // Clean up speech synthesis
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      
+      // Clean up session
+      if (sessionId && !sessionEnded) {
+        endSession();
+      }
+      
+      // Clean up recording
+      if (recorderRef.current) {
+        if (recorderRef.current.stream) {
+          recorderRef.current.stream.getTracks().forEach(track => track.stop());
+        }
+        recorderRef.current = null;
+      }
+    };
+  }, [sessionId, sessionEnded]);
 
   // ===============================
   // AUDIO ANALYSIS (All question types)
@@ -638,31 +817,22 @@ const Assessments = () => {
 
       // 2. PRONUNCIATION
       else if (currentQuestion.question_type === "pronunciation") {
-        const correctAnswers = Array.isArray(
-          currentQuestion.question_data.correct_answers
-        )
-          ? currentQuestion.question_data.correct_answers.map((a) =>
-            a.toString().toLowerCase().trim()
-          )
-          : [
-            currentQuestion.question_data.correct_answer
-              ?.toString()
-              .toLowerCase()
-              .trim(),
-          ].filter(Boolean);
+        const correctAnswer = currentQuestion.question_data.correct_answer;
 
-        isCorrect = correctAnswers.some((ans) => {
-          const ansLower = ans.toLowerCase();
-          const transLower = transcript.toLowerCase();
-          return (
-            transLower.includes(ansLower) ||
-            ansLower.includes(transLower) ||
-            transLower.replace(/\s+/g, "") ===
-            ansLower.replace(/\s+/g, "")
-          );
-        });
+        if (!correctAnswer) {
+          setFeedback("No correct answer found for pronunciation.");
+          setAnalyzing(false);
+          return;
+        }
 
-        correctText = correctAnswers.join(" or ");
+        const correctAnswerLower = correctAnswer.toString().toLowerCase().trim();
+        const transcriptLower = transcript.toLowerCase();
+
+        isCorrect = transcriptLower.includes(correctAnswerLower) ||
+          correctAnswerLower.includes(transcriptLower) ||
+          transcriptLower.replace(/\s+/g, "") === correctAnswerLower.replace(/\s+/g, "");
+
+        correctText = correctAnswer;
       }
 
       // 3. TRUE/FALSE
@@ -805,13 +975,21 @@ const Assessments = () => {
             correctAnswer: correctText,
           },
         }));
-        setAnswers((prev) => ({ ...prev, [`show-next-${qid}`]: true }));
+        setAnswers((prev) => ({ 
+          ...prev, 
+          [`show-next-${qid}`]: true,
+          [`text-${qid}`]: userAnswer 
+        }));
         speakText("Correct");
       } else {
         if (newAttemptCount >= 2) {
           setFeedback(`❌ Incorrect. Correct: ${correctText}`);
           setShowCorrectAnswer((prev) => ({ ...prev, [qid]: true }));
-          setAnswers((prev) => ({ ...prev, [`show-next-${qid}`]: true }));
+          setAnswers((prev) => ({ 
+            ...prev, 
+            [`show-next-${qid}`]: true,
+            [`text-${qid}`]: userAnswer 
+          }));
           setAnalysisResults((prev) => ({
             ...prev,
             [qid]: {
@@ -847,11 +1025,10 @@ const Assessments = () => {
   // ===============================
   // OPTION CLICK HANDLER (Speak only)
   // ===============================
-  const handleOptionSpeak = (optionText) => {
+  const handleOptionSpeak = useCallback((optionText) => {
     if (!currentQuestion) return;
     speakText(optionText);
-    // No answer storage or validation - just speak
-  };
+  }, [currentQuestion, speakText]);
 
   const handlePrevious = () => {
     if (currentStep > 1) setCurrentStep((s) => s - 1);
@@ -865,14 +1042,14 @@ const Assessments = () => {
     }
   };
 
-  const calculateScore = () => {
+  const calculateScore = useCallback(() => {
     let marksObtained = 0;
     questions.forEach((q) => {
       const analysis = analysisResults[q.question_id];
       if (analysis?.correctness === "correct") marksObtained++;
     });
     return { marks_obtained: marksObtained, max_marks: questions.length };
-  };
+  }, [questions, analysisResults]);
 
   const handleSubmitTest = async () => {
     const score = calculateScore();
@@ -945,7 +1122,7 @@ const Assessments = () => {
   };
 
   // Get correct answer text for display
-  const getCorrectAnswerText = () => {
+  const getCorrectAnswerText = useCallback(() => {
     if (!currentQuestion) return "";
     const data = currentQuestion.question_data;
 
@@ -990,7 +1167,7 @@ const Assessments = () => {
       default:
         return data.correct_answer?.toString() || "N/A";
     }
-  };
+  }, [currentQuestion]);
 
   // If test already completed, show message
   if (testCompleted) {
@@ -1013,7 +1190,13 @@ const Assessments = () => {
   }
 
   if (loading)
-    return <div className="flex justify-center items-center h-screen text-gray-600">Loading questions...</div>;
+    return (
+      <div className="flex flex-col justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
+        <p className="text-gray-600">Loading assessment questions...</p>
+      </div>
+    );
+    
   if (error)
     return <div className="flex justify-center items-center h-screen text-red-500">Error: {error}</div>;
   if (questions.length === 0)
@@ -1069,7 +1252,8 @@ const Assessments = () => {
                       const rawCorrect = currentQuestion.question_data.correct_answer;
                       const isCorrectOption =
                         rawCorrect !== undefined &&
-                        option.toString().toLowerCase() === rawCorrect.toString().toLowerCase();
+                        option.toString().trim().toLowerCase() === 
+                        rawCorrect.toString().trim().toLowerCase();
 
                       return (
                         <div
@@ -1140,7 +1324,7 @@ const Assessments = () => {
                           ? currentQuestion.question_data.correct_answers
                           : [currentQuestion.question_data.correct_answer].filter(Boolean);
                         const isCorrectOption = correctAnswers.some(correct =>
-                          option.toString().toLowerCase() === correct.toString().toLowerCase()
+                          option.toString().trim().toLowerCase() === correct.toString().trim().toLowerCase()
                         );
 
                         return (

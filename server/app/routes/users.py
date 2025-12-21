@@ -1,4 +1,5 @@
 
+import json
 from fastapi import APIRouter, HTTPException, Form, File, UploadFile
 from config.database import get_db
 from pydantic import BaseModel, Field, field_validator,EmailStr
@@ -1093,7 +1094,7 @@ async def get_questions_by_subtopic(sub_topic_id: int):
                         q.marks,
                         q.order_no,
                         q.created_at,
-                        qt.question_type  -- GET THE QUESTION TYPE NAME
+                        qt.question_type
                     FROM questions q
                     JOIN question_type qt ON q.question_type_id = qt.question_type_id
                     WHERE q.test_scope = 'sub_topic' 
@@ -1102,6 +1103,18 @@ async def get_questions_by_subtopic(sub_topic_id: int):
                 """, (sub_topic_id,))
                 
                 questions = cursor.fetchall()
+
+                # ✅ PARSE THE question_data JSON!
+                for question in questions:
+                    if question['question_data']:
+                        try:
+                            question['question_data'] = json.loads(question['question_data'])
+                        except json.JSONDecodeError:
+                            # If it's already an object or invalid, keep as is
+                            if isinstance(question['question_data'], dict):
+                                pass
+                            else:
+                                question['question_data'] = {}
 
                 return {
                     "status": "success",

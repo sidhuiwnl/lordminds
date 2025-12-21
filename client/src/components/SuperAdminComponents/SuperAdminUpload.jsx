@@ -13,6 +13,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.j
 
 const SuperAdminUpload = () => {
   const [selectedTab, setSelectedTab] = useState("upload-assignment");
+  const overviewTextRef = useRef("");
   const [formData, setFormData] = useState({
     // Assignment fields
     assignmentCollege: "",
@@ -59,7 +60,6 @@ const SuperAdminUpload = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // File handling with text extraction
   const handleFileChange = async (e) => {
     const { name, files } = e.target;
     if (!files || files.length === 0) return;
@@ -87,7 +87,18 @@ const SuperAdminUpload = () => {
           toast.error("Failed to extract text from document");
         } finally {
           setField("overviewDocument", file);
-          setField("overviewText", `<p>${extractedText.replace(/\n/g, "</p><p>")}</p>`);
+          const html = `<p>${extractedText.replace(/\n/g, "</p><p>")}</p>`;
+
+          overviewTextRef.current = html;   // ✅ sync ref
+          setField("overviewText", html);   // ✅ initial render
+
+
+          // Auto-focus the editor after text is loaded
+          setTimeout(() => {
+            if (editor.current && editor.current.editor) {
+              editor.current.editor.focus();
+            }
+          }, 300);
         }
       };
       reader.readAsArrayBuffer(file);
@@ -187,10 +198,10 @@ const SuperAdminUpload = () => {
 
   // Helper to map arrays to react-select options
   const mapOptions = (arr, valueKey, labelKey) =>
-    (arr || []).map((item) => ({ 
-      value: item[valueKey], 
-      label: item[labelKey], 
-      raw: item 
+    (arr || []).map((item) => ({
+      value: item[valueKey],
+      label: item[labelKey],
+      raw: item
     }));
 
   // Assignment submission handler
@@ -216,13 +227,13 @@ const SuperAdminUpload = () => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       toast.success("Assignment uploaded successfully!");
       fetchAssignments();
-      setFormData((prev) => ({ 
-        ...prev, 
-        assignmentNo: "", 
-        assignmentTopic: "", 
-        file: null, 
-        startDate: "", 
-        endDate: "" 
+      setFormData((prev) => ({
+        ...prev,
+        assignmentNo: "",
+        assignmentTopic: "",
+        file: null,
+        startDate: "",
+        endDate: ""
       }));
       window.location.reload();
     } catch (err) {
@@ -253,7 +264,11 @@ const SuperAdminUpload = () => {
       fd.append("sub_topic_name", formData.subTopicName);
       fd.append("no_of_sub_topics", formData.noOfSubTopic || 0);
       fd.append("video_link", formData.overviewVideo || "");
-      fd.append("overview_content", formData.overviewText || "");
+      fd.append(
+        "overview_content",
+        overviewTextRef.current || formData.overviewText || ""
+      );
+
 
       if (formData.overviewDocument) fd.append("file", formData.overviewDocument);
 
@@ -262,23 +277,35 @@ const SuperAdminUpload = () => {
         headers: { Accept: "application/json" },
         body: fd,
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      toast.success("Overview uploaded successfully!");
-      setFormData((prev) => ({
-        ...prev,
-        topicId: "",
-        subTopicName: "",
-        noOfSubTopic: "",
-        overviewVideo: "",
-        overviewDocument: null,
-        overviewText: "",
-      }));
-      fetchOverviewDetails();
-      window.location.reload();
+      if (!res.ok) {
+        // Try to parse the error response from backend
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTTP Error ${res.status}`);
+      }
+
+      const data = await res.json();
+
+      if (data.status === "success") {
+        toast.success("Overview uploaded successfully!");
+        setFormData((prev) => ({
+          ...prev,
+          topicId: "",
+          subTopicName: "",
+          noOfSubTopic: "",
+          overviewVideo: "",
+          overviewDocument: null,
+          overviewText: "",
+        }));
+        fetchOverviewDetails();
+        window.location.reload();
+      } else {
+        throw new Error(data.message || "Upload failed");
+      }
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to upload overview");
+      console.error("Upload error:", err);
+      // Show the specific error message from backend
+      toast.error(err.message || "Failed to upload overview. Please try again.");
     }
   };
 
@@ -295,9 +322,9 @@ const SuperAdminUpload = () => {
       const fd = new FormData();
       fd.append("test_type", "sub_topic");
       fd.append("topic_id", formData.mcqTopicId || "");
-     
+
       fd.append("sub_topic_id", formData.mcqSubTopicId || "");
-      
+
       fd.append("no_of_sub_topics", 0);
       fd.append("file", formData.mcqFile);
       fd.append("file_name", formData.mcqFile.name);
@@ -310,11 +337,11 @@ const SuperAdminUpload = () => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       toast.success("Questions uploaded successfully!");
-      setFormData((prev) => ({ 
-        ...prev, 
-        mcqFile: null, 
-        mcqSubTopicName: "", 
-        mcqSubTopicId: "" 
+      setFormData((prev) => ({
+        ...prev,
+        mcqFile: null,
+        mcqSubTopicName: "",
+        mcqSubTopicId: ""
       }));
       window.location.reload();
     } catch (err) {
@@ -404,7 +431,7 @@ const SuperAdminUpload = () => {
   return (
     <div className="p-4 lg:p-6 mt-30 min-h-screen">
       <ToastContainer />
-      
+
       {/* Tab Navigation */}
       <div className="flex justify-center gap-2 lg:gap-4 mb-6 overflow-x-auto pb-2">
         {[
@@ -414,9 +441,8 @@ const SuperAdminUpload = () => {
         ].map((tab) => (
           <div
             key={tab.id}
-            className={`flex items-center gap-2 px-3 py-2 lg:px-6 lg:py-4 bg-white rounded-lg border-2 shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md flex-shrink-0 min-w-[140px] lg:min-w-0 ${
-              selectedTab === tab.id ? "border-blue-500 bg-blue-50" : "border-gray-200"
-            }`}
+            className={`flex items-center gap-2 px-3 py-2 lg:px-6 lg:py-4 bg-white rounded-lg border-2 shadow-sm cursor-pointer transition-all duration-200 hover:shadow-md flex-shrink-0 min-w-[140px] lg:min-w-0 ${selectedTab === tab.id ? "border-blue-500 bg-blue-50" : "border-gray-200"
+              }`}
             onClick={() => setSelectedTab(tab.id)}
           >
             <input
@@ -641,20 +667,32 @@ const SuperAdminUpload = () => {
               </div>
             </div>
 
-            {formData.overviewText && (
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Extracted Text (Editable)</label>
-                <div className="border border-gray-300 rounded-lg overflow-hidden" style={{ height: "300px", width: "100%" }}>
-                  <JoditEditor
-                    ref={editor}
-                    value={formData.overviewText}
-                    config={{ readonly: false, height: 300 }}
-                    onBlur={handleEditorChange}
-                    onChange={handleEditorChange}
-                  />
-                </div>
-              </div>
-            )}
+            <div
+              className="border border-gray-300 rounded-lg overflow-hidden"
+              style={{
+                height: "300px",
+                width: "100%",
+                display: formData.overviewText ? "block" : "none"
+              }}
+            >
+              <JoditEditor
+                ref={editor}
+                value={formData.overviewText}
+                config={{
+                  readonly: false,
+                  height: 300,
+                  toolbarAdaptive: false,
+                  autofocus: false, // ⛔ IMPORTANT
+                }}
+                onChange={(content) => {
+                  overviewTextRef.current = content;
+                }}
+                onBlur={() => {
+                  setField("overviewText", overviewTextRef.current);
+                }}
+              />
+            </div>
+
 
             <div className="flex justify-end">
               <button
@@ -678,7 +716,7 @@ const SuperAdminUpload = () => {
         </>
       )}
 
-      
+
 
 
       {selectedTab === "upload-questions" && (
