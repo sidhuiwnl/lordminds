@@ -331,8 +331,12 @@ const SuperAdminAccessCreation = () => {
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
-    setSelectedFile(file);
-    setFileName(file ? file.name : '');
+    if (file) {
+      setSelectedFile(file);
+      setFileName(file.name);
+      setMessage({ type: "", text: "" }); // Clear any previous messages
+      setBulkErrors([]); // Clear any previous errors
+    }
   };
 
   const handleTopicInputKey = (e) => {
@@ -380,6 +384,7 @@ const SuperAdminAccessCreation = () => {
     try {
       setLoading(true);
       setBulkErrors([]);
+
       const res = await fetch(`${API_BASE}/users/bulk`, {
         method: "POST",
         body: uploadFormData
@@ -387,35 +392,50 @@ const SuperAdminAccessCreation = () => {
 
       const result = await res.json();
 
-      if (!res.ok) {
-        setBulkErrors(result.errors || [result.detail] || ["An unknown error occurred."]);
-      } else {
-        setBulkErrors(result.errors || []);
-      }
-
       let messageType = "error";
       let messageText = result.message || result.detail || "Bulk upload failed";
 
       if (res.ok && result.status === "success") {
         messageType = "success";
         messageText = `Successfully created ${result.created_count} students in ${college.name} - ${formData.department}`;
+
+        // Clear form data on success
+        setSelectedFile(null);
+        setFileName('');
+        setFormData(prev => ({
+          ...prev,
+          name: "",
+          department: "",
+          username: "",
+          password: "",
+          college: ""
+        }));
+
       } else if (res.ok && result.status === "partial") {
         messageType = "warning";
         messageText = `Created ${result.created_count} students in ${college.name} - ${formData.department}. ${result.errors?.length || 0} rows had errors.`;
+        setBulkErrors(result.errors || []);
       } else if (res.ok && result.status === "error") {
         messageType = "error";
         messageText = result.message || "No valid students were created";
+        setBulkErrors(result.errors || []);
+      } else if (!res.ok) {
+        // Handle non-ok responses
+        setBulkErrors(result.errors || [result.detail] || ["An unknown error occurred."]);
       }
 
       setMessage({ type: messageType, text: messageText });
-      setSelectedFile(null);
-      setFileName('');
+
+      // Refresh student list
       await fetchStudents();
 
+      // Show errors modal if there are errors
       if (bulkErrors.length > 0) {
         setShowBulkErrorsModal(true);
       }
+
     } catch (error) {
+      console.error("Bulk upload error:", error);
       setMessage({ type: "error", text: "Network error: " + error.message });
     } finally {
       setLoading(false);
@@ -482,28 +502,50 @@ const SuperAdminAccessCreation = () => {
       else if (selectedAccessType === "student") {
         if (selectedFile) {
           await handleBulkUpload();
+          // Don't reset form here - let handleBulkUpload handle it
         } else {
+          // Individual student creation logic
           const college = colleges.find(c => c.college_id === formData.college);
+
+          // Validate all fields
+          if (!formData.name || !formData.username || !formData.password) {
+            setMessage({ type: "error", text: "Please fill all required fields" });
+            setLoading(false);
+            return;
+          }
+
           const payload = {
             role: "student",
-            college_name: college.name,
+            college_name: college?.name || "",
             full_name: formData.name,
             department_name: formData.department,
             username: formData.username,
             password: formData.password,
           };
+
           const res = await fetch(`${API_BASE}/users/create`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           });
+
           const result = await res.json();
-          setMessage({ type: res.ok ? "success" : "error", text: res.ok ? result.message : result.detail || "User creation failed" });
+          setMessage({
+            type: res.ok ? "success" : "error",
+            text: res.ok ? result.message : result.detail || "User creation failed"
+          });
 
           if (res.ok) {
-            setFormData(prev => ({ ...prev, name: "", department: "", username: "", password: "", college: "" }));
+            // Clear form on success
+            setFormData(prev => ({
+              ...prev,
+              name: "",
+              department: "",
+              username: "",
+              password: "",
+              college: ""
+            }));
             await fetchStudents();
-            window.location.reload();
           }
         }
       }
@@ -1025,6 +1067,8 @@ const SuperAdminAccessCreation = () => {
                     </svg>
                     Download Template
                   </a>
+
+                  {/* File Upload Section */}
                   <div className="relative">
                     <input
                       type="file"
@@ -1032,28 +1076,55 @@ const SuperAdminAccessCreation = () => {
                       onChange={handleFileChange}
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       disabled={!formData.college || !formData.department}
+                      id="bulk-upload-file"
+                      key={selectedFile ? "file-selected" : "no-file"} // Add key to reset input
                     />
-                    <button
-                      type="button"
-                      className={`px-5 py-2 rounded-lg font-medium text-sm shadow-md transition-shadow flex items-center gap-1 ${!formData.college || !formData.department
+                    <label
+                      htmlFor="bulk-upload-file"
+                      className={`px-5 py-2 rounded-lg font-medium text-sm shadow-md transition-shadow flex items-center gap-1 cursor-pointer ${!formData.college || !formData.department
                         ? "bg-gray-400 text-gray-200 cursor-not-allowed"
                         : "bg-blue-500 text-white hover:shadow-lg"
                         }`}
-                      onClick={() => selectedFile && handleBulkUpload()}
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 20l-5.5-5.5M15 20l5.5-5.5" />
                       </svg>
-                      {fileName ? 'Upload Now' : 'Upload Excel'}
-                    </button>
+                      {fileName ? fileName : 'Upload Excel'}
+                    </label>
                   </div>
-                  {fileName && (
-                    <div className="text-sm text-green-600 flex items-center gap-1">
+
+                  {/* Upload Now Button - Only show when file is selected */}
+                  {selectedFile && (
+                    <button
+                      type="button"
+                      onClick={handleBulkUpload}
+                      className="px-5 py-2 bg-green-500 text-white rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow flex items-center gap-1"
+                    >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
-                      {fileName}
-                    </div>
+                      Upload Now
+                    </button>
+                  )}
+
+                  {/* Clear File Button */}
+                  {selectedFile && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFile(null);
+                        setFileName('');
+                        // Reset file input
+                        const fileInput = document.getElementById('bulk-upload-file');
+                        if (fileInput) fileInput.value = '';
+                      }}
+                      className="px-5 py-2 bg-red-500 text-white rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-shadow flex items-center gap-1"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Clear File
+                    </button>
                   )}
                 </div>
               )}
