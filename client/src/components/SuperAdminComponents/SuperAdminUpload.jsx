@@ -445,6 +445,7 @@ const SuperAdminUpload = () => {
               }`}
             onClick={() => setSelectedTab(tab.id)}
           >
+
             <input
               type="radio"
               id={tab.id}
@@ -548,11 +549,12 @@ const SuperAdminUpload = () => {
                 <input
                   type="file"
                   name="file"
+                  accept=".xls,.xlsx"
                   onChange={handleFileChange}
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
-                <p className="text-xs text-gray-500 mt-1">File Upload (doc 1mb)</p>
+                <p className="text-xs text-gray-500 mt-1">File Upload (xls or xlsx)</p>
               </div>
             </div>
 
@@ -660,11 +662,13 @@ const SuperAdminUpload = () => {
                 <input
                   type="file"
                   name="overviewDocument"
+                  
                   onChange={handleFileChange}
-                  accept=".pdf,.docx"
+                  accept=".docx"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
               </div>
+              <p className="text-xs text-gray-500 mt-1">File Upload (docx)</p>
             </div>
 
             <div
@@ -775,7 +779,7 @@ const SuperAdminUpload = () => {
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
-                <p className="text-xs text-gray-500 mt-1">File Upload (xls or xlsx, 2mb)</p>
+                <p className="text-xs text-gray-500 mt-1">File Upload (xls or xlsx)</p>
               </div>
             </div>
 
